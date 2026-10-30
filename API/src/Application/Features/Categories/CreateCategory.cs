@@ -16,7 +16,18 @@ public record CreateCategoryCommand(
     string? MetaKeywords = null,
     string? CanonicalUrl = null,
     int DisplayOrder = 0,
-    bool IsEnabled = true) : IRequest<CategoryDto>;
+    bool IsEnabled = true,
+    string? Summary = null,
+    bool ShowInMenu = true,
+    Guid? ImageMediaId = null,
+    string? ImageAltText = null,
+    Guid? Image2MediaId = null,
+    string? Image2AltText = null,
+    string? H1 = null,
+    Guid? MetaImageMediaId = null,
+    string? MetaOpenGraph = null,
+    string? MetaCustomTags = null,
+    string? MetaFooterTags = null) : IRequest<CategoryDto>;
 
 public class CreateCategoryCommandValidator : AbstractValidator<CreateCategoryCommand>
 {
@@ -24,6 +35,10 @@ public class CreateCategoryCommandValidator : AbstractValidator<CreateCategoryCo
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Slug).MaximumLength(220);
+        RuleFor(x => x.Summary).MaximumLength(2000);
+        RuleFor(x => x.ImageAltText).MaximumLength(300);
+        RuleFor(x => x.Image2AltText).MaximumLength(300);
+        RuleFor(x => x.H1).MaximumLength(300);
     }
 }
 
@@ -35,6 +50,9 @@ public class CreateCategoryCommandHandler : IRequestHandler<CreateCategoryComman
 
     public async Task<CategoryDto> Handle(CreateCategoryCommand request, CancellationToken cancellationToken)
     {
+        await CategoryQueries.EnsureMediaExistsAsync(_db, cancellationToken,
+            request.ImageMediaId, request.Image2MediaId, request.MetaImageMediaId);
+
         var entity = new Category
         {
             Name = request.Name,
@@ -47,10 +65,21 @@ public class CreateCategoryCommandHandler : IRequestHandler<CreateCategoryComman
             CanonicalUrl = request.CanonicalUrl,
             DisplayOrder = request.DisplayOrder,
             IsEnabled = request.IsEnabled,
+            Summary = request.Summary,
+            ShowInMenu = request.ShowInMenu,
+            ImageMediaId = request.ImageMediaId,
+            ImageAltText = request.ImageAltText,
+            Image2MediaId = request.Image2MediaId,
+            Image2AltText = request.Image2AltText,
+            H1 = request.H1,
+            MetaImageMediaId = request.MetaImageMediaId,
+            MetaOpenGraph = request.MetaOpenGraph,
+            MetaCustomTags = request.MetaCustomTags,
+            MetaFooterTags = request.MetaFooterTags,
         };
 
         _db.Categories.Add(entity);
         await _db.SaveChangesAsync(cancellationToken);
-        return CategoryDto.From(entity);
+        return await CategoryQueries.GetDtoAsync(_db, entity.Id, cancellationToken);
     }
 }

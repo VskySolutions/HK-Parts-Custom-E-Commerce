@@ -19,7 +19,18 @@ public record UpdateCategoryCommand(
     string? MetaKeywords = null,
     string? CanonicalUrl = null,
     int DisplayOrder = 0,
-    bool IsEnabled = true) : IRequest<CategoryDto>;
+    bool IsEnabled = true,
+    string? Summary = null,
+    bool ShowInMenu = true,
+    Guid? ImageMediaId = null,
+    string? ImageAltText = null,
+    Guid? Image2MediaId = null,
+    string? Image2AltText = null,
+    string? H1 = null,
+    Guid? MetaImageMediaId = null,
+    string? MetaOpenGraph = null,
+    string? MetaCustomTags = null,
+    string? MetaFooterTags = null) : IRequest<CategoryDto>;
 
 public class UpdateCategoryCommandValidator : AbstractValidator<UpdateCategoryCommand>
 {
@@ -28,6 +39,10 @@ public class UpdateCategoryCommandValidator : AbstractValidator<UpdateCategoryCo
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Slug).MaximumLength(220);
+        RuleFor(x => x.Summary).MaximumLength(2000);
+        RuleFor(x => x.ImageAltText).MaximumLength(300);
+        RuleFor(x => x.Image2AltText).MaximumLength(300);
+        RuleFor(x => x.H1).MaximumLength(300);
         RuleFor(x => x.ParentId).NotEqual(x => x.Id).When(x => x.ParentId.HasValue);
     }
 }
@@ -47,6 +62,9 @@ public class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategoryComman
         if (request.ParentId.HasValue && request.ParentId.Value == request.Id)
             throw new ConflictException("A category cannot be its own parent.");
 
+        await CategoryQueries.EnsureMediaExistsAsync(_db, cancellationToken,
+            request.ImageMediaId, request.Image2MediaId, request.MetaImageMediaId);
+
         entity.Name = request.Name;
         entity.Description = request.Description;
         entity.ParentId = request.ParentId;
@@ -57,8 +75,19 @@ public class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategoryComman
         entity.CanonicalUrl = request.CanonicalUrl;
         entity.DisplayOrder = request.DisplayOrder;
         entity.IsEnabled = request.IsEnabled;
+        entity.Summary = request.Summary;
+        entity.ShowInMenu = request.ShowInMenu;
+        entity.ImageMediaId = request.ImageMediaId;
+        entity.ImageAltText = request.ImageAltText;
+        entity.Image2MediaId = request.Image2MediaId;
+        entity.Image2AltText = request.Image2AltText;
+        entity.H1 = request.H1;
+        entity.MetaImageMediaId = request.MetaImageMediaId;
+        entity.MetaOpenGraph = request.MetaOpenGraph;
+        entity.MetaCustomTags = request.MetaCustomTags;
+        entity.MetaFooterTags = request.MetaFooterTags;
 
         await _db.SaveChangesAsync(cancellationToken);
-        return CategoryDto.From(entity);
+        return await CategoryQueries.GetDtoAsync(_db, entity.Id, cancellationToken);
     }
 }

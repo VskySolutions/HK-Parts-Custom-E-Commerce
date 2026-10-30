@@ -31,6 +31,7 @@ public class GetStorefrontCategoriesQueryHandler : IRequestHandler<GetStorefront
                 Name = c.Name,
                 Slug = c.Slug,
                 ParentId = c.ParentId,
+                ShowInMenu = c.ShowInMenu,
                 ProductCount = _db.Products.Count(p =>
                     p.IsPublished && p.ProductCategories.Any(pc => pc.CategoryId == c.Id)),
             })

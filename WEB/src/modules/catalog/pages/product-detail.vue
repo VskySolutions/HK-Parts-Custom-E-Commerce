@@ -74,6 +74,7 @@
               <q-badge v-if="!isCreate && variants.length" color="grey-5" class="q-ml-xs">{{ variants.length }}</q-badge>
             </div>
           </q-tab>
+          <q-tab name="shipping" icon="o_local_shipping" label="Shipping" :disable="isCreate" />
           <q-tab name="organization" :disable="isCreate">
             <div class="row items-center no-wrap">
               <q-icon name="o_account_tree" class="q-mr-xs" />Organization
@@ -153,6 +154,15 @@
               </div>
             </div>
 
+            <div class="row q-col-gutter-sm items-start">
+              <div class="col-12 col-md-6">
+                <AppTextField v-model="form.gtin" label="GTIN" :v="v$.gtin" maxlength="50" placeholder="UPC / EAN / ISBN" hint="Barcode — also matched by the product search" :disable="!canWrite" />
+              </div>
+              <div class="col-12 col-md-6">
+                <AppTextField v-model="form.taxCode" label="Tax code" :v="v$.taxCode" maxlength="50" placeholder="e.g. P0000000" hint="Tax provider product code (Avalara / TaxJar / Stripe Tax)" :disable="!canWrite" />
+              </div>
+            </div>
+
             <div class="row q-col-gutter-sm items-center">
               <div class="col-6 col-md-3">
                 <AppTextField v-model="form.displayOrder" label="Display order" type="number" hint="Lower shows first" :disable="!canWrite" />
@@ -177,7 +187,56 @@
                   </q-tooltip>
                 </q-toggle>
               </div>
+              <div class="col-auto q-mt-md">
+                <q-toggle v-model="form.isPurchasable" label="Can purchase" color="primary" :disable="!canWrite">
+                  <q-tooltip>Off = the product is shown but the buy button is hidden</q-tooltip>
+                </q-toggle>
+              </div>
+              <div class="col-auto q-mt-md">
+                <q-toggle v-model="form.isFflRequired" label="FFL required" color="primary" :disable="!canWrite">
+                  <q-tooltip>Firearm — must ship to a Federal Firearms Licensee</q-tooltip>
+                </q-toggle>
+              </div>
             </div>
+
+            <!-- Store listing (edit only — a sub-resource with its own endpoint) -->
+            <template v-if="!isCreate && stores.length > 1">
+              <q-separator class="q-my-sm" />
+              <AppFieldLabel label="Stores">
+                <template #hint>Stores this product is listed in — leave empty to list it in every store</template>
+              </AppFieldLabel>
+              <q-select
+                v-model="storeIds"
+                dense outlined multiple use-chips emit-value map-options clearable
+                :options="storeOptions"
+                :disable="!canWrite"
+                placeholder="All stores"
+                @update:model-value="queueStores"
+              />
+            </template>
+
+            <!-- Merchant-defined custom fields (edit only) -->
+            <template v-if="!isCreate && customFields.length">
+              <q-separator class="q-my-sm" />
+              <AppFieldLabel label="Custom product information">
+                <template #hint>Fields defined under Catalog → Custom fields</template>
+              </AppFieldLabel>
+              <div class="row q-col-gutter-sm">
+                <div v-for="f in customFields" :key="f.id" :class="f.fieldType === 'TextArea' ? 'col-12' : 'col-12 col-md-6'">
+                  <AppTextField
+                    v-model="customValues[f.id]"
+                    :label="f.name"
+                    :required="f.isRequired"
+                    :type="f.fieldType === 'TextArea' ? 'textarea' : 'text'"
+                    :autogrow="f.fieldType === 'TextArea'"
+                    :error="f.isRequired && customFieldsTouched && !(customValues[f.id] || '').trim()"
+                    :error-message="`${f.name} is required`"
+                    :disable="!canWrite"
+                    @update:model-value="queueCustomFields"
+                  />
+                </div>
+              </div>
+            </template>
 
             <div v-if="form.isInquiryOnly" class="row q-col-gutter-sm items-center">
               <div class="col-12 col-md-4">
@@ -209,6 +268,45 @@
               </div>
             </div>
 
+            <div class="row q-col-gutter-sm">
+              <div class="col-6 col-md-4">
+                <AppTextField v-model="form.cost" label="Cost" type="number" step="0.01" min="0" placeholder="0.00" :v="v$.cost" hint="Internal — never shown to buyers" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-4">
+                <AppTextField v-model="form.msrp" label="MSRP" type="number" step="0.01" min="0" placeholder="0.00" :v="v$.msrp" hint="Suggested retail / “compare at” price" :disable="!canWrite" />
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+            <AppFieldLabel label="Sale">
+              <template #hint>Scheduled sale price — applies while now is inside the window (leave a date blank for no limit)</template>
+            </AppFieldLabel>
+            <div class="row q-col-gutter-sm">
+              <div class="col-12 col-md-4">
+                <AppTextField v-model="form.salePrice" label="Sale price" type="number" step="0.01" min="0" placeholder="0.00" :v="v$.salePrice" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-4">
+                <AppTextField v-model="form.saleStartDateUtc" label="Sale starts" type="datetime-local" clearable :disable="!canWrite || !hasSalePrice" />
+              </div>
+              <div class="col-6 col-md-4">
+                <AppTextField v-model="form.saleEndDateUtc" label="Sale ends" type="datetime-local" clearable :v="v$.saleEndDateUtc" :disable="!canWrite || !hasSalePrice" />
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+            <AppFieldLabel label="Ordering &amp; availability" />
+            <div class="row q-col-gutter-sm">
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.minOrderQuantity" label="Min qty allowed" type="number" min="1" placeholder="No minimum" :v="v$.minOrderQuantity" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.maxOrderQuantity" label="Max qty allowed" type="number" min="1" placeholder="No maximum" :v="v$.maxOrderQuantity" :disable="!canWrite" />
+              </div>
+              <div class="col-12 col-md-6">
+                <AppSelect v-model="form.stockStatusOverride" label="Stock status" :options="stockStatusOverrideOptions" :disable="!canWrite" hint="Override what the storefront shows, regardless of stock" />
+              </div>
+            </div>
+
             <div class="row items-center q-gutter-md q-mt-none">
               <q-toggle v-model="form.allowBackorder" label="Allow backorder" color="primary" :disable="!canWrite" />
               <div v-if="form.allowBackorder" style="max-width: 220px">
@@ -218,6 +316,16 @@
                 <q-input v-model="form.estimatedRestockDate" dense outlined type="date" :disable="!canWrite" clearable />
               </div>
             </div>
+            <AppTextField
+              v-if="form.allowBackorder"
+              v-model="form.backorderMessage"
+              label="Backorder message"
+              maxlength="500"
+              placeholder="e.g. Ships in 2–3 weeks"
+              hint="Shown on the product page while backordered"
+              :v="v$.backorderMessage"
+              :disable="!canWrite"
+            />
 
             <!-- Per-store stock (the authoritative fulfillment inventory read by checkout/routing) -->
             <q-separator class="q-my-sm" />
@@ -361,6 +469,18 @@
               <template #body-cell-price="p">
                 <q-td :props="p"><q-input v-model.number="p.row.price" dense borderless type="number" step="0.01" input-class="text-right" :disable="!canWrite" @update:model-value="queueVariant(p.row)" /></q-td>
               </template>
+              <template #body-cell-gtin="p">
+                <q-td :props="p"><q-input v-model="p.row.gtin" dense borderless maxlength="50" :disable="!canWrite" @update:model-value="queueVariant(p.row)" /></q-td>
+              </template>
+              <template #body-cell-cost="p">
+                <q-td :props="p"><q-input v-model.number="p.row.cost" dense borderless type="number" step="0.01" min="0" input-class="text-right" :disable="!canWrite" @update:model-value="queueVariant(p.row)" /></q-td>
+              </template>
+              <template #body-cell-msrp="p">
+                <q-td :props="p"><q-input v-model.number="p.row.msrp" dense borderless type="number" step="0.01" min="0" input-class="text-right" :disable="!canWrite" @update:model-value="queueVariant(p.row)" /></q-td>
+              </template>
+              <template #body-cell-weight="p">
+                <q-td :props="p"><q-input v-model.number="p.row.weight" dense borderless type="number" step="0.01" min="0" input-class="text-right" placeholder="Inherit" :disable="!canWrite" @update:model-value="queueVariant(p.row)" /></q-td>
+              </template>
               <template #body-cell-stock="p">
                 <q-td :props="p">
                   <q-input
@@ -408,7 +528,7 @@
 
               <template #bottom-row>
                 <q-tr class="variant-total-row">
-                  <q-td colspan="3" class="text-right text-weight-medium">Totals @ store</q-td>
+                  <q-td colspan="7" class="text-right text-weight-medium">Totals @ store</q-td>
                   <q-td class="text-right text-weight-bold">{{ invStoreId ? variantStockTotal : '—' }}</q-td>
                   <q-td />
                   <q-td class="text-right text-weight-bold">{{ invStoreId ? variantReservedTotal : '—' }}</q-td>
@@ -417,6 +537,46 @@
               </template>
             </q-table>
             <div v-else class="text-grey-6 q-mt-sm">No variants yet. Assign attributes (with values) then Generate.</div>
+          </q-tab-panel>
+
+          <!-- ============ SHIPPING ============ -->
+          <q-tab-panel name="shipping" class="q-gutter-y-sm">
+            <AppFieldLabel label="Package">
+              <template #hint>Weight in pounds, dimensions in inches — used for carrier rate quotes</template>
+            </AppFieldLabel>
+            <div class="row q-col-gutter-sm">
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.weight" label="Weight (lb)" type="number" step="0.01" min="0" :v="v$.weight" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.length" label="Length (in)" type="number" step="0.01" min="0" :v="v$.length" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.width" label="Width (in)" type="number" step="0.01" min="0" :v="v$.width" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.height" label="Height (in)" type="number" step="0.01" min="0" :v="v$.height" :disable="!canWrite" />
+              </div>
+            </div>
+
+            <q-separator class="q-my-sm" />
+            <AppFieldLabel label="Freight (LTL)">
+              <template #hint>Used by freight carriers such as FreightView</template>
+            </AppFieldLabel>
+            <div class="row q-col-gutter-sm items-center">
+              <div class="col-6 col-md-3">
+                <AppSelect v-model="form.freightClass" label="Freight class" :options="freightClassOptions" clearable placeholder="None" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-3">
+                <AppSelect v-model="form.packageType" label="Package type" :options="packageTypeOptions" clearable placeholder="None" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.packagePieces" label="Number of pieces" type="number" min="1" :v="v$.packagePieces" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-3 q-mt-md">
+                <q-toggle v-model="form.isHazardous" label="Hazardous" color="primary" :disable="!canWrite" />
+              </div>
+            </div>
           </q-tab-panel>
 
           <!-- ============ ORGANIZATION ============ -->
@@ -543,6 +703,21 @@
             <AppTextField v-model="form.metaKeywords" label="Meta keywords" placeholder="e.g. polo shirt, cotton, menswear" :disable="!canWrite" maxlength="500">
               <template #hint>Comma-separated keywords (minor SEO impact on modern search engines)</template>
             </AppTextField>
+
+            <AppTextField v-model="form.h1" label="H1 tag" placeholder="Defaults to the product name" :v="v$.h1" :disable="!canWrite" maxlength="300" />
+
+            <MediaImageField
+              v-model="form.metaImageMediaId"
+              v-model:url="metaImageUrl"
+              label="Meta image"
+              hint="Social-share (og:image) picture — 1200×630 recommended"
+              :alt="form.name"
+              :disable="!canWrite"
+            />
+
+            <AppTextField v-model="form.metaOpenGraph" label="Open Graph override" type="textarea" autogrow placeholder='&lt;meta property="og:title" content="…" /&gt;' hint="Raw og: tags — replaces the generated Open Graph markup" :disable="!canWrite" />
+            <AppTextField v-model="form.metaCustomTags" label="Custom head tags / scripts" type="textarea" autogrow hint="Injected into the page &lt;head&gt;" :disable="!canWrite" />
+            <AppTextField v-model="form.metaFooterTags" label="Custom footer tags / scripts" type="textarea" autogrow hint="Injected before &lt;/body&gt;" :disable="!canWrite" />
           </q-tab-panel>
 
           <!-- ============ REVIEWS ============ -->
@@ -602,15 +777,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { debounce } from 'quasar'
 import { getApiErrorMessage } from 'services/api'
 import {
-  productApi, inventoryApi, mediaApi, categoryApi, productAttributeApi, manufacturerApi, taxCategoryApi,
-  productTypeOptions, giftCardTypeOptions
+  productApi, inventoryApi, mediaApi, categoryApi, productAttributeApi, manufacturerApi, taxCategoryApi, productCustomFieldApi,
+  productTypeOptions, giftCardTypeOptions, stockStatusOverrideOptions, freightClassOptions, packageTypeOptions
 } from 'modules/catalog/api'
 import { storeApi } from 'modules/stores/api'
 import { usePermissions } from 'composables/usePermissions'
 import { useNotify } from 'composables/useNotify'
 import { deleteConfirmation } from 'dialogs/delete_confirmation'
 import useVuelidate from '@vuelidate/core'
-import { required, maxLength } from 'validators'
+import { required, maxLength, minValue, helpers } from 'validators'
 import AppDetailHeader from 'components/common/AppDetailHeader.vue'
 import AppTextField from 'components/common/AppTextField.vue'
 import AppSelect from 'components/common/AppSelect.vue'
@@ -618,6 +793,7 @@ import AppRichText from 'components/common/AppRichText.vue'
 import AppFieldLabel from 'components/common/AppFieldLabel.vue'
 import ProductReviewsPanel from 'modules/catalog/components/ProductReviewsPanel.vue'
 import ProductQuestionsPanel from 'modules/catalog/components/ProductQuestionsPanel.vue'
+import MediaImageField from 'modules/catalog/components/MediaImageField.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -650,7 +826,13 @@ const EMPTY = {
   isPublished: false, displayOrder: 0, isFeatured: false, featuredDisplayOrder: 0,
   isInquiryOnly: false, inquiryButtonLabel: '',
   downloadExpiryDays: null, downloadLimit: null,
-  giftCardType: 'Fixed', giftCardAmount: null
+  giftCardType: 'Fixed', giftCardAmount: null,
+  gtin: '', taxCode: '', isPurchasable: true, isFflRequired: false,
+  cost: null, msrp: null, salePrice: null, saleStartDateUtc: '', saleEndDateUtc: '',
+  minOrderQuantity: null, maxOrderQuantity: null, stockStatusOverride: '', backorderMessage: '',
+  weight: null, length: null, width: null, height: null,
+  packagePieces: 1, packageType: null, freightClass: null, isHazardous: false,
+  h1: '', metaImageMediaId: null, metaOpenGraph: '', metaCustomTags: '', metaFooterTags: ''
 }
 const CORE_KEYS = Object.keys(EMPTY)
 const form = reactive({ ...EMPTY })
@@ -669,9 +851,40 @@ const rules = {
   productType: { required },
   taxCategoryId: { required },
   slug: { maxLength: maxLength(400) },
-  sku: { maxLength: maxLength(400) }
+  sku: { maxLength: maxLength(400) },
+  gtin: { maxLength: maxLength(50) },
+  taxCode: { maxLength: maxLength(50) },
+  h1: { maxLength: maxLength(300) },
+  backorderMessage: { maxLength: maxLength(500) },
+  cost: { minValue: optionalMin(0) },
+  msrp: { minValue: optionalMin(0) },
+  salePrice: { minValue: optionalMin(0) },
+  saleEndDateUtc: {
+    afterStart: helpers.withMessage('Must be after the sale start',
+      (v) => !v || !form.saleStartDateUtc || v >= form.saleStartDateUtc)
+  },
+  minOrderQuantity: { minValue: optionalMin(1) },
+  maxOrderQuantity: {
+    minValue: optionalMin(1),
+    atLeastMin: helpers.withMessage('Must be at least the min qty',
+      (v) => isBlank(v) || isBlank(form.minOrderQuantity) || Number(v) >= Number(form.minOrderQuantity))
+  },
+  weight: { minValue: optionalMin(0) },
+  length: { minValue: optionalMin(0) },
+  width: { minValue: optionalMin(0) },
+  height: { minValue: optionalMin(0) },
+  packagePieces: { required, minValue: minValue(1) }
 }
 const v$ = useVuelidate(rules, form)
+
+function isBlank (v) { return v === '' || v === null || v === undefined }
+// minValue that lets an empty optional field through.
+function optionalMin (min) {
+  return helpers.withMessage(`Must be at least ${min}`, (v) => isBlank(v) || Number(v) >= min)
+}
+
+const hasSalePrice = computed(() => !isBlank(form.salePrice))
+const metaImageUrl = ref(null)
 
 const isVariantType = computed(() => form.productType === 'WithVariants')
 
@@ -684,6 +897,10 @@ const attributeValueMap = ref({})
 const attributeTypes = ref({})      // attributeId -> displayType, so the two pickers below can split the list
 
 // ---- Sub-resources ------------------------------------------------------------
+const storeIds = ref([])            // [] = listed in every store
+const customFields = ref([])        // active ProductCustomFieldDto[]
+const customValues = reactive({})   // fieldId -> value
+const customFieldsTouched = ref(false)
 const categoryIds = ref([])
 const tagNames = ref([])
 const tiers = ref([])
@@ -884,6 +1101,21 @@ function toNumberOrNull (value) {
   return Number.isFinite(n) ? n : null
 }
 
+// <input type=datetime-local> holds local "YYYY-MM-DDTHH:mm"; the API stores UTC.
+function localToUtcIso (local) {
+  if (!local) return null
+  const d = new Date(local)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+function utcIsoToLocal (iso) {
+  if (!iso) return ''
+  // EF returns datetime2 without a zone designator — it is UTC.
+  const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function buildPayload () {
   const payload = {
     name: form.name,
@@ -906,7 +1138,33 @@ function buildPayload () {
     isFeatured: form.isFeatured,
     featuredDisplayOrder: form.isFeatured ? (toNumberOrNull(form.featuredDisplayOrder) || 0) : 0,
     isInquiryOnly: form.isInquiryOnly,
-    inquiryButtonLabel: form.isInquiryOnly ? (form.inquiryButtonLabel || null) : null
+    inquiryButtonLabel: form.isInquiryOnly ? (form.inquiryButtonLabel || null) : null,
+    gtin: form.gtin || null,
+    taxCode: form.taxCode || null,
+    isPurchasable: form.isPurchasable,
+    isFflRequired: form.isFflRequired,
+    cost: toNumberOrNull(form.cost),
+    msrp: toNumberOrNull(form.msrp),
+    salePrice: toNumberOrNull(form.salePrice),
+    saleStartDateUtc: hasSalePrice.value ? localToUtcIso(form.saleStartDateUtc) : null,
+    saleEndDateUtc: hasSalePrice.value ? localToUtcIso(form.saleEndDateUtc) : null,
+    minOrderQuantity: toNumberOrNull(form.minOrderQuantity),
+    maxOrderQuantity: toNumberOrNull(form.maxOrderQuantity),
+    stockStatusOverride: form.stockStatusOverride || null,
+    backorderMessage: form.allowBackorder ? (form.backorderMessage || null) : null,
+    weight: toNumberOrNull(form.weight),
+    length: toNumberOrNull(form.length),
+    width: toNumberOrNull(form.width),
+    height: toNumberOrNull(form.height),
+    packagePieces: toNumberOrNull(form.packagePieces) || 1,
+    packageType: form.packageType || null,
+    freightClass: form.freightClass || null,
+    isHazardous: form.isHazardous,
+    h1: form.h1 || null,
+    metaImageMediaId: form.metaImageMediaId || null,
+    metaOpenGraph: form.metaOpenGraph || null,
+    metaCustomTags: form.metaCustomTags || null,
+    metaFooterTags: form.metaFooterTags || null
   }
   if (form.productType === 'Downloadable') {
     payload.downloadExpiryDays = toNumberOrNull(form.downloadExpiryDays)
@@ -928,12 +1186,20 @@ function hydrate (p) {
   for (const k of CORE_KEYS) form[k] = p[k] ?? EMPTY[k]
   // Date-only for the <input type=date> (the API returns a full ISO timestamp).
   if (form.estimatedRestockDate) form.estimatedRestockDate = String(form.estimatedRestockDate).slice(0, 10)
+  form.saleStartDateUtc = utcIsoToLocal(p.saleStartDateUtc)
+  form.saleEndDateUtc = utcIsoToLocal(p.saleEndDateUtc)
+  metaImageUrl.value = p.metaImageUrl || null
+  storeIds.value = [...(p.storeIds || [])]
+  for (const k of Object.keys(customValues)) delete customValues[k]
+  for (const cv of p.customFieldValues || []) customValues[cv.productCustomFieldId] = cv.value || ''
+  customFieldsTouched.value = false
   categoryIds.value = [...(p.categoryIds || [])]
   tagNames.value = (p.tags || []).map((t) => t.name)
   tiers.value = (p.tierPrices || []).filter((t) => !t.productVariantId).map((t) => ({ minQuantity: t.minQuantity, price: t.price }))
   attributeIds.value = [...(p.attributeIds || [])]
   variants.value = (p.variants || []).map((v) => ({
     id: v.id, sku: v.sku, price: v.price, stockQuantity: v.stockQuantity,
+    gtin: v.gtin, cost: v.cost, msrp: v.msrp, weight: v.weight,
     allowBackorder: v.allowBackorder, isEnabled: v.isEnabled, displayOrder: v.displayOrder,
     attributeValueIds: v.attributeValueIds || [], _saving: false, _saved: false
   }))
@@ -976,6 +1242,20 @@ watch(() => form.name, (name) => {
 watch(isVariantType, (v) => { if (!v && tab.value === 'variants') tab.value = 'general' })
 
 // ---- Sub-resource auto-save ---------------------------------------------------
+const queueStores = debounce(() => {
+  if (hydrating) return
+  runSave(async () => { product.value = await productApi.setStores(pid.value, storeIds.value || []) })
+}, 700)
+
+// Custom fields save as one set; hold the save while a required field is blank (the server rejects it).
+const queueCustomFields = debounce(() => {
+  if (hydrating) return
+  customFieldsTouched.value = true
+  if (customFields.value.some((f) => f.isRequired && !(customValues[f.id] || '').trim())) return
+  const values = customFields.value.map((f) => ({ productCustomFieldId: f.id, value: customValues[f.id] || null }))
+  runSave(async () => { product.value = await productApi.setCustomFieldValues(pid.value, values) })
+}, 800)
+
 const queueCategories = debounce(() => {
   if (hydrating) return
   runSave(async () => { product.value = await productApi.setCategories(pid.value, categoryIds.value) })
@@ -1038,6 +1318,10 @@ function queueVariant (variant) {
         await productApi.updateVariant(variant.id, {
           sku: variant.sku || null,
           price: variant.price === '' || variant.price === null ? null : Number(variant.price),
+          gtin: variant.gtin || null,
+          cost: toNumberOrNull(variant.cost),
+          msrp: toNumberOrNull(variant.msrp),
+          weight: toNumberOrNull(variant.weight),
           stockQuantity: Number(variant.stockQuantity) || 0,
           allowBackorder: variant.allowBackorder,
           isEnabled: variant.isEnabled,
@@ -1158,6 +1442,10 @@ const variantColumns = [
   { name: 'combination', label: 'Combination', align: 'left', field: (r) => variantLabel(r), sortable: true },
   { name: 'sku', label: 'SKU', align: 'left', field: (r) => r.sku || '', sortable: true },
   { name: 'price', label: 'Price', align: 'right', field: (r) => (r.price == null ? -1 : Number(r.price)), sortable: true },
+  { name: 'gtin', label: 'GTIN', align: 'left', field: (r) => r.gtin || '', sortable: true },
+  { name: 'cost', label: 'Cost', align: 'right', field: (r) => (r.cost == null ? -1 : Number(r.cost)), sortable: true },
+  { name: 'msrp', label: 'MSRP', align: 'right', field: (r) => (r.msrp == null ? -1 : Number(r.msrp)), sortable: true },
+  { name: 'weight', label: 'Weight (lb)', align: 'right', field: (r) => (r.weight == null ? -1 : Number(r.weight)), sortable: true },
   { name: 'stock', label: 'Stock @ store', align: 'right', field: (r) => (invStoreId.value ? Number(invEntry(r.id, invStoreId.value).qty) || 0 : 0), sortable: true },
   { name: 'threshold', label: 'Low-stock alert', align: 'right', field: (r) => (invStoreId.value ? Number(invEntry(r.id, invStoreId.value).threshold) || 0 : 0), sortable: true },
   { name: 'reserved', label: 'Reserved', align: 'right', field: (r) => (invStoreId.value ? Number(invEntry(r.id, invStoreId.value).reserved) || 0 : 0), sortable: true },
@@ -1274,6 +1562,13 @@ async function loadManufacturers () {
   } catch (err) { manufacturerOptions.value = [] }
 }
 
+async function loadCustomFields () {
+  try {
+    const items = await productCustomFieldApi.list({ isActive: true })
+    customFields.value = Array.isArray(items) ? items : []
+  } catch (err) { customFields.value = [] }
+}
+
 async function loadTaxCategories () {
   try {
     const result = await taxCategoryApi.list({ page: 1, pageSize: 200 })
@@ -1315,6 +1610,8 @@ async function init () {
     hydrating = true
     Object.assign(form, EMPTY)
     categoryIds.value = []; tagNames.value = []; tiers.value = []; attributeIds.value = []; variants.value = []; pictures.value = []
+    storeIds.value = []; metaImageUrl.value = null
+    for (const k of Object.keys(customValues)) delete customValues[k]
     product.value = null
     loading.value = false
     v$.value.$reset()
@@ -1330,6 +1627,7 @@ onMounted(() => {
   loadCategories()
   loadAttributes()
   loadManufacturers()
+  loadCustomFields()
   if (!isCreate.value) loadTaxCategories()
 })
 

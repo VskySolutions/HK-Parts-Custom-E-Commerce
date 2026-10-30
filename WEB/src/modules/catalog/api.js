@@ -59,6 +59,14 @@ export const productApi = {
   setTierPrices (id, tiers, productVariantId = null) {
     return api.put(`/api/admin/products/${id}/tier-prices`, { productVariantId, tiers }).then(unwrap)
   },
+  // Stores the product is listed in; [] = every store.
+  setStores (id, storeIds) {
+    return api.put(`/api/admin/products/${id}/stores`, { storeIds }).then(unwrap)
+  },
+  // [{ productCustomFieldId, value }] — blanks are dropped server-side.
+  setCustomFieldValues (id, values) {
+    return api.put(`/api/admin/products/${id}/custom-fields`, { values }).then(unwrap)
+  },
 
   // Video embeds are Media-backed pictures too (added by URL); images use the picture endpoints below.
   addVideo (id, payload) {
@@ -140,6 +148,10 @@ export const categoryApi = {
   },
   remove (id) {
     return api.delete(`/api/admin/categories/${id}`).then(unwrap)
+  },
+  // Listing facets: brand toggle + ordered specification attribute ids.
+  setFilters (id, payload) {
+    return api.put(`/api/admin/categories/${id}/filters`, payload).then(unwrap)
   },
 
   // Media-library-backed pictures (mirrors productApi): list / assign / remove category pictures.
@@ -228,6 +240,47 @@ export const specificationAttributeApi = {
     return api.delete(`/api/admin/specification-attributes/${id}`).then(unwrap)
   }
 }
+
+// ---- Product custom fields (merchant-defined free-text fields) ---------------
+export const productCustomFieldApi = {
+  list (params = {}) {
+    return api
+      .get('/api/admin/product-custom-fields', { params, paramsSerializer: qsSerializer })
+      .then(unwrap)
+  },
+  create (payload) {
+    return api.post('/api/admin/product-custom-fields', payload).then(unwrap)
+  },
+  update (id, payload) {
+    return api.put(`/api/admin/product-custom-fields/${id}`, payload).then(unwrap)
+  },
+  remove (id) {
+    return api.delete(`/api/admin/product-custom-fields/${id}`).then(unwrap)
+  }
+}
+
+export const customFieldTypeOptions = [
+  { label: 'Text (single line)', value: 'Text' },
+  { label: 'Text area', value: 'TextArea' }
+]
+
+// Manual stock-status override; '' = derive from inventory (sent as null).
+export const stockStatusOverrideOptions = [
+  { label: 'Automatic (from inventory)', value: '' },
+  { label: 'Force in stock', value: 'InStock' },
+  { label: 'Force out of stock', value: 'OutOfStock' },
+  { label: 'Force backordered', value: 'Backordered' }
+]
+
+// NMFC freight classes (LTL shipping).
+export const freightClassOptions = ['50', '55', '60', '65', '70', '77.5', '85', '92.5', '100', '110', '125', '150', '175', '200', '250', '300', '400', '500']
+  .map((c) => ({ label: `Class ${c}`, value: c }))
+
+// FreightView package-type codes (same values the PHP store saved, so migrated data maps 1:1).
+export const packageTypeOptions = [
+  'Pallets_48x40', 'Pallets_48x48', 'Pallets_60x48', 'Pallets_other', 'Bags', 'Bales', 'Boxes', 'Bundles', 'Carpets',
+  'Coils', 'Crates', 'Cylinders', 'Drums', 'Pails', 'Reels', 'Rolls', 'TubesPipes', 'Slipsheets', 'Unit'
+].map((t) => ({ label: t.replace('_', ' ').replace('TubesPipes', 'Tubes / pipes'), value: t }))
 
 // Product-attribute display types (transported as enum names). Swatch values carry a colour;
 // Custom input has no values at all — the buyer types their own, bounded by the input settings.

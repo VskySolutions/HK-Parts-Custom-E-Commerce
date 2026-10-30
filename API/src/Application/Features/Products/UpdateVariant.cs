@@ -12,6 +12,10 @@ public record UpdateVariantCommand(
     Guid VariantId,
     string? Sku = null,
     decimal? Price = null,
+    string? Gtin = null,
+    decimal? Cost = null,
+    decimal? Msrp = null,
+    decimal? Weight = null,
     int StockQuantity = 0,
     bool AllowBackorder = false,
     bool IsEnabled = true,
@@ -23,6 +27,10 @@ public class UpdateVariantCommandValidator : AbstractValidator<UpdateVariantComm
     {
         RuleFor(x => x.VariantId).NotEmpty();
         RuleFor(x => x.Sku).MaximumLength(400);
+        RuleFor(x => x.Gtin).MaximumLength(50);
+        RuleFor(x => x.Cost).GreaterThanOrEqualTo(0).When(x => x.Cost.HasValue);
+        RuleFor(x => x.Msrp).GreaterThanOrEqualTo(0).When(x => x.Msrp.HasValue);
+        RuleFor(x => x.Weight).GreaterThanOrEqualTo(0).When(x => x.Weight.HasValue);
     }
 }
 
@@ -41,6 +49,10 @@ public class UpdateVariantCommandHandler : IRequestHandler<UpdateVariantCommand,
 
         variant.Sku = request.Sku;
         variant.Price = request.Price;
+        variant.Gtin = request.Gtin;
+        variant.Cost = request.Cost;
+        variant.Msrp = request.Msrp;
+        variant.Weight = request.Weight;
         variant.AllowBackorder = request.AllowBackorder;
         variant.IsEnabled = request.IsEnabled;
         variant.DisplayOrder = request.DisplayOrder;

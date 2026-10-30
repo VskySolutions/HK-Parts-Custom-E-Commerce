@@ -5,12 +5,20 @@
  * GET /api/storefront/catalog/categories and shares it across the header
  * mega-menu and the home-page category grid.
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { storefrontApi } from 'modules/storefront/api'
 
 const categories = ref([])
 const loaded = ref(false)
 const loading = ref(false)
+
+// Navigation view: drops categories flagged "Display in menu = off" (and their subtrees).
+function pruneMenu (nodes) {
+  return (nodes || [])
+    .filter((n) => n.showInMenu !== false)
+    .map((n) => ({ ...n, children: pruneMenu(n.children) }))
+}
+const menuCategories = computed(() => pruneMenu(categories.value))
 
 export function useCategories () {
   async function loadCategories (force = false) {
@@ -31,5 +39,5 @@ export function useCategories () {
     return categories.value
   }
 
-  return { categories, loaded, loading, loadCategories }
+  return { categories, menuCategories, loaded, loading, loadCategories }
 }

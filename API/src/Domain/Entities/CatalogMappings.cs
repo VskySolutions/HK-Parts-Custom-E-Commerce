@@ -51,6 +51,25 @@ public class GroupedProductMember : BaseEntity
     public int DisplayOrder { get; set; }
 }
 
+/// <summary>Lists a product in a <see cref="Store"/>. A product with no rows is listed in every store.</summary>
+public class ProductStoreMapping : BaseEntity
+{
+    public Guid ProductId { get; set; }
+    public Product? Product { get; set; }
+    public Guid StoreId { get; set; }
+    public Store? Store { get; set; }
+}
+
+/// <summary>A <see cref="SpecificationAttribute"/> offered as a facet on a category's product listing.</summary>
+public class CategoryFilterAttribute : BaseEntity
+{
+    public Guid CategoryId { get; set; }
+    public Category? Category { get; set; }
+    public Guid SpecificationAttributeId { get; set; }
+    public SpecificationAttribute? SpecificationAttribute { get; set; }
+    public int DisplayOrder { get; set; }
+}
+
 /// <summary>A downloadable file or URL attached to a Downloadable product (AC-CAT-001.4).</summary>
 public class ProductDownload : AuditableEntity
 {

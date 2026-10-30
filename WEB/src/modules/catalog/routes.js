@@ -77,6 +77,12 @@ export default [
     component: () => import('modules/catalog/pages/attributes.vue')
   },
   {
+    path: 'catalog/custom-fields',
+    name: 'catalog-custom-fields',
+    meta: { title: 'Custom fields', permissions: ['Catalog.Read'] },
+    component: () => import('modules/catalog/pages/custom-fields.vue')
+  },
+  {
     path: 'catalog/attributes/product/new',
     name: 'product-attribute-new',
     meta: { title: 'New product attribute', permissions: ['Catalog.Write'] },

@@ -24,8 +24,10 @@ public class AdminProductsController : ApiControllerBase
         [FromQuery] bool? isPublished = null,
         [FromQuery] Guid? categoryId = null,
         [FromQuery] Guid? manufacturerId = null,
-        [FromQuery] bool? isFeatured = null)
-        => Ok(await Mediator.Send(new ListProductsQuery(page, pageSize, search, type, isPublished, categoryId, manufacturerId, isFeatured)));
+        [FromQuery] bool? isFeatured = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListProductsQuery(page, pageSize, search, type, isPublished, categoryId, manufacturerId, isFeatured, sortBy, sortDescending)));
 
     /// <summary>Get a single product with its full child graph.</summary>
     [HttpGet("{id:guid}")]
@@ -71,6 +73,16 @@ public class AdminProductsController : ApiControllerBase
     }
 
     // ----- Assignments (replace-semantics) -------------------------------------------------------
+
+    /// <summary>Replace the stores the product is listed in (empty = every store).</summary>
+    [HttpPut("{id:guid}/stores")]
+    public async Task<ActionResult<ProductDto>> SetStores(Guid id, [FromBody] SetProductStoresCommand command)
+        => Ok(await Mediator.Send(command with { ProductId = id }));
+
+    /// <summary>Replace the product's custom-field values.</summary>
+    [HttpPut("{id:guid}/custom-fields")]
+    public async Task<ActionResult<ProductDto>> SetCustomFieldValues(Guid id, [FromBody] SetProductCustomFieldValuesCommand command)
+        => Ok(await Mediator.Send(command with { ProductId = id }));
 
     /// <summary>Replace the product's category assignments.</summary>
     [HttpPut("{id:guid}/categories")]

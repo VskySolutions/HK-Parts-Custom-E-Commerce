@@ -39,3 +39,10 @@ public enum StockStatus
     OutOfStock = 1,
     Backordered = 2
 }
+
+/// <summary>Input type of a <see cref="Entities.ProductCustomField"/>.</summary>
+public enum ProductCustomFieldType
+{
+    Text = 0,
+    TextArea = 1
+}

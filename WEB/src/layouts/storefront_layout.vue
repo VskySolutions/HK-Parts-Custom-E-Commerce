@@ -315,7 +315,7 @@ const { compareIds } = useCompare()
 const auth = useAuthStore()
 const customerAuth = useCustomerAuthStore()
 const { branding, loadBranding } = useStorefront()
-const { categories, loadCategories } = useCategories()
+const { menuCategories: categories, loadCategories } = useCategories()
 const { itemCount, ensureLoaded } = useCart()
 
 const year = new Date().getFullYear()

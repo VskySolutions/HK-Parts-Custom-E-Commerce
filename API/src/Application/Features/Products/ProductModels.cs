@@ -37,6 +37,37 @@ public class ProductDto
     public int? DownloadLimit { get; set; }
     public GiftCardType? GiftCardType { get; set; }
     public decimal? GiftCardAmount { get; set; }
+    public string? H1 { get; set; }
+    public Guid? MetaImageMediaId { get; set; }
+    public string? MetaOpenGraph { get; set; }
+    public string? MetaCustomTags { get; set; }
+    public string? MetaFooterTags { get; set; }
+    public string? Gtin { get; set; }
+    public decimal? Cost { get; set; }
+    public decimal? Msrp { get; set; }
+    public decimal? SalePrice { get; set; }
+    public DateTime? SaleStartDateUtc { get; set; }
+    public DateTime? SaleEndDateUtc { get; set; }
+    public string? TaxCode { get; set; }
+    public bool IsPurchasable { get; set; }
+    public bool IsFflRequired { get; set; }
+    public int? MinOrderQuantity { get; set; }
+    public int? MaxOrderQuantity { get; set; }
+    public StockStatus? StockStatusOverride { get; set; }
+    public string? BackorderMessage { get; set; }
+    public decimal? Weight { get; set; }
+    public decimal? Length { get; set; }
+    public decimal? Width { get; set; }
+    public decimal? Height { get; set; }
+    public int PackagePieces { get; set; }
+    public string? PackageType { get; set; }
+    public string? FreightClass { get; set; }
+    public bool IsHazardous { get; set; }
+    /// <summary>Resolved public URL of <see cref="MetaImageMediaId"/>.</summary>
+    public string? MetaImageUrl { get; set; }
+    /// <summary>Stores the product is listed in; empty = every store.</summary>
+    public List<Guid> StoreIds { get; set; } = new();
+    public List<ProductCustomFieldValueDto> CustomFieldValues { get; set; } = new();
 
     public List<ProductVariantDto> Variants { get; set; } = new();
     public List<ProductPictureDto> Pictures { get; set; } = new();
@@ -79,6 +110,35 @@ public class ProductDto
         DownloadLimit = p.DownloadLimit,
         GiftCardType = p.GiftCardType,
         GiftCardAmount = p.GiftCardAmount,
+        H1 = p.H1,
+        MetaImageMediaId = p.MetaImageMediaId,
+        MetaOpenGraph = p.MetaOpenGraph,
+        MetaCustomTags = p.MetaCustomTags,
+        MetaFooterTags = p.MetaFooterTags,
+        Gtin = p.Gtin,
+        Cost = p.Cost,
+        Msrp = p.Msrp,
+        SalePrice = p.SalePrice,
+        SaleStartDateUtc = p.SaleStartDateUtc,
+        SaleEndDateUtc = p.SaleEndDateUtc,
+        TaxCode = p.TaxCode,
+        IsPurchasable = p.IsPurchasable,
+        IsFflRequired = p.IsFflRequired,
+        MinOrderQuantity = p.MinOrderQuantity,
+        MaxOrderQuantity = p.MaxOrderQuantity,
+        StockStatusOverride = p.StockStatusOverride,
+        BackorderMessage = p.BackorderMessage,
+        Weight = p.Weight,
+        Length = p.Length,
+        Width = p.Width,
+        Height = p.Height,
+        PackagePieces = p.PackagePieces,
+        PackageType = p.PackageType,
+        FreightClass = p.FreightClass,
+        IsHazardous = p.IsHazardous,
+        MetaImageUrl = p.MetaImage?.Url,
+        StoreIds = p.StoreMappings.Select(m => m.StoreId).ToList(),
+        CustomFieldValues = p.CustomFieldValues.Select(ProductCustomFieldValueDto.From).ToList(),
         Variants = p.Variants
             .OrderBy(v => v.DisplayOrder)
             .Select(ProductVariantDto.From)
@@ -140,6 +200,9 @@ public class ProductListItemDto
     public int DisplayOrder { get; set; }
     public Guid TaxCategoryId { get; set; }
     public Guid? ManufacturerId { get; set; }
+    public string? Gtin { get; set; }
+    /// <summary>First image (by display order); requires <c>Pictures.Media</c> to be loaded.</summary>
+    public string? ImageUrl { get; set; }
 
     public static ProductListItemDto From(Product p) => new()
     {
@@ -155,6 +218,12 @@ public class ProductListItemDto
         DisplayOrder = p.DisplayOrder,
         TaxCategoryId = p.TaxCategoryId,
         ManufacturerId = p.ManufacturerId,
+        Gtin = p.Gtin,
+        ImageUrl = p.Pictures
+            .Where(i => i.Media != null && i.Media.MediaType == MediaType.Image)
+            .OrderBy(i => i.DisplayOrder)
+            .Select(i => i.Media!.Url)
+            .FirstOrDefault(),
     };
 }
 
@@ -164,6 +233,10 @@ public class ProductVariantDto
     public Guid Id { get; set; }
     public string? Sku { get; set; }
     public decimal? Price { get; set; }
+    public string? Gtin { get; set; }
+    public decimal? Cost { get; set; }
+    public decimal? Msrp { get; set; }
+    public decimal? Weight { get; set; }
     public int StockQuantity { get; set; }
     public bool AllowBackorder { get; set; }
     public bool IsEnabled { get; set; }
@@ -176,6 +249,10 @@ public class ProductVariantDto
         Id = v.Id,
         Sku = v.Sku,
         Price = v.Price,
+        Gtin = v.Gtin,
+        Cost = v.Cost,
+        Msrp = v.Msrp,
+        Weight = v.Weight,
         StockQuantity = v.StockQuantity,
         AllowBackorder = v.AllowBackorder,
         IsEnabled = v.IsEnabled,
@@ -249,5 +326,18 @@ public class ProductDownloadDto
         Name = d.Name,
         Url = d.Url,
         DisplayOrder = d.DisplayOrder,
+    };
+}
+
+/// <summary>A product's value for one custom field.</summary>
+public class ProductCustomFieldValueDto
+{
+    public Guid ProductCustomFieldId { get; set; }
+    public string? Value { get; set; }
+
+    public static ProductCustomFieldValueDto From(ProductCustomFieldValue v) => new()
+    {
+        ProductCustomFieldId = v.ProductCustomFieldId,
+        Value = v.Value,
     };
 }

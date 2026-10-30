@@ -70,6 +70,10 @@ public interface IApplicationDbContext
     DbSet<ProductSpecificationValue> ProductSpecificationValues { get; }
     DbSet<GroupedProductMember> GroupedProductMembers { get; }
     DbSet<ProductDownload> ProductDownloads { get; }
+    DbSet<ProductStoreMapping> ProductStoreMappings { get; }
+    DbSet<CategoryFilterAttribute> CategoryFilterAttributes { get; }
+    DbSet<ProductCustomField> ProductCustomFields { get; }
+    DbSet<ProductCustomFieldValue> ProductCustomFieldValues { get; }
 
     // Inventory (WO-12)
     DbSet<InventoryLevel> InventoryLevels { get; }

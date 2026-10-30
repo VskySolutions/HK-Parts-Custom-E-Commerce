@@ -52,6 +52,18 @@
         >
           <q-tab name="general" icon="o_info" label="General" />
           <q-tab name="seo" icon="o_search" label="SEO" :disable="isCreate" />
+          <q-tab name="filters" :disable="isCreate">
+            <div class="row items-center no-wrap">
+              <q-icon name="o_filter_list" class="q-mr-xs" />Filters
+              <q-badge v-if="!isCreate && filterCount" color="grey-5" class="q-ml-xs">{{ filterCount }}</q-badge>
+            </div>
+          </q-tab>
+          <q-tab name="products" :disable="isCreate">
+            <div class="row items-center no-wrap">
+              <q-icon name="o_inventory_2" class="q-mr-xs" />Products
+              <q-badge v-if="!isCreate && productTotal" color="grey-5" class="q-ml-xs">{{ productTotal }}</q-badge>
+            </div>
+          </q-tab>
           <q-tab name="media" :disable="isCreate">
             <div class="row items-center no-wrap">
               <q-icon name="o_photo_library" class="q-mr-xs" />Media
@@ -83,6 +95,7 @@
             </div>
 
             <AppTextField v-model="form.slug" label="Slug" :v="v$.slug" placeholder="e.g. mens-clothing" hint="Storefront URL — auto-filled from the name until you edit it" :disable="!canWrite" />
+            <AppTextField v-model="form.summary" label="Summary" type="textarea" autogrow maxlength="2000" :v="v$.summary" placeholder="A short teaser for category tiles and listings" :disable="!canWrite" />
             <AppRichText v-model="form.description" label="Description" placeholder="Describe this category…" hint="Rich text shown on the category page" :disable="!canWrite" />
 
             <q-separator class="q-my-sm" />
@@ -93,7 +106,27 @@
               <div class="col-auto q-mt-md">
                 <q-toggle v-model="form.isEnabled" label="Enabled" color="primary" :disable="!canWrite" />
               </div>
+              <div class="col-auto q-mt-md">
+                <q-toggle v-model="form.showInMenu" label="Display in menu" color="primary" :disable="!canWrite">
+                  <q-tooltip>Show this category in the storefront navigation menu</q-tooltip>
+                </q-toggle>
+              </div>
             </div>
+
+            <!-- Fixed image slots (edit only — uploads need the category to exist) -->
+            <template v-if="!isCreate">
+              <q-separator class="q-my-sm" />
+              <div class="row q-col-gutter-md">
+                <div class="col-12 col-md-6 q-gutter-y-sm">
+                  <MediaImageField v-model="form.imageMediaId" v-model:url="imageUrl" label="Image 1" hint="e.g. the listing / menu tile" :alt="form.imageAltText || form.name" :disable="!canWrite" />
+                  <AppTextField v-model="form.imageAltText" label="Image 1 alt text" maxlength="300" :v="v$.imageAltText" placeholder="Describe the image for screen readers" :disable="!canWrite" />
+                </div>
+                <div class="col-12 col-md-6 q-gutter-y-sm">
+                  <MediaImageField v-model="form.image2MediaId" v-model:url="image2Url" label="Image 2" hint="e.g. the category page banner" :alt="form.image2AltText || form.name" :disable="!canWrite" />
+                  <AppTextField v-model="form.image2AltText" label="Image 2 alt text" maxlength="300" :v="v$.image2AltText" placeholder="Describe the image for screen readers" :disable="!canWrite" />
+                </div>
+              </div>
+            </template>
           </q-tab-panel>
 
           <!-- ============ SEO ============ -->
@@ -112,6 +145,85 @@
             </AppTextField>
             <AppTextField v-model="form.metaKeywords" label="Meta keywords" placeholder="Comma-separated keywords" :disable="!canWrite" maxlength="500" />
             <AppTextField v-model="form.canonicalUrl" label="Canonical URL" placeholder="Optional — for duplicate-content canonicalization" :disable="!canWrite" />
+            <AppTextField v-model="form.h1" label="H1 tag" placeholder="Defaults to the category name" maxlength="300" :v="v$.h1" :disable="!canWrite" />
+
+            <MediaImageField
+              v-model="form.metaImageMediaId"
+              v-model:url="metaImageUrl"
+              label="Meta image"
+              hint="Social-share (og:image) picture — 1200×630 recommended"
+              :alt="form.name"
+              :disable="!canWrite"
+            />
+
+            <AppTextField v-model="form.metaOpenGraph" label="Open Graph override" type="textarea" autogrow hint="Raw og: tags — replaces the generated Open Graph markup" :disable="!canWrite" />
+            <AppTextField v-model="form.metaCustomTags" label="Custom head tags / scripts" type="textarea" autogrow hint="Injected into the page &lt;head&gt;" :disable="!canWrite" />
+            <AppTextField v-model="form.metaFooterTags" label="Custom footer tags / scripts" type="textarea" autogrow hint="Injected before &lt;/body&gt;" :disable="!canWrite" />
+          </q-tab-panel>
+
+          <!-- ============ FILTERS ============ -->
+          <q-tab-panel name="filters" class="q-gutter-y-sm">
+            <div class="app-section__title q-mb-xs">Select filterable attributes</div>
+            <div class="text-caption text-grey-7 q-mb-sm">Checked attributes are offered as filters on this category's product listing.</div>
+
+            <q-card flat bordered class="q-pa-sm filter-list">
+              <q-checkbox v-model="showBrandFilter" label="Brand" dense class="filter-list__item" :disable="!canWrite" @update:model-value="queueFilters" />
+              <q-checkbox
+                v-for="opt in specAttributeOptions"
+                :key="opt.value"
+                v-model="filterAttributeIds"
+                :val="opt.value"
+                dense
+                class="filter-list__item"
+                :disable="!canWrite"
+                @update:model-value="queueFilters"
+              >
+                {{ opt.label }}
+                <q-badge v-if="!opt.isFilterable" color="grey-4" text-color="grey-8" class="q-ml-xs">not filterable</q-badge>
+              </q-checkbox>
+            </q-card>
+
+            <div v-if="!specAttributeOptions.length" class="text-caption text-grey-6">
+              No attributes yet — add them under
+              <router-link :to="{ name: 'catalog-attributes' }" class="text-primary">Catalog → Attributes</router-link>
+              as specification attributes (e.g. Allow International Shipping, Condition, Shipping Package Size) and they'll appear here.
+            </div>
+            <div v-else-if="specAttributeOptions.some((o) => !o.isFilterable)" class="text-caption text-grey-6">
+              Attributes marked “not filterable” are hidden from storefront filters until “Filterable” is switched on for them under Catalog → Attributes.
+            </div>
+          </q-tab-panel>
+
+          <!-- ============ PRODUCTS ============ -->
+          <q-tab-panel name="products">
+            <q-table
+              flat bordered dense
+              class="app-table-card"
+              row-key="id"
+              :rows="products"
+              :columns="productColumns"
+              :loading="productsLoading"
+              v-model:pagination="productPagination"
+              :rows-per-page-options="[10, 25, 50, 100]"
+              binary-state-sort
+              @request="loadProducts"
+              @row-click="(evt, row) => router.push({ name: 'catalog-product-detail', params: { id: row.id } })"
+            >
+              <template #top>
+                <div class="app-section__title col ellipsis">Products in this category</div>
+                <q-input v-model="productSearch" dense outlined debounce="300" placeholder="Search name, SKU or GTIN" style="min-width: 240px" @update:model-value="reloadProducts">
+                  <template #prepend><q-icon name="o_search" /></template>
+                </q-input>
+              </template>
+              <template #body-cell-image="p">
+                <q-td :props="p">
+                  <img v-if="p.row.imageUrl" :src="$media(p.row.imageUrl)" :alt="p.row.name" class="product-thumb">
+                  <q-icon v-else name="o_image_not_supported" size="24px" color="grey-5" />
+                </q-td>
+              </template>
+              <template #no-data>
+                <div class="full-width text-center text-grey-6 q-pa-md">No products assigned — assign categories from a product's Organization tab.</div>
+              </template>
+            </q-table>
           </q-tab-panel>
 
           <!-- ============ MEDIA ============ -->
@@ -148,7 +260,7 @@
           <q-separator />
           <q-card-actions class="q-pa-md">
             <div class="text-caption text-grey-7">
-              Create the category to unlock SEO and media — all auto-saved from then on.
+              Create the category to unlock images, SEO, filters, products and media — all auto-saved from then on.
             </div>
             <q-space />
             <q-btn v-if="canWrite" unelevated color="primary" no-caps icon="o_check" label="Create category" :loading="creating" @click="create" />
@@ -172,7 +284,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getApiErrorMessage } from 'services/api'
-import { categoryApi, mediaApi } from 'modules/catalog/api'
+import { categoryApi, mediaApi, productApi, specificationAttributeApi } from 'modules/catalog/api'
 import { usePermissions } from 'composables/usePermissions'
 import { useNotify } from 'composables/useNotify'
 import { useDetailForm } from 'composables/useDetailForm'
@@ -183,6 +295,8 @@ import AppTextField from 'components/common/AppTextField.vue'
 import AppSelect from 'components/common/AppSelect.vue'
 import AppRichText from 'components/common/AppRichText.vue'
 import AppFieldLabel from 'components/common/AppFieldLabel.vue'
+import MediaImageField from 'modules/catalog/components/MediaImageField.vue'
+import { debounce } from 'quasar'
 
 const router = useRouter()
 const notify = useNotify()
@@ -202,9 +316,25 @@ function buildPayload (form) {
     metaKeywords: form.metaKeywords || null,
     canonicalUrl: form.canonicalUrl || null,
     displayOrder: Number(form.displayOrder) || 0,
-    isEnabled: form.isEnabled
+    isEnabled: form.isEnabled,
+    summary: form.summary || null,
+    showInMenu: form.showInMenu,
+    imageMediaId: form.imageMediaId || null,
+    imageAltText: form.imageAltText || null,
+    image2MediaId: form.image2MediaId || null,
+    image2AltText: form.image2AltText || null,
+    h1: form.h1 || null,
+    metaImageMediaId: form.metaImageMediaId || null,
+    metaOpenGraph: form.metaOpenGraph || null,
+    metaCustomTags: form.metaCustomTags || null,
+    metaFooterTags: form.metaFooterTags || null
   }
 }
+
+// Preview URLs for the media-backed image fields (the form only holds media ids).
+const imageUrl = ref(null)
+const image2Url = ref(null)
+const metaImageUrl = ref(null)
 
 const {
   form, v$, entity, loading, creating, isCreate, id, saveStatus, create, markSaved
@@ -218,15 +348,108 @@ const {
   empty: {
     name: '', parentId: null, slug: '', description: '',
     metaTitle: '', metaDescription: '', metaKeywords: '', canonicalUrl: '',
-    displayOrder: 0, isEnabled: true
+    displayOrder: 0, isEnabled: true,
+    summary: '', showInMenu: true,
+    imageMediaId: null, imageAltText: '', image2MediaId: null, image2AltText: '',
+    h1: '', metaImageMediaId: null, metaOpenGraph: '', metaCustomTags: '', metaFooterTags: ''
   },
   rules: {
     name: { required, maxLength: maxLength(200) },
-    slug: { maxLength: maxLength(220) }
+    slug: { maxLength: maxLength(220) },
+    summary: { maxLength: maxLength(2000) },
+    imageAltText: { maxLength: maxLength(300) },
+    image2AltText: { maxLength: maxLength(300) },
+    h1: { maxLength: maxLength(300) }
   },
-  afterLoad: () => { loadTree(); loadPictures() },
-  resetExtra: () => { pictures.value = []; loadTree() }
+  hydrateForm: (f, e) => {
+    imageUrl.value = e.imageUrl || null
+    image2Url.value = e.image2Url || null
+    metaImageUrl.value = e.metaImageUrl || null
+  },
+  afterLoad: (e) => { loadTree(); loadPictures(); hydrateFilters(e); loadSpecAttributes(); reloadProducts() },
+  resetExtra: () => {
+    pictures.value = []; products.value = []; productTotal.value = 0
+    imageUrl.value = null; image2Url.value = null; metaImageUrl.value = null
+    loadTree()
+  }
 })
+
+// ---- Filters (brand toggle + ordered specification attributes) ------------------
+const showBrandFilter = ref(false)
+const filterAttributeIds = ref([])
+const specAttributeOptions = ref([])
+const filterCount = computed(() => filterAttributeIds.value.length + (showBrandFilter.value ? 1 : 0))
+let hydratingFilters = false
+
+function hydrateFilters (e) {
+  hydratingFilters = true
+  showBrandFilter.value = !!e.showBrandFilter
+  filterAttributeIds.value = [...(e.filterSpecificationAttributeIds || [])]
+  hydratingFilters = false
+}
+
+async function loadSpecAttributes () {
+  try {
+    // Every specification attribute is listed (like the PHP Filters tab lists every dropdown attribute);
+    // non-filterable ones are flagged rather than hidden.
+    const result = await specificationAttributeApi.list({ page: 1, pageSize: 200 })
+    const items = Array.isArray(result) ? result : result?.items || []
+    specAttributeOptions.value = items.map((a) => ({ label: a.name, value: a.id, isFilterable: a.isFilterable !== false }))
+  } catch (err) { specAttributeOptions.value = [] }
+}
+
+const queueFilters = debounce(async () => {
+  if (hydratingFilters) return
+  try {
+    // Checkboxes have no pick order — save in the attribute list's display order.
+    const checked = new Set(filterAttributeIds.value)
+    await categoryApi.setFilters(id.value, {
+      showBrandFilter: showBrandFilter.value,
+      specificationAttributeIds: specAttributeOptions.value.filter((o) => checked.has(o.value)).map((o) => o.value)
+    })
+    markSaved()
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+  }
+}, 700)
+
+// ---- Products in this category (server-paged) -----------------------------------
+const products = ref([])
+const productTotal = ref(0)
+const productsLoading = ref(false)
+const productSearch = ref('')
+const productPagination = ref({ sortBy: 'name', descending: false, page: 1, rowsPerPage: 25, rowsNumber: 0 })
+const productColumns = [
+  { name: 'image', label: 'Image', align: 'left', field: 'imageUrl', style: 'width: 64px' },
+  { name: 'name', label: 'Name', align: 'left', field: 'name', sortable: true },
+  { name: 'sku', label: 'SKU', align: 'left', field: (r) => r.sku || '—', sortable: true },
+  // Stock is a rollup over per-store inventory — not sortable server-side.
+  { name: 'stockQuantity', label: 'Qty in stock', align: 'right', field: 'stockQuantity' }
+]
+
+async function loadProducts (props) {
+  const pag = props?.pagination || productPagination.value
+  productsLoading.value = true
+  try {
+    const result = await productApi.list({
+      categoryId: id.value,
+      search: productSearch.value || undefined,
+      page: pag.page,
+      pageSize: pag.rowsPerPage || 100,
+      sortBy: pag.sortBy || undefined,
+      sortDescending: pag.descending
+    })
+    products.value = result?.items || []
+    productTotal.value = result?.totalCount ?? products.value.length
+    productPagination.value = { ...pag, rowsNumber: productTotal.value }
+  } catch (err) {
+    products.value = []
+    notify.error(getApiErrorMessage(err))
+  } finally {
+    productsLoading.value = false
+  }
+}
+function reloadProducts () { loadProducts({ pagination: { ...productPagination.value, page: 1 } }) }
 
 // ---- Parent options (flattened tree, current node excluded) --------------------
 const parentOptions = ref([])
@@ -339,6 +562,16 @@ async function removePicture (pic) {
   &__title { color: #1a0dab; font-size: 18px; line-height: 1.3; }
   &__url { color: #006621; font-size: 13px; }
   &__desc { color: #545454; font-size: 13px; margin-top: 2px; }
+}
+
+.filter-list {
+  display: flex; flex-direction: column; max-width: 560px;
+  &__item { padding: 4px 0; }
+}
+
+.product-thumb {
+  width: 40px; height: 40px; object-fit: cover; display: block;
+  border: 1px solid rgba(0, 0, 0, 0.12); border-radius: 4px; background: #fafafa;
 }
 
 .detail-pic {

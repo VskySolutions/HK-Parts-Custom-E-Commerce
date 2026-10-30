@@ -24,5 +24,8 @@ internal static class ProductQueries
             .Include(p => p.SpecificationValues)
             .Include(p => p.Relationships)
             .Include(p => p.GroupedMembers)
-            .Include(p => p.Downloads);
+            .Include(p => p.Downloads)
+            .Include(p => p.MetaImage)
+            .Include(p => p.StoreMappings)
+            .Include(p => p.CustomFieldValues);
 }

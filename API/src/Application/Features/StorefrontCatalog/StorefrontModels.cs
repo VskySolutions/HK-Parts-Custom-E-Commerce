@@ -63,6 +63,8 @@ public class StorefrontCategoryNodeDto
     public string? Slug { get; set; }
     public Guid? ParentId { get; set; }
     public int ProductCount { get; set; }
+    /// <summary>False = keep out of the navigation menu (still listed in grids / reachable by URL).</summary>
+    public bool ShowInMenu { get; set; }
     public List<StorefrontCategoryNodeDto> Children { get; set; } = new();
 }
 

@@ -16,11 +16,6 @@ public class GetCategoryQueryHandler : IRequestHandler<GetCategoryQuery, Categor
 
     public async Task<CategoryDto> Handle(GetCategoryQuery request, CancellationToken cancellationToken)
     {
-        var category = await _db.Categories
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == request.Id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Category), request.Id);
-
-        return CategoryDto.From(category);
+        return await CategoryQueries.GetDtoAsync(_db, request.Id, cancellationToken);
     }
 }

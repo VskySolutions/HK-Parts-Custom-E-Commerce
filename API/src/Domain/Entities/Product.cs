@@ -26,9 +26,62 @@ public class Product : AuditableEntity, ISoftDeletable
     public string? MetaDescription { get; set; }
     public string? MetaKeywords { get; set; }
 
+    /// <summary>Page heading override; the storefront falls back to <see cref="Name"/>.</summary>
+    public string? H1 { get; set; }
+    /// <summary>Social-share (og:image) picture from the media library.</summary>
+    public Guid? MetaImageMediaId { get; set; }
+    public Media? MetaImage { get; set; }
+    /// <summary>Raw Open Graph markup that replaces the generated og: tags.</summary>
+    public string? MetaOpenGraph { get; set; }
+    /// <summary>Raw tags/scripts injected into the page &lt;head&gt;.</summary>
+    public string? MetaCustomTags { get; set; }
+    /// <summary>Raw tags/scripts injected before &lt;/body&gt;.</summary>
+    public string? MetaFooterTags { get; set; }
+
     // Simple-product fields (also the default/base for other types).
     public string? Sku { get; set; }
     public decimal? Price { get; set; }
+
+    /// <summary>Barcode (UPC / EAN / ISBN).</summary>
+    public string? Gtin { get; set; }
+    /// <summary>Merchant cost — internal, never shown on the storefront.</summary>
+    public decimal? Cost { get; set; }
+    /// <summary>Manufacturer's suggested retail ("compare at") price.</summary>
+    public decimal? Msrp { get; set; }
+
+    /// <summary>Scheduled sale price; applies while now is inside the optional start/end window.</summary>
+    public decimal? SalePrice { get; set; }
+    public DateTime? SaleStartDateUtc { get; set; }
+    public DateTime? SaleEndDateUtc { get; set; }
+
+    /// <summary>Tax provider product code (Avalara / TaxJar / Stripe Tax); <see cref="TaxCategoryId"/> stays the internal class.</summary>
+    public string? TaxCode { get; set; }
+
+    /// <summary>False shows the product but hides the buy button (catalog-only listing).</summary>
+    public bool IsPurchasable { get; set; } = true;
+    /// <summary>Firearm that must ship to a Federal Firearms Licensee.</summary>
+    public bool IsFflRequired { get; set; }
+
+    // Order-quantity limits (per cart line); null = no limit.
+    public int? MinOrderQuantity { get; set; }
+    public int? MaxOrderQuantity { get; set; }
+
+    /// <summary>Manual stock-status override; null derives availability from inventory.</summary>
+    public StockStatus? StockStatusOverride { get; set; }
+    /// <summary>Message shown on the product page while the product is backordered.</summary>
+    public string? BackorderMessage { get; set; }
+
+    // Shipping — weight in pounds, dimensions in inches.
+    public decimal? Weight { get; set; }
+    public decimal? Length { get; set; }
+    public decimal? Width { get; set; }
+    public decimal? Height { get; set; }
+    public int PackagePieces { get; set; } = 1;
+    /// <summary>LTL package type (pallet, box, crate…).</summary>
+    public string? PackageType { get; set; }
+    /// <summary>NMFC freight class (50–500).</summary>
+    public string? FreightClass { get; set; }
+    public bool IsHazardous { get; set; }
 
     /// <summary>
     /// On-hand stock is held per store in <see cref="InventoryLevels"/> (the single source of truth read
@@ -97,4 +150,7 @@ public class Product : AuditableEntity, ISoftDeletable
     public ICollection<GroupedProductMember> GroupedMembers { get; set; } = new List<GroupedProductMember>();
     public ICollection<ProductDownload> Downloads { get; set; } = new List<ProductDownload>();
     public ICollection<InventoryLevel> InventoryLevels { get; set; } = new List<InventoryLevel>();
+    /// <summary>Stores the product is listed in; empty = every store.</summary>
+    public ICollection<ProductStoreMapping> StoreMappings { get; set; } = new List<ProductStoreMapping>();
+    public ICollection<ProductCustomFieldValue> CustomFieldValues { get; set; } = new List<ProductCustomFieldValue>();
 }

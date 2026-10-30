@@ -23,6 +23,33 @@ public class Category : AuditableEntity, ISoftDeletable
     public string? MetaKeywords { get; set; }
     public string? CanonicalUrl { get; set; }
 
+    /// <summary>Page heading override; the storefront falls back to <see cref="Name"/>.</summary>
+    public string? H1 { get; set; }
+    public Guid? MetaImageMediaId { get; set; }
+    public Media? MetaImage { get; set; }
+    public string? MetaOpenGraph { get; set; }
+    public string? MetaCustomTags { get; set; }
+    public string? MetaFooterTags { get; set; }
+
+    /// <summary>Short plain-text teaser shown on category tiles / listings.</summary>
+    public string? Summary { get; set; }
+
+    /// <summary>Whether the category appears in the storefront navigation menu.</summary>
+    public bool ShowInMenu { get; set; } = true;
+
+    // Two fixed image slots (e.g. listing tile + page banner), each with its own alt text.
+    public Guid? ImageMediaId { get; set; }
+    public Media? Image { get; set; }
+    public string? ImageAltText { get; set; }
+    public Guid? Image2MediaId { get; set; }
+    public Media? Image2 { get; set; }
+    public string? Image2AltText { get; set; }
+
+    /// <summary>Offer the brand (manufacturer) facet on this category's listing.</summary>
+    public bool ShowBrandFilter { get; set; }
+    /// <summary>Specification attributes offered as facets on this category's listing.</summary>
+    public ICollection<CategoryFilterAttribute> FilterAttributes { get; set; } = new List<CategoryFilterAttribute>();
+
     public int DisplayOrder { get; set; }
     public bool IsEnabled { get; set; } = true;
 

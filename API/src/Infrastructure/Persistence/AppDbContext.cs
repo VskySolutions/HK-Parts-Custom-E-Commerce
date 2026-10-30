@@ -91,6 +91,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProductSpecificationValue> ProductSpecificationValues => Set<ProductSpecificationValue>();
     public DbSet<GroupedProductMember> GroupedProductMembers => Set<GroupedProductMember>();
     public DbSet<ProductDownload> ProductDownloads => Set<ProductDownload>();
+    public DbSet<ProductStoreMapping> ProductStoreMappings => Set<ProductStoreMapping>();
+    public DbSet<CategoryFilterAttribute> CategoryFilterAttributes => Set<CategoryFilterAttribute>();
+    public DbSet<ProductCustomField> ProductCustomFields => Set<ProductCustomField>();
+    public DbSet<ProductCustomFieldValue> ProductCustomFieldValues => Set<ProductCustomFieldValue>();
 
     // Inventory (WO-12)
     public DbSet<InventoryLevel> InventoryLevels => Set<InventoryLevel>();

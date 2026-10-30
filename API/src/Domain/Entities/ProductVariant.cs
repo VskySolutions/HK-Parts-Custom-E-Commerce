@@ -16,6 +16,11 @@ public class ProductVariant : AuditableEntity, ISoftDeletable
 
     public string? Sku { get; set; }
     public decimal? Price { get; set; }
+    public string? Gtin { get; set; }
+    public decimal? Cost { get; set; }
+    public decimal? Msrp { get; set; }
+    /// <summary>Pounds; null inherits the product weight.</summary>
+    public decimal? Weight { get; set; }
 
     /// <summary>Read-through rollup of this variant's per-store <see cref="InventoryLevels"/> (sum across
     /// stores). On-hand stock is held per store in the inventory; requires the collection to be loaded.</summary>

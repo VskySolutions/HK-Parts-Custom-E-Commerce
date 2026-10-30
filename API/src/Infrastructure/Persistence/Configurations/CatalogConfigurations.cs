@@ -30,11 +30,20 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
         b.Property(x => x.MetaDescription).HasMaxLength(500);
         b.Property(x => x.MetaKeywords).HasMaxLength(500);
         b.Property(x => x.CanonicalUrl).HasMaxLength(500);
+        b.Property(x => x.H1).HasMaxLength(300);
+        b.Property(x => x.Summary).HasMaxLength(2000);
+        b.Property(x => x.ImageAltText).HasMaxLength(300);
+        b.Property(x => x.Image2AltText).HasMaxLength(300);
 
         b.HasOne(x => x.Parent)
             .WithMany(x => x.Children)
             .HasForeignKey(x => x.ParentId)
             .OnDelete(DeleteBehavior.NoAction);
+
+        // Media lookups: three FKs to the same table → NoAction (no multiple cascade paths).
+        b.HasOne(x => x.MetaImage).WithMany().HasForeignKey(x => x.MetaImageMediaId).OnDelete(DeleteBehavior.NoAction);
+        b.HasOne(x => x.Image).WithMany().HasForeignKey(x => x.ImageMediaId).OnDelete(DeleteBehavior.NoAction);
+        b.HasOne(x => x.Image2).WithMany().HasForeignKey(x => x.Image2MediaId).OnDelete(DeleteBehavior.NoAction);
 
         b.HasIndex(x => x.ParentId);
         b.HasIndex(x => x.Slug).IsUnique().HasFilter("[Slug] IS NOT NULL AND [Deleted] = 0");
@@ -86,6 +95,35 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         b.Property(x => x.GiftCardAmount).HasPrecision(18, 2);
         b.Property(x => x.ProductType).HasConversion<int>();
         b.Property(x => x.GiftCardType).HasConversion<int?>();
+        b.Property(x => x.H1).HasMaxLength(300);
+        b.Property(x => x.Gtin).HasMaxLength(50);
+        b.Property(x => x.Cost).HasPrecision(18, 2);
+        b.Property(x => x.Msrp).HasPrecision(18, 2);
+        b.Property(x => x.SalePrice).HasPrecision(18, 2);
+        b.Property(x => x.TaxCode).HasMaxLength(50);
+        b.Property(x => x.StockStatusOverride).HasConversion<int?>();
+        b.Property(x => x.BackorderMessage).HasMaxLength(500);
+        b.Property(x => x.Weight).HasPrecision(18, 4);
+        b.Property(x => x.Length).HasPrecision(18, 2);
+        b.Property(x => x.Width).HasPrecision(18, 2);
+        b.Property(x => x.Height).HasPrecision(18, 2);
+        b.Property(x => x.PackageType).HasMaxLength(50);
+        b.Property(x => x.FreightClass).HasMaxLength(10);
+
+        b.ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_Products_OrderQuantityRange",
+                "([MinOrderQuantity] IS NULL OR [MinOrderQuantity] >= 1) AND ([MaxOrderQuantity] IS NULL OR [MaxOrderQuantity] >= 1) "
+                + "AND ([MinOrderQuantity] IS NULL OR [MaxOrderQuantity] IS NULL OR [MaxOrderQuantity] >= [MinOrderQuantity])");
+            t.HasCheckConstraint("CK_Products_SaleWindow",
+                "[SaleStartDateUtc] IS NULL OR [SaleEndDateUtc] IS NULL OR [SaleEndDateUtc] >= [SaleStartDateUtc]");
+            t.HasCheckConstraint("CK_Products_PackagePieces", "[PackagePieces] >= 1");
+        });
+
+        b.HasOne(x => x.MetaImage)
+            .WithMany()
+            .HasForeignKey(x => x.MetaImageMediaId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         b.HasOne(x => x.TaxCategory)
             .WithMany(t => t.Products)
@@ -102,7 +140,90 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         b.HasIndex(x => x.IsPublished);
         b.HasIndex(x => new { x.IsFeatured, x.FeaturedDisplayOrder });
         b.HasIndex(x => x.ManufacturerId);
+        b.HasIndex(x => x.Sku).HasFilter("[Sku] IS NOT NULL");
+        b.HasIndex(x => x.Gtin).HasFilter("[Gtin] IS NOT NULL");
         b.HasQueryFilter(x => !x.Deleted);
+    }
+}
+
+public class ProductStoreMappingConfiguration : IEntityTypeConfiguration<ProductStoreMapping>
+{
+    public void Configure(EntityTypeBuilder<ProductStoreMapping> b)
+    {
+        b.ToTable("ProductStoreMappings");
+        b.HasKey(x => x.Id);
+
+        b.HasOne(x => x.Product)
+            .WithMany(p => p.StoreMappings)
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasOne(x => x.Store)
+            .WithMany()
+            .HasForeignKey(x => x.StoreId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        b.HasIndex(x => new { x.ProductId, x.StoreId }).IsUnique();
+        b.HasIndex(x => x.StoreId);
+    }
+}
+
+public class CategoryFilterAttributeConfiguration : IEntityTypeConfiguration<CategoryFilterAttribute>
+{
+    public void Configure(EntityTypeBuilder<CategoryFilterAttribute> b)
+    {
+        b.ToTable("CategoryFilterAttributes");
+        b.HasKey(x => x.Id);
+
+        b.HasOne(x => x.Category)
+            .WithMany(c => c.FilterAttributes)
+            .HasForeignKey(x => x.CategoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasOne(x => x.SpecificationAttribute)
+            .WithMany()
+            .HasForeignKey(x => x.SpecificationAttributeId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        b.HasIndex(x => new { x.CategoryId, x.SpecificationAttributeId }).IsUnique();
+        b.HasIndex(x => x.SpecificationAttributeId);
+    }
+}
+
+public class ProductCustomFieldConfiguration : IEntityTypeConfiguration<ProductCustomField>
+{
+    public void Configure(EntityTypeBuilder<ProductCustomField> b)
+    {
+        b.ToTable("ProductCustomFields");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Code).HasMaxLength(100).IsRequired();
+        b.Property(x => x.FieldType).HasConversion<int>();
+
+        b.HasIndex(x => x.Code).IsUnique().HasFilter("[Deleted] = 0");
+        b.HasQueryFilter(x => !x.Deleted);
+    }
+}
+
+public class ProductCustomFieldValueConfiguration : IEntityTypeConfiguration<ProductCustomFieldValue>
+{
+    public void Configure(EntityTypeBuilder<ProductCustomFieldValue> b)
+    {
+        b.ToTable("ProductCustomFieldValues");
+        b.HasKey(x => x.Id);
+
+        b.HasOne(x => x.Product)
+            .WithMany(p => p.CustomFieldValues)
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasOne(x => x.ProductCustomField)
+            .WithMany(f => f.Values)
+            .HasForeignKey(x => x.ProductCustomFieldId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        b.HasIndex(x => new { x.ProductId, x.ProductCustomFieldId }).IsUnique();
+        b.HasIndex(x => x.ProductCustomFieldId);
     }
 }
 
@@ -114,6 +235,11 @@ public class ProductVariantConfiguration : IEntityTypeConfiguration<ProductVaria
         b.HasKey(x => x.Id);
         b.Property(x => x.Sku).HasMaxLength(100);
         b.Property(x => x.Price).HasPrecision(18, 2);
+        b.Property(x => x.Gtin).HasMaxLength(50);
+        b.Property(x => x.Cost).HasPrecision(18, 2);
+        b.Property(x => x.Msrp).HasPrecision(18, 2);
+        b.Property(x => x.Weight).HasPrecision(18, 4);
+        b.HasIndex(x => x.Gtin).HasFilter("[Gtin] IS NOT NULL");
 
         b.HasOne(x => x.Product)
             .WithMany(p => p.Variants)

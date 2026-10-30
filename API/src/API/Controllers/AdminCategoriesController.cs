@@ -37,6 +37,11 @@ public class AdminCategoriesController : ApiControllerBase
     public async Task<ActionResult<CategoryDto>> Update(Guid id, [FromBody] UpdateCategoryCommand command)
         => Ok(await Mediator.Send(command with { Id = id }));
 
+    /// <summary>Replace the listing facets: brand toggle + the ordered specification attributes.</summary>
+    [HttpPut("{id:guid}/filters")]
+    public async Task<ActionResult<CategoryDto>> SetFilters(Guid id, [FromBody] SetCategoryFiltersCommand command)
+        => Ok(await Mediator.Send(command with { CategoryId = id }));
+
     /// <summary>Delete (soft) a category.</summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)

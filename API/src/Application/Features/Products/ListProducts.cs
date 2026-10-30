@@ -45,12 +45,15 @@ public class ListProductsQueryHandler : IRequestHandler<ListProductsQuery, Pagin
         // was dropped; stock now lives in InventoryLevels). SplitQuery avoids a cartesian blow-up.
         IQueryable<Product> query = _db.Products.AsNoTracking()
             .Include(p => p.InventoryLevels)
+            .Include(p => p.Pictures).ThenInclude(pic => pic.Media)
             .AsSplitQuery();
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var term = request.Search.Trim();
-            query = query.Where(p => p.Name.Contains(term));
+            query = query.Where(p => p.Name.Contains(term)
+                || (p.Sku != null && p.Sku.Contains(term))
+                || (p.Gtin != null && p.Gtin == term));
         }
 
         if (request.Type.HasValue)

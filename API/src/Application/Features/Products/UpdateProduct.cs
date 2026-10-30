@@ -36,7 +36,33 @@ public record UpdateProductCommand(
     int? DownloadExpiryDays = null,
     int? DownloadLimit = null,
     GiftCardType? GiftCardType = null,
-    decimal? GiftCardAmount = null) : IRequest<ProductDto>;
+    decimal? GiftCardAmount = null,
+    string? H1 = null,
+    Guid? MetaImageMediaId = null,
+    string? MetaOpenGraph = null,
+    string? MetaCustomTags = null,
+    string? MetaFooterTags = null,
+    string? Gtin = null,
+    decimal? Cost = null,
+    decimal? Msrp = null,
+    decimal? SalePrice = null,
+    DateTime? SaleStartDateUtc = null,
+    DateTime? SaleEndDateUtc = null,
+    string? TaxCode = null,
+    bool IsPurchasable = true,
+    bool IsFflRequired = false,
+    int? MinOrderQuantity = null,
+    int? MaxOrderQuantity = null,
+    StockStatus? StockStatusOverride = null,
+    string? BackorderMessage = null,
+    decimal? Weight = null,
+    decimal? Length = null,
+    decimal? Width = null,
+    decimal? Height = null,
+    int PackagePieces = 1,
+    string? PackageType = null,
+    string? FreightClass = null,
+    bool IsHazardous = false) : IRequest<ProductDto>;
 
 public class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
 {
@@ -50,6 +76,28 @@ public class UpdateProductCommandValidator : AbstractValidator<UpdateProductComm
         RuleFor(x => x.MetaTitle).MaximumLength(300);
         RuleFor(x => x.MetaDescription).MaximumLength(500);
         RuleFor(x => x.MetaKeywords).MaximumLength(500);
+        RuleFor(x => x.H1).MaximumLength(300);
+        RuleFor(x => x.Gtin).MaximumLength(50);
+        RuleFor(x => x.TaxCode).MaximumLength(50);
+        RuleFor(x => x.BackorderMessage).MaximumLength(500);
+        RuleFor(x => x.PackageType).MaximumLength(50);
+        RuleFor(x => x.FreightClass).MaximumLength(10);
+        RuleFor(x => x.Cost).GreaterThanOrEqualTo(0).When(x => x.Cost.HasValue);
+        RuleFor(x => x.Msrp).GreaterThanOrEqualTo(0).When(x => x.Msrp.HasValue);
+        RuleFor(x => x.SalePrice).GreaterThanOrEqualTo(0).When(x => x.SalePrice.HasValue);
+        RuleFor(x => x.SaleEndDateUtc).GreaterThanOrEqualTo(x => x.SaleStartDateUtc!.Value)
+            .When(x => x.SaleStartDateUtc.HasValue && x.SaleEndDateUtc.HasValue)
+            .WithMessage("Sale end date must be on or after the sale start date.");
+        RuleFor(x => x.MinOrderQuantity).GreaterThanOrEqualTo(1).When(x => x.MinOrderQuantity.HasValue);
+        RuleFor(x => x.MaxOrderQuantity).GreaterThanOrEqualTo(1).When(x => x.MaxOrderQuantity.HasValue);
+        RuleFor(x => x.MaxOrderQuantity).GreaterThanOrEqualTo(x => x.MinOrderQuantity!.Value)
+            .When(x => x.MinOrderQuantity.HasValue && x.MaxOrderQuantity.HasValue)
+            .WithMessage("Max order quantity must be at least the min order quantity.");
+        RuleFor(x => x.Weight).GreaterThanOrEqualTo(0).When(x => x.Weight.HasValue);
+        RuleFor(x => x.Length).GreaterThanOrEqualTo(0).When(x => x.Length.HasValue);
+        RuleFor(x => x.Width).GreaterThanOrEqualTo(0).When(x => x.Width.HasValue);
+        RuleFor(x => x.Height).GreaterThanOrEqualTo(0).When(x => x.Height.HasValue);
+        RuleFor(x => x.PackagePieces).GreaterThanOrEqualTo(1);
     }
 }
 
@@ -73,6 +121,10 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
         if (request.ManufacturerId is Guid manufacturerId
             && !await _db.Manufacturers.AnyAsync(m => m.Id == manufacturerId, cancellationToken))
             throw new NotFoundException(nameof(Manufacturer), manufacturerId);
+
+        if (request.MetaImageMediaId is Guid metaImageId
+            && !await _db.Media.AnyAsync(m => m.Id == metaImageId, cancellationToken))
+            throw new NotFoundException(nameof(Media), metaImageId);
 
         entity.Name = request.Name;
         entity.Slug = request.Slug;
@@ -99,6 +151,32 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
         entity.DownloadLimit = request.DownloadLimit;
         entity.GiftCardType = request.GiftCardType;
         entity.GiftCardAmount = request.GiftCardAmount;
+        entity.H1 = request.H1;
+        entity.MetaImageMediaId = request.MetaImageMediaId;
+        entity.MetaOpenGraph = request.MetaOpenGraph;
+        entity.MetaCustomTags = request.MetaCustomTags;
+        entity.MetaFooterTags = request.MetaFooterTags;
+        entity.Gtin = request.Gtin;
+        entity.Cost = request.Cost;
+        entity.Msrp = request.Msrp;
+        entity.SalePrice = request.SalePrice;
+        entity.SaleStartDateUtc = request.SaleStartDateUtc;
+        entity.SaleEndDateUtc = request.SaleEndDateUtc;
+        entity.TaxCode = request.TaxCode;
+        entity.IsPurchasable = request.IsPurchasable;
+        entity.IsFflRequired = request.IsFflRequired;
+        entity.MinOrderQuantity = request.MinOrderQuantity;
+        entity.MaxOrderQuantity = request.MaxOrderQuantity;
+        entity.StockStatusOverride = request.StockStatusOverride;
+        entity.BackorderMessage = request.BackorderMessage;
+        entity.Weight = request.Weight;
+        entity.Length = request.Length;
+        entity.Width = request.Width;
+        entity.Height = request.Height;
+        entity.PackagePieces = request.PackagePieces;
+        entity.PackageType = request.PackageType;
+        entity.FreightClass = request.FreightClass;
+        entity.IsHazardous = request.IsHazardous;
 
         await _db.SaveChangesAsync(cancellationToken);
         return ProductDto.From(entity);

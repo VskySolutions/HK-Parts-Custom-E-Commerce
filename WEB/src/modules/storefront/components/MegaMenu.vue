@@ -335,7 +335,7 @@ import { useStorefront } from 'modules/storefront/composables/useStorefront'
 
 const route = useRoute()
 const router = useRouter()
-const { categories, loadCategories } = useCategories()
+const { menuCategories: categories, loadCategories } = useCategories()
 const { branding } = useStorefront()
 
 // CMS pages the admin flagged "show in top bar" ([{ title, slug }]), loaded by storefront_layout.
