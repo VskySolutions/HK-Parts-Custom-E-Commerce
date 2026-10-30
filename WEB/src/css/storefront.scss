@@ -1,0 +1,829 @@
+/*
+ * Storefront theme (WO-109) — a Porto Demo 4-inspired design system.
+ *
+ * All tokens are CSS custom properties prefixed `--sf-*` (set on :root so components
+ * work anywhere, incl. drawers/dialogs), and all component classes are prefixed `sf-`,
+ * so nothing here bleeds into the admin portal (which uses `--brand-*` / `--q-*` / `.app-*`).
+ * The accent + primary tokens are overridden at runtime from tenant branding by
+ * `useStorefront().applyTheme()`.
+ */
+
+:root {
+  // ---- Palette (light & settled) ----
+  // Chrome (header/topbar/footer) is white/near-white; brand colour comes through the
+  // accent + primary tokens (overridden at runtime by useStorefront().applyTheme()).
+  --sf-header-bg: #ffffff;
+  --sf-topbar-bg: #f7f7f9;
+  --sf-header-text: #2b2b2d;
+  --sf-accent: #e31e24;          // overridden by branding accent
+  --sf-accent-hover: #c81a1f;
+  --sf-primary: #2b2b3a;         // overridden by branding primary
+  --sf-body-bg: #ffffff;
+  --sf-surface: #ffffff;
+  --sf-surface-alt: #f4f4f6;
+  --sf-text: #2b2b2d;
+  --sf-heading: #1f1f2b;
+  --sf-muted: #8a8a92;
+  --sf-border: #e4e4e7;
+  --sf-footer-bg: #f7f7f9;
+  --sf-footer-text: #5a5a66;
+  --sf-footer-heading: #1f1f2b;
+
+  // ---- Semantic ----
+  --sf-price: #1f1f2b;
+  --sf-price-old: #a0a0a8;
+  --sf-star: #ffb400;
+  --sf-badge-new: #0891b2;
+  --sf-badge-sale: #e31e24;
+  --sf-badge-hot: #f97316;
+  --sf-badge-featured: #7c3aed;
+  --sf-badge-out: #6b7280;
+
+  // ---- Spacing / shape (Porto uses tight radii) ----
+  --sf-radius: 3px;
+  --sf-radius-lg: 6px;
+  --sf-gap: 24px;
+  --sf-shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --sf-shadow: 0 4px 18px rgba(0, 0, 0, 0.09);
+  --sf-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.14);
+  --sf-transition: 0.25s ease;
+
+  --sf-font: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+// ============================================================================
+// Layout chrome
+// ============================================================================
+.storefront-root {
+  background: var(--sf-body-bg);
+  color: var(--sf-text);
+  font-family: var(--sf-font);
+
+  h1, h2, h3, h4, h5, h6, .sf-heading {
+    font-family: var(--sf-font);
+    color: var(--sf-heading);
+    font-weight: 600;
+    line-height: 1.25;
+    margin-top: 0;
+    margin-bottom: 0.4em;
+  }
+  // Per-level heading colours from branding; each falls back to the general heading colour.
+  h1 { color: var(--sf-h1, var(--sf-heading)); }
+  h2 { color: var(--sf-h2, var(--sf-heading)); }
+  h3 { color: var(--sf-h3, var(--sf-heading)); }
+  h4 { color: var(--sf-h4, var(--sf-heading)); }
+  h5 { color: var(--sf-h5, var(--sf-heading)); }
+  h6 { color: var(--sf-h6, var(--sf-heading)); }
+
+  // Content/prose tags (bare, class-less — e.g. CMS product descriptions). These are no-ops until a
+  // branding colour is set (fall back to inherit / accent), so component text (prices, badges, nav
+  // links, card titles — all class-based) keeps its own intentional styling untouched.
+  p:not([class]) { color: var(--sf-p, inherit); }
+  span:not([class]) { color: var(--sf-span, inherit); }
+  a:not([class]) {
+    color: var(--sf-link, var(--sf-accent));
+    &:hover { color: var(--sf-accent-hover); }
+  }
+}
+
+.sf-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+// ---- Collapsible chrome (top bar + main header) ----
+// Hidden on scroll-down so only the mega-menu stays as the sticky top bar; revealed on scroll-up.
+.sf-chrome {
+  overflow: hidden;
+  max-height: 240px;
+  opacity: 1;
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+}
+.sf-chrome--collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+// ---- Top info bar ----
+.sf-topbar {
+  background: var(--sf-topbar-bg);
+  color: var(--sf-muted);
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--sf-border);
+
+  a { color: var(--sf-muted); text-decoration: none; }
+  a:hover { color: var(--sf-accent); }
+
+  .sf-topbar__item { display: inline-flex; align-items: center; gap: 6px; }
+}
+
+// ---- Sticky header ----
+.sf-header {
+  background: var(--sf-header-bg);
+  color: var(--sf-header-text);
+  border-bottom: 1px solid var(--sf-border);
+
+  .sf-header__logo {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--sf-heading);
+    letter-spacing: 0.5px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sf-header__logo-img { max-height: 40px; width: auto; display: block; }
+
+  .sf-header__icon {
+    color: var(--sf-heading);
+    position: relative;
+  }
+}
+
+// ---- Search with category prefix ----
+.sf-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  background: #fff;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  overflow: hidden;
+
+  .sf-search__cat {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    background: #f0f0f2;
+    color: #444;
+    font-size: 13px;
+    border-right: 1px solid #e0e0e0;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .sf-search__input { flex: 1; min-width: 0; }
+
+  .sf-search__btn {
+    background: var(--sf-accent);
+    color: #fff;
+    border: none;
+    padding: 0 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background var(--sf-transition);
+  }
+  .sf-search__btn:hover { background: var(--sf-accent-hover); }
+}
+
+// ---- Mega-menu ----
+// The nav bar itself; the dropdown panels are teleported to <body>, so their
+// styles live outside `.sf-megamenu` (see `.sf-mm-panel` below).
+.sf-megamenu {
+  --sf-mm-height: 50px;
+  background: #fff;
+  border-bottom: 1px solid var(--sf-border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+
+  .sf-megamenu__bar { flex: 1; min-width: 0; overflow: hidden; }
+  .sf-megamenu__item { display: inline-flex; }
+
+  // Top-level entries (router-link or the dropdown toggle button)
+  .sf-megamenu__link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: var(--sf-mm-height);
+    padding: 0 15px;
+    font-family: var(--sf-font);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sf-heading);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: color var(--sf-transition);
+  }
+  // Underline grows out from the centre instead of a static border.
+  .sf-megamenu__link::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    right: 50%;
+    bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: var(--sf-accent);
+    transition: left var(--sf-transition), right var(--sf-transition);
+  }
+  .sf-megamenu__link:hover,
+  .sf-megamenu__link--active { color: var(--sf-accent); }
+  .sf-megamenu__link:hover::after,
+  .sf-megamenu__link--active::after { left: 12px; right: 12px; }
+  .sf-megamenu__link:focus-visible { outline: 2px solid var(--sf-accent); outline-offset: -4px; }
+
+  // Left "All Categories" pillar
+  .sf-mm-pillar {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    height: var(--sf-mm-height);
+    margin-right: 18px;
+    padding: 0 20px;
+    font-family: var(--sf-font);
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #fff;
+    background: var(--sf-accent);
+    border: 0;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--sf-transition);
+  }
+  .sf-mm-pillar:hover,
+  .sf-mm-pillar--open { background: var(--sf-accent-hover); }
+
+  // Right-hand support shortcut (stays visible once the top bar collapses)
+  .sf-megamenu__support {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    padding-left: 18px;
+    color: var(--sf-heading);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--sf-transition);
+
+    .sf-megamenu__support-text { display: flex; flex-direction: column; line-height: 1.2; }
+    small { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sf-muted); }
+    strong { font-size: 13.5px; font-weight: 700; }
+  }
+  .sf-megamenu__support:hover { color: var(--sf-accent); }
+}
+
+.sf-mm-caret { transition: transform 0.2s ease; }
+.sf-mm-caret--open { transform: rotate(180deg); }
+
+// ---- Dropdown panels (teleported to body by QMenu) ----
+.sf-mm-panel {
+  max-width: calc(100vw - 24px);
+  background: var(--sf-surface);
+  border-radius: 0 0 var(--sf-radius-lg) var(--sf-radius-lg);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+
+  .sf-mm-panel__body {
+    display: flex;
+    align-items: stretch;
+    gap: 28px;
+    padding: 26px 28px;
+  }
+
+  // Column grid of child groups
+  .sf-mm-cols {
+    display: flex;
+    flex: 1;
+    gap: 30px;
+    min-width: 0;
+  }
+  .sf-mm-col { flex: 1; min-width: 150px; }
+
+  .sf-mm-group + .sf-mm-group { margin-top: 20px; }
+  .sf-mm-group__title {
+    position: relative;
+    display: block;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--sf-heading);
+    text-decoration: none;
+  }
+  .sf-mm-group__title::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 24px;
+    height: 2px;
+    background: var(--sf-accent);
+    transition: width var(--sf-transition);
+  }
+  .sf-mm-group__title:hover { color: var(--sf-accent); }
+  .sf-mm-group__title:hover::after { width: 100%; }
+
+  .sf-mm-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 0 5px 0;
+    font-size: 13px;
+    color: var(--sf-text);
+    text-decoration: none;
+    transition: color var(--sf-transition), padding-left var(--sf-transition);
+  }
+  .sf-mm-link__label { position: relative; }
+  .sf-mm-link:hover { color: var(--sf-accent); padding-left: 6px; }
+  .sf-mm-link__count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--sf-muted);
+    background: var(--sf-surface-alt);
+    border-radius: 10px;
+    padding: 1px 7px;
+  }
+  .sf-mm-more {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sf-accent);
+    text-decoration: none;
+  }
+  .sf-mm-more:hover { text-decoration: underline; }
+
+  // Right rail
+  .sf-mm-rail {
+    position: relative;
+    width: 230px;
+    flex: 0 0 230px;
+    padding: 22px 20px;
+    border-radius: var(--sf-radius-lg);
+    overflow: hidden;
+    color: #fff;
+    background:
+      linear-gradient(135deg, var(--sf-primary) 0%, rgba(0, 0, 0, 0.86) 100%);
+
+    .sf-mm-rail__glyph {
+      position: absolute;
+      right: -18px;
+      bottom: -22px;
+      font-size: 118px;
+      opacity: 0.09;
+      pointer-events: none;
+    }
+    .sf-mm-rail__eyebrow {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      color: var(--sf-accent);
+      margin-bottom: 6px;
+    }
+    .sf-mm-rail__title {
+      font-size: 19px;
+      font-weight: 700;
+      line-height: 1.25;
+      margin-bottom: 6px;
+    }
+    .sf-mm-rail__meta {
+      font-size: 12px;
+      opacity: 0.72;
+      margin-bottom: 18px;
+    }
+    .sf-mm-rail__cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #fff;
+      background: var(--sf-accent);
+      border-radius: var(--sf-radius);
+      text-decoration: none;
+      transition: background var(--sf-transition), transform var(--sf-transition);
+    }
+    .sf-mm-rail__cta:hover { background: var(--sf-accent-hover); transform: translateX(3px); }
+  }
+}
+
+// ---- Pillar panel: two-pane category browser ----
+.sf-mm-panel--pillar {
+  .sf-mm-browser {
+    display: flex;
+    align-items: stretch;
+    width: 940px;
+    max-width: calc(100vw - 24px);
+    min-height: 330px;
+  }
+
+  .sf-mm-browser__aside {
+    width: 250px;
+    flex: 0 0 250px;
+    padding: 10px 0;
+    background: var(--sf-surface-alt);
+    border-right: 1px solid var(--sf-border);
+    max-height: 440px;
+    overflow-y: auto;
+  }
+  .sf-mm-browser__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 16px;
+    font-family: var(--sf-font);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    color: var(--sf-heading);
+    background: none;
+    border: 0;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    transition: background var(--sf-transition), color var(--sf-transition);
+
+    .sf-mm-browser__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sf-mm-browser__count { font-size: 11px; color: var(--sf-muted); }
+  }
+  .sf-mm-browser__row:hover,
+  .sf-mm-browser__row--active {
+    background: var(--sf-surface);
+    color: var(--sf-accent);
+    border-left-color: var(--sf-accent);
+  }
+
+  .sf-mm-browser__pane { flex: 1; min-width: 0; padding: 22px 26px 26px; }
+
+  .sf-mm-panel__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--sf-border);
+  }
+  .sf-mm-panel__eyebrow {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: var(--sf-muted);
+  }
+  .sf-mm-panel__title { font-size: 18px; font-weight: 700; color: var(--sf-heading); }
+  .sf-mm-panel__all {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--sf-accent);
+    text-decoration: none;
+  }
+  .sf-mm-panel__all:hover { text-decoration: underline; }
+
+  .sf-mm-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 180px;
+    color: var(--sf-muted);
+    font-size: 13px;
+    text-align: center;
+  }
+}
+
+// ---- Mobile category drawer ----
+.sf-mobile-nav {
+  .sf-mobile-nav__head {
+    color: #fff;
+    background: linear-gradient(135deg, var(--sf-primary) 0%, rgba(0, 0, 0, 0.88) 100%);
+
+    .q-btn { color: #fff; }
+  }
+  .sf-mobile-nav__list { font-size: 13.5px; }
+  .sf-mobile-nav__parent { font-weight: 600; color: var(--sf-heading); }
+  .sf-mobile-nav__all { color: var(--sf-accent); font-weight: 600; }
+  .sf-mobile-nav__count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--sf-muted);
+    background: var(--sf-surface-alt);
+    border-radius: 10px;
+    padding: 1px 7px;
+  }
+}
+
+// ============================================================================
+// Buttons
+// ============================================================================
+.sf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--sf-font);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 10px 22px;
+  border-radius: var(--sf-radius);
+  border: 2px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--sf-transition);
+  line-height: 1.2;
+}
+.sf-btn--primary { background: var(--sf-accent); color: #fff; border-color: var(--sf-accent); }
+.sf-btn--primary:hover { background: var(--sf-accent-hover); border-color: var(--sf-accent-hover); }
+.sf-btn--dark { background: var(--sf-primary); color: #fff; border-color: var(--sf-primary); }
+.sf-btn--dark:hover { filter: brightness(0.9); }
+.sf-btn--outline { background: transparent; color: var(--sf-heading); border-color: var(--sf-border); }
+.sf-btn--outline:hover { border-color: var(--sf-accent); color: var(--sf-accent); }
+.sf-btn--block { width: 100%; }
+
+// ============================================================================
+// Badges
+// ============================================================================
+.sf-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: var(--sf-radius);
+  line-height: 1.2;
+}
+.sf-badge--new { background: var(--sf-badge-new); }
+.sf-badge--sale { background: var(--sf-badge-sale); }
+.sf-badge--hot { background: var(--sf-badge-hot); }
+.sf-badge--featured { background: var(--sf-badge-featured); }
+.sf-badge--out { background: var(--sf-badge-out); }
+
+// ============================================================================
+// Star rating
+// ============================================================================
+.sf-stars { display: inline-flex; align-items: center; color: var(--sf-star); line-height: 1; }
+.sf-stars .q-icon { font-size: 15px; }
+.sf-stars__count { color: var(--sf-muted); font-size: 12px; margin-left: 6px; }
+
+// ============================================================================
+// Product card (base — used by StorefrontProductCard)
+// ============================================================================
+.sf-card {
+  position: relative;
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  overflow: hidden;
+  transition: box-shadow var(--sf-transition), border-color var(--sf-transition);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.sf-card:hover { box-shadow: var(--sf-shadow-hover); border-color: transparent; z-index: 2; }
+
+.sf-card__media {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: #fafafa;
+  overflow: hidden;
+}
+.sf-card__img,
+.sf-card__img-alt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: opacity var(--sf-transition);
+}
+.sf-card__img-alt { opacity: 0; }
+.sf-card:hover .sf-card__img-alt { opacity: 1; }
+
+.sf-card__badges { position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 3; }
+
+.sf-card__actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: opacity var(--sf-transition), transform var(--sf-transition);
+  z-index: 3;
+}
+.sf-card:hover .sf-card__actions { opacity: 1; transform: translateX(0); }
+.sf-card__action-btn {
+  width: 36px; height: 36px;
+  background: #fff;
+  border: 1px solid var(--sf-border);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--sf-heading);
+  transition: background var(--sf-transition), color var(--sf-transition);
+}
+.sf-card__action-btn:hover { background: var(--sf-accent); color: #fff; border-color: var(--sf-accent); }
+
+.sf-card__body { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.sf-card__brand { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--sf-muted); }
+.sf-card__title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--sf-heading);
+  line-height: 1.35;
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.7em;
+}
+.sf-card__title:hover { color: var(--sf-accent); }
+.sf-card__price { display: flex; align-items: baseline; gap: 8px; margin-top: auto; }
+.sf-card__price-now { font-size: 16px; font-weight: 700; color: var(--sf-price); }
+.sf-card__price-old { font-size: 13px; color: var(--sf-price-old); text-decoration: line-through; }
+
+.sf-card__cart {
+  margin-top: 10px;
+  opacity: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (min-width: 1024px) {
+  // Porto pattern: Add-to-Cart reveals on hover on desktop, always visible on mobile.
+  .sf-card__cart { opacity: 0; transform: translateY(6px); transition: opacity var(--sf-transition), transform var(--sf-transition); }
+  .sf-card:hover .sf-card__cart { opacity: 1; transform: translateY(0); }
+}
+
+// ============================================================================
+// Breadcrumb (doubles as the page heading on listing/detail pages)
+// ============================================================================
+.sf-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sf-crumbs__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--sf-muted);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  transition: color var(--sf-transition);
+}
+.sf-crumbs__link:hover { color: var(--sf-accent); }
+.sf-crumbs__sep {
+  color: var(--sf-border);
+  flex: 0 0 auto;
+}
+// The trailing (current-page) crumb is the visual heading — no separate big title needed.
+.sf-crumbs__current {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--sf-heading);
+  margin: 0;
+}
+.sf-crumbs__current::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--sf-accent);
+  margin-right: 8px;
+  vertical-align: -3px;
+}
+// A compact non-link current crumb, for pages that keep their own big heading (e.g. product page).
+.sf-crumbs__here {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sf-heading);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55vw;
+}
+
+// ============================================================================
+// Section headings (home + listing rails)
+// ============================================================================
+.sf-section { padding: 22px 0; }
+.sf-section__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sf-section__title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--sf-heading);
+  position: relative;
+  padding-bottom: 8px;
+}
+.sf-section__title::after {
+  content: '';
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 48px; height: 3px;
+  background: var(--sf-accent);
+}
+
+// ============================================================================
+// Footer
+// ============================================================================
+.sf-footer {
+  background: var(--sf-footer-bg);
+  color: var(--sf-footer-text);
+  padding-top: 48px;
+  border-top: 1px solid var(--sf-border);
+
+  a { color: var(--sf-footer-text); text-decoration: none; transition: color var(--sf-transition); }
+  a:hover { color: var(--sf-accent); }
+
+  .sf-footer__title {
+    color: var(--sf-footer-heading);
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 18px;
+  }
+  .sf-footer__link { display: block; padding: 5px 0; font-size: 13.5px; }
+  .sf-footer__social {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #fff;
+    border: 1px solid var(--sf-border);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--sf-heading);
+    transition: background var(--sf-transition), color var(--sf-transition), border-color var(--sf-transition);
+  }
+  .sf-footer__social:hover { background: var(--sf-accent); color: #fff; border-color: var(--sf-accent); }
+
+  .sf-footer__bottom {
+    border-top: 1px solid var(--sf-border);
+    margin-top: 32px;
+    padding: 20px 0;
+    font-size: 12.5px;
+  }
+  .sf-footer__pay {
+    height: 26px;
+    padding: 3px 8px;
+    background: #fff;
+    border: 1px solid var(--sf-border);
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #333;
+  }
+}
+
+// ============================================================================
+// Utility
+// ============================================================================
+.sf-skeleton-card { border: 1px solid var(--sf-border); border-radius: var(--sf-radius); overflow: hidden; }
+.sf-newsletter { background: var(--sf-surface-alt); color: var(--sf-text); border-top: 1px solid var(--sf-border); border-bottom: 1px solid var(--sf-border); }
+
+// Cart slide-over: a flush, full-height right panel. QDialog teleports to <body>, so these must
+// be global (not scoped) to remove the default inner padding and stretch the card top-to-bottom.
+.sf-cart-dialog .q-dialog__inner { padding: 0; }
+.sf-cart-dialog .q-dialog__inner > .q-card {
+  height: 100vh;
+  max-height: 100vh;
+  width: 400px;
+  max-width: 92vw;
+  border-radius: 0;
+}
+.sf-hover-scale { transition: transform var(--sf-transition); }
+.sf-hover-scale:hover { transform: scale(1.04); }

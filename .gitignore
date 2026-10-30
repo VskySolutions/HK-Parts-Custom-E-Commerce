@@ -1,0 +1,104 @@
+# =====================================================================
+# Repository layout: API/ (.NET 9 solution) + WEB/ (Quasar SPA)
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# OS
+# ---------------------------------------------------------------------
+.DS_Store
+.thumbs.db
+Thumbs.db
+
+# ---------------------------------------------------------------------
+# Editors / IDEs
+# ---------------------------------------------------------------------
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.ntvs*
+*.njsproj
+
+# Rider / ReSharper
+_ReSharper*/
+*.DotSettings.user
+
+# ---------------------------------------------------------------------
+# API — .NET 9 (API/)
+# ---------------------------------------------------------------------
+# Build results (match at any depth: API/src/**/bin, **/obj, etc.)
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+build/
+bld/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+**/packages/*
+!**/packages/build/
+
+# Local secrets / settings overrides
+appsettings.*.local.json
+
+# Local cryptographic key material (JWT RSA signing key, Data Protection key ring).
+# Generated per-deployment — must never be committed.
+API/src/API/keys/
+
+# ---------------------------------------------------------------------
+# WEB — Node / Quasar (WEB/)
+# ---------------------------------------------------------------------
+node_modules/
+
+# Quasar core build/cache directories
+.quasar/
+WEB/dist/
+**/quasar.config.*.temporary.compiled*
+
+# SPA production build output (distDir = "../publish/spa/...")
+/publish/
+
+# Cordova / Capacitor
+/src-cordova/node_modules/
+/src-cordova/platforms/
+/src-cordova/plugins/
+/src-cordova/www/
+/src-capacitor/www/
+/src-capacitor/node_modules/
+
+# npm / yarn logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment files
+.env.local*
+
+# Uploaded media (runtime/local + test artifacts)
+media-uploads/
+API/src/API/wwwroot/uploads/
+
+WEB/security
+API/src/API/appsettings.Development.json
+API/src/API/appsettings.json
+CLAUDE.md

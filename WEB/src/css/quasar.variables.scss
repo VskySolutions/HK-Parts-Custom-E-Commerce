@@ -1,0 +1,26 @@
+// Quasar SCSS variables (WO-94 Step 11).
+// Auto-prepended to every SCSS/Sass file by the Quasar Vite plugin
+// (framework > css variablesFile) — do NOT @import this file manually.
+// https://v2.quasar.dev/style/sass-scss-variables
+
+// ---- Brand palette ---------------------------------------------------------
+$primary   : #1565C0; // brand token
+$secondary : #26A69A;
+$accent    : #7B1FA2;
+
+$dark      : #1D1D1D;
+$dark-page : #121212;
+
+$positive  : #2E7D32;
+$negative  : #C62828;
+$info      : #0277BD;
+$warning   : #F9A825;
+
+// ---- Typography ------------------------------------------------------------
+// Poppins (self-hosted via @fontsource, loaded in boot/fonts.js) is the admin
+// portal's default font, falling back to the platform sans-serif stack.
+$typography-font-family: 'Poppins', sans-serif;
+
+// ---- Layout tokens ---------------------------------------------------------
+$app-drawer-width: 292px;
+$generic-border-radius: 8px;

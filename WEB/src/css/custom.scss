@@ -1,0 +1,42 @@
+// Custom component tweaks / overrides (WO-94 Step 11).
+
+// Tighten dense form fields used by the App*Field wrappers.
+.app-field {
+  .q-field__label {
+    font-size: 15px;
+  }
+}
+
+// App menu active item accent.
+.app-menu {
+  .q-item.q-router-link--active {
+    color: $primary;
+    font-weight: 600;
+    background: rgba($primary, 0.08);
+  }
+}
+
+// Resize handle for the form drawer.
+.app-drawer-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: $primary;
+
+  &:hover {
+    opacity: 0.4;
+  }
+}
+
+// Tenant switcher dropdown label.
+.tenant-switcher .q-btn__content {
+  text-transform: none;
+}
+.StoreSelector .app-field{
+  margin-bottom: 0px;
+}

@@ -1,0 +1,42 @@
+// Typography (WO-94 Step 11).
+// $typography-font-family / $primary come from quasar.variables.scss, which is
+// auto-prepended by the Quasar Vite plugin.
+
+body,
+.q-page,
+.q-drawer,
+.q-header {
+  font-family: $typography-font-family;
+}
+
+// Section / page titles used by App list & detail headers (standardized to 15px).
+.app-page-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: $dark;
+}
+
+.app-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: $primary;
+}
+
+.text-muted {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+// 12px field labels (App*Field wrappers rely on this); the required star is text-negative.
+.app-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

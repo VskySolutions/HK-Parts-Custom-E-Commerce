@@ -1,0 +1,53 @@
+{
+  "name": "hkpartsecommerce-web",
+  "version": "0.1.0",
+  "description": "HK Parts E-Commerce platform admin SPA (Quasar + Vue 3 + Vite)",
+  "productName": "HK Parts E-Commerce",
+  "author": "HK Parts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env QENV=dev quasar dev",
+    "build": "cross-env QENV=prod quasar build",
+    "build:dev": "cross-env QENV=dev quasar build",
+    "build:test": "cross-env QENV=test quasar build",
+    "test": "cross-env QENV=test vitest run",
+    "test:watch": "cross-env QENV=test vitest"
+  },
+  "dependencies": {
+    "@fontsource/poppins": "^5.2.7",
+    "@quasar/extras": "^1.16.0",
+    "@vuelidate/core": "^2.0.3",
+    "@vuelidate/validators": "^2.0.4",
+    "@vueuse/core": "^12.0.0",
+    "axios": "^1.7.0",
+    "country-state-city": "^3.2.1",
+    "date-fns": "^4.1.0",
+    "libphonenumber-js": "^1.11.0",
+    "lodash-es": "^4.17.21",
+    "pinia": "^3.0.0",
+    "qs": "^6.12.0",
+    "quasar": "^2.17.0",
+    "validator": "^13.12.0",
+    "vue": "^3.5.0",
+    "vue-i18n": "^11.0.0",
+    "vue-router": "^4.4.0"
+  },
+  "devDependencies": {
+    "@intlify/unplugin-vue-i18n": "^6.0.0",
+    "@pinia/testing": "^1.0.0",
+    "@quasar/app-vite": "^2.0.0",
+    "@vue/test-utils": "^2.4.6",
+    "autoprefixer": "^10.4.20",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.4.0",
+    "happy-dom": "^15.0.0",
+    "postcss": "^8.4.47",
+    "sass-embedded": "^1.80.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": "^28 || ^26 || ^24 || ^22 || ^20 || ^18",
+    "npm": ">= 6.13.4"
+  }
+}

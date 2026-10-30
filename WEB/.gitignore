@@ -1,0 +1,21 @@
+# Quasar / Vite build artifacts
+.DS_Store
+.thumbs.db
+*.log
+
+node_modules
+/dist
+/.quasar
+/quasar.config.*.temporary.*
+
+# Local env
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

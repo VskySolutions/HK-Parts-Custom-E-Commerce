@@ -1,0 +1,73 @@
+// Global application styles (WO-94 Step 11).
+//
+// Brand colours are also exposed as CSS custom properties so runtime tenant
+// branding (stores/tenant.js -> applyBranding) can override them live.
+:root {
+  --brand-primary: #{$primary};
+  --brand-secondary: #{$secondary};
+  --brand-accent: #{$accent};
+  --brand-font-family: #{$typography-font-family};
+}
+
+html,
+body,
+#q-app {
+  height: 100%;
+}
+
+// Brand utility classes (respect the possibly tenant-overridden values).
+.bg-brand-primary {
+  background-color: var(--brand-primary) !important;
+}
+.text-brand-primary {
+  color: var(--brand-primary) !important;
+}
+
+.q-item {
+  min-height: 37px;
+  padding: 5px 10px;
+}
+// Crisp, dense sidebar navigation — tuned for many menu items.
+.app-menu {
+  padding-top: 4px;
+
+  .q-item {
+    min-height: 35px;
+    padding: 5px 10px;
+    margin: 1px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .q-item__section--avatar {
+    min-width: 30px;
+    padding-right: 8px;
+
+    .q-icon {
+      font-size: 20px;
+    }
+  }
+
+  .q-item-label--header {
+    padding: 12px 16px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .q-separator {
+    margin: 6px 12px;
+  }
+}
+
+.rounded-borders {
+  border-radius: $generic-border-radius;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.full-width-dialog .q-dialog__inner > div {
+  width: 100%;
+}

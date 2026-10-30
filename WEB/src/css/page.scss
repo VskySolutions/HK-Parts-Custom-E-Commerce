@@ -1,0 +1,115 @@
+// Page-level layout helpers (WO-94 Step 11).
+
+.app-page {
+  padding: 16px;
+  background-color: #fbfbfb;
+}
+
+// Standard content wrapper for list/detail pages.
+.app-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// Sticky list toolbar under the page header.
+.app-list-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+// Data table shell.
+.app-table-card {
+  border-radius: $generic-border-radius;
+  overflow: hidden;
+  font-size: 14px;
+
+  // Card title in the table's top slot: 15px, primary (matches the section-title standard).
+  .app-section__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: $primary;
+  }
+
+  // Noticeable header: filled background, bold dark text, and a stronger divider so
+  // the header row clearly stands apart from the body rows.
+  thead tr th {
+    font-size: 14px;
+    font-weight: 600;
+    color: $dark;
+    background: #f7f7f7;
+    border-bottom: 2px solid rgba(0, 0, 0, 0.14);
+    text-transform: none;
+    letter-spacing: 0.2px;
+  }
+
+  // Body cells match the 14px scale.
+  tbody td {
+    font-size: 14px;
+  }
+}
+
+// Standardized bordered toolbar (list/detail page headers).
+.app-toolbar {
+  border-radius: $generic-border-radius;
+}
+
+// Tabbed list pages: the sub-tab strip and the active panel's toolbar share one bordered
+// card sitting above the table card (Attributes, Promotions).
+.app-tabs-toolbar {
+  border-radius: $generic-border-radius;
+
+  &__body {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 12px;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: auto;
+  }
+}
+
+// Consistent vertical spacing between adjacent form fields across the whole app.
+// AppTextField / AppSelect / AppDateField all wrap their control in .app-field.
+.app-field {
+  margin-bottom: 15px;
+}
+
+// Standardized content card (detail pages). `--danger` marks a destructive panel.
+.app-section {
+  border-radius: $generic-border-radius;
+
+  .app-section__title {
+    color: $primary;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .app-section__head {
+    padding-bottom: 4px;
+  }
+
+  &--danger {
+    border-color: $negative;
+
+    .app-section__title {
+      color: $negative;
+    }
+  }
+}
+
+// Right-hand form/view drawer body spacing.
+.app-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
