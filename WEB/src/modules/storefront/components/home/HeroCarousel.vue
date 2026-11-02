@@ -9,7 +9,7 @@
     swipeable
     arrows
     navigation
-    control-color="primary"
+    control-color="white"
     height="clamp(280px, 42vw, 520px)"
     class="sf-hero"
   >
@@ -26,8 +26,8 @@
           <div class="sf-hero__title">{{ s.title }}</div>
           <div v-if="s.subtitle" class="sf-hero__subtitle">{{ s.subtitle }}</div>
           <div class="sf-hero__cta q-gutter-sm q-mt-md">
-            <q-btn v-if="s.primaryTo" unelevated color="primary" no-caps :label="s.primaryLabel" :to="s.primaryTo" />
-            <q-btn v-if="s.secondaryTo" outline color="primary" no-caps :label="s.secondaryLabel" :to="s.secondaryTo" />
+            <q-btn v-if="s.primaryTo" unelevated color="red" no-caps :label="s.primaryLabel" :to="s.primaryTo" />
+            <q-btn v-if="s.secondaryTo" outline color="red" no-caps :label="s.secondaryLabel" :to="s.secondaryTo" />
           </div>
         </div>
       </div>
@@ -97,8 +97,13 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .sf-hero { border-radius: 0; }
-.sf-hero__slide { padding: 0; color: var(--sf-heading); }
-.sf-hero__content { max-width: 560px; }
+.sf-hero__slide { padding: 0; color: var(--sf-heading); opacity: 0.9; background-size: cover; background-position: center; }
+.sf-hero__content { 
+  max-width: 380px;
+  background: #000000d9;
+  padding: 30px;
+  color: white !important;
+  }
 .text-right .sf-hero__content,
 .sf-hero__content.text-right { margin-left: auto; }
 .sf-hero__label {
@@ -109,6 +114,6 @@ onMounted(() => {
   opacity: 0.85;
   margin-bottom: 10px;
 }
-.sf-hero__title { font-size: clamp(28px, 4.5vw, 52px); font-weight: 800; line-height: 1.05; }
-.sf-hero__subtitle { font-size: clamp(15px, 2vw, 20px); margin-top: 12px; opacity: 0.9; }
+.sf-hero__title { font-size: clamp(20px, 4.5vw, 24px); font-weight: 600; line-height: 1.05; text-transform: uppercase; margin-bottom: 10px; line-height: 1.1; letter-spacing: 2px; }
+.sf-hero__subtitle { font-size: clamp(18px, 2vw, 20px); margin-top: 12px; opacity: 0.9; }
 </style>

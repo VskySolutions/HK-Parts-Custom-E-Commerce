@@ -79,12 +79,14 @@ watch(() => [props.entityType, props.recordId], load, { immediate: true })
   margin-top: 28px;
 }
 .app-record-meta__label {
-  color: var(--q-color-grey-6, #9e9e9e);
+  /* color: var(--q-color-grey-6, #9e9e9e); */
+  color: var(--q-color-grey-8, #616161 );
   font-size: 12px;
   margin-right: 6px;
 }
 .app-record-meta__value {
-  color: var(--q-color-grey-8, #616161);
-  font-weight: 500;
+  /* color: var(--q-color-grey-8, #616161); */
+  color: var(--q-color-grey-6, #9e9e9e);
+  font-weight: 600;
 }
 </style>

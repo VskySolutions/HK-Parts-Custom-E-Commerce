@@ -25,9 +25,12 @@
   --sf-heading: #1f1f2b;
   --sf-muted: #8a8a92;
   --sf-border: #e4e4e7;
-  --sf-footer-bg: #f7f7f9;
-  --sf-footer-text: #5a5a66;
-  --sf-footer-heading: #1f1f2b;
+  // --sf-footer-bg: #f7f7f9;
+  // --sf-footer-text: #5a5a66;
+  // --sf-footer-heading: #1f1f2b;
+  --sf-footer-bg: #111;
+  --sf-footer-text: #fff;
+  --sf-footer-heading: #fff;
 
   // ---- Semantic ----
   --sf-price: #1f1f2b;
@@ -48,7 +51,8 @@
   --sf-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.14);
   --sf-transition: 0.25s ease;
 
-  --sf-font: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  // --sf-font: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --sf-font: 'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 // ============================================================================
@@ -109,12 +113,18 @@
 
 // ---- Top info bar ----
 .sf-topbar {
-  background: var(--sf-topbar-bg);
-  color: var(--sf-muted);
+  // background: var(--sf-topbar-bg);
+  background: #262626;
+  // color: var(--sf-muted);
+  color: white;
   font-size: 12.5px;
   border-bottom: 1px solid var(--sf-border);
 
-  a { color: var(--sf-muted); text-decoration: none; }
+  a { 
+    // color: var(--sf-muted); 
+    color: white; 
+    text-decoration: none; 
+  }
   a:hover { color: var(--sf-accent); }
 
   .sf-topbar__item { display: inline-flex; align-items: center; gap: 6px; }
@@ -122,8 +132,12 @@
 
 // ---- Sticky header ----
 .sf-header {
-  background: var(--sf-header-bg);
-  color: var(--sf-header-text);
+  // background: var(--sf-header-bg);
+  // color: var(--sf-header-text);
+  // border-bottom: 1px solid var(--sf-border);
+
+  background: #111111;
+  color: white;
   border-bottom: 1px solid var(--sf-border);
 
   .sf-header__logo {
@@ -140,7 +154,8 @@
   .sf-header__logo-img { max-height: 40px; width: auto; display: block; }
 
   .sf-header__icon {
-    color: var(--sf-heading);
+    // color: var(--sf-heading);
+    color: white;
     position: relative;
   }
 }
@@ -762,6 +777,7 @@
 // Footer
 // ============================================================================
 .sf-footer {
+  background: var(--sf-footer-bg);
   background: var(--sf-footer-bg);
   color: var(--sf-footer-text);
   padding-top: 48px;

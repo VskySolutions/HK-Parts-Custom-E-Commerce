@@ -1,5 +1,5 @@
 <template>
-  <q-page class="app-page">
+  <q-page class="app-page bg-black">
     <AppListHeader
       title="Dashboard"
       :subtitle="`Welcome${auth.user?.fullName ? ', ' + auth.user.fullName : ''}.`"
