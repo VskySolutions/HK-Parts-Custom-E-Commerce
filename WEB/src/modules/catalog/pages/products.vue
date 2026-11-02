@@ -68,7 +68,7 @@
       <template #body-cell-image="cell">
         <q-td :props="cell">
           <q-avatar rounded size="36px" class="bg-grey-2">
-            <img v-if="cell.row.imageUrl" :src="$media(cell.row.imageUrl)" alt="">
+            <img v-if="cell.row.imageUrl" :src="$media(cell.row.imageUrl)" :alt="cell.row.name" class="image-fit-contain" />
             <q-icon v-else name="o_image" color="grey-5" />
           </q-avatar>
         </q-td>

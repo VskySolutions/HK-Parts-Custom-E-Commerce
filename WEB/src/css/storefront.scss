@@ -843,3 +843,5 @@
 }
 .sf-hover-scale { transition: transform var(--sf-transition); }
 .sf-hover-scale:hover { transform: scale(1.04); }
+
+.image-fit-contain { object-fit: contain; }

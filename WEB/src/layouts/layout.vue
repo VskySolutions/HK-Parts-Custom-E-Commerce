@@ -43,7 +43,7 @@
       :width="292"
       :breakpoint="900"
     >
-      <div class="column full-height no-wrap bg-black text-white">
+      <div class="column full-height no-wrap bg-22 text-white">
         <AsideHeader />
         <q-scroll-area class="col">
           <AppMenu />

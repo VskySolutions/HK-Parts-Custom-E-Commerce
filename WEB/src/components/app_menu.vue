@@ -1,5 +1,5 @@
 <template>
-  <q-list padding class="app-menu q-mt-sm bg-black text-white">
+  <q-list padding class="app-menu q-mt-sm bg-22 text-white">
     <template v-for="(section, si) in visibleSections" :key="si">
       <!-- Header-less section (Dashboard): always visible, never collapsible. The
            collapse/expand-all control is merged into the Dashboard row, on the right. -->
