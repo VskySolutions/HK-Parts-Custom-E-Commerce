@@ -84,3 +84,20 @@ public class ProductDownload : AuditableEntity
     public string? FileKey { get; set; }
     public int DisplayOrder { get; set; }
 }
+
+/// <summary>
+/// A public file attached to a product (manual, spec sheet, warranty card…), backed by a central
+/// <see cref="Media"/> asset and listed on the storefront product page. Distinct from
+/// <see cref="ProductDownload"/>, which is the paid deliverable of a Downloadable product.
+/// </summary>
+public class ProductAttachment : AuditableEntity
+{
+    public Guid ProductId { get; set; }
+    public Product? Product { get; set; }
+    public Guid MediaId { get; set; }
+    public Media? Media { get; set; }
+
+    /// <summary>Display label; falls back to the media file name when blank.</summary>
+    public string? Title { get; set; }
+    public int DisplayOrder { get; set; }
+}

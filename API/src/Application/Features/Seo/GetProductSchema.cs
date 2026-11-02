@@ -71,9 +71,11 @@ public class GetProductSchemaQueryHandler : IRequestHandler<GetProductSchemaQuer
             .Select(pic => pic.Media!.Url)
             .FirstOrDefault();
 
+        var seo = await SeoEntities.GetStorefrontSeoAsync(_db, SeoEntityType.Product, product.Id, cancellationToken);
+
         var input = new ProductSchemaInput(
-            Name: string.IsNullOrWhiteSpace(product.MetaTitle) ? product.Name : product.MetaTitle!,
-            Description: string.IsNullOrWhiteSpace(product.MetaDescription) ? product.ShortDescription : product.MetaDescription,
+            Name: string.IsNullOrWhiteSpace(seo.MetaTitle) ? product.Name : seo.MetaTitle!,
+            Description: string.IsNullOrWhiteSpace(seo.MetaDescription) ? product.ShortDescription : seo.MetaDescription,
             Sku: product.Sku,
             Slug: product.Slug,
             ImageUrl: imageUrl,

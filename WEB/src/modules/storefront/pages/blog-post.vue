@@ -26,7 +26,7 @@
           <span class="sf-crumbs__here">{{ post.title }}</span>
         </nav>
 
-        <h1 class="sf-article__title">{{ post.title }}</h1>
+        <h1 class="sf-article__title">{{ heading || post.title }}</h1>
         <div class="sf-article__meta">
           <span v-if="post.publishedOnUtc"><q-icon name="o_event" size="15px" /> {{ $date(post.publishedOnUtc) }}</span>
           <span v-if="post.author"><q-icon name="o_person" size="15px" /> {{ post.author }}</span>
@@ -65,7 +65,7 @@
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useMeta } from 'quasar'
+import { useStorefrontSeo } from 'composables/useStorefrontSeo'
 import { cmsApi, sanitizeCmsHtml } from 'modules/storefront/cms-api'
 
 const route = useRoute()
@@ -77,7 +77,14 @@ const notFound = ref(false)
 const safeBody = computed(() => sanitizeCmsHtml(post.value && post.value.body))
 const tags = computed(() => (Array.isArray(post.value && post.value.tags) ? post.value.tags : []))
 
-useMeta(() => ({ title: (post.value && post.value.title) || 'Article' }))
+// <head> SEO from the central SEO record, falling back to the post's title / summary / featured image.
+const { heading } = useStorefrontSeo(() => post.value && {
+  seo: post.value.seo,
+  title: post.value.title,
+  description: post.value.summary || post.value.body,
+  image: post.value.featuredImageUrl,
+  type: 'article'
+})
 
 function tagLabel (tag) {
   return typeof tag === 'string' ? tag : (tag && (tag.name || tag.title)) || ''

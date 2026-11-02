@@ -29,10 +29,6 @@ public class CMSPageConfiguration : IEntityTypeConfiguration<CMSPage>
         b.HasKey(x => x.Id);
         b.Property(x => x.Title).HasMaxLength(300).IsRequired();
         b.Property(x => x.Slug).HasMaxLength(300).IsRequired();
-        b.Property(x => x.MetaTitle).HasMaxLength(300);
-        b.Property(x => x.MetaDescription).HasMaxLength(500);
-        b.Property(x => x.MetaKeywords).HasMaxLength(500);
-        b.Property(x => x.CanonicalUrl).HasMaxLength(500);
         b.Property(x => x.Status).HasConversion<int>();
         b.Property(x => x.ShowInFooter).HasDefaultValue(true);
         b.HasIndex(x => new { x.Status, x.DisplayOrder });
@@ -59,8 +55,6 @@ public class CMSBlogPostConfiguration : IEntityTypeConfiguration<CMSBlogPost>
         b.Property(x => x.Summary).HasMaxLength(1000);
         b.Property(x => x.Author).HasMaxLength(200);
         b.Property(x => x.Tags).HasMaxLength(1000);
-        b.Property(x => x.MetaTitle).HasMaxLength(300);
-        b.Property(x => x.MetaDescription).HasMaxLength(500);
         b.Property(x => x.Status).HasConversion<int>();
 
         b.HasOne(x => x.FeaturedImageMedia)

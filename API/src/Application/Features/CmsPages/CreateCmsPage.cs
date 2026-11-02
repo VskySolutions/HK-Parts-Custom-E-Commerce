@@ -15,10 +15,6 @@ public record CreateCmsPageCommand(
     string Title,
     string? Slug = null,
     string? Body = null,
-    string? MetaTitle = null,
-    string? MetaDescription = null,
-    string? MetaKeywords = null,
-    string? CanonicalUrl = null,
     CmsContentStatus Status = CmsContentStatus.Draft,
     Guid? PageGroupId = null,
     int DisplayOrder = 0,
@@ -31,10 +27,6 @@ public class CreateCmsPageCommandValidator : AbstractValidator<CreateCmsPageComm
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(300);
         RuleFor(x => x.Slug).MaximumLength(300);
-        RuleFor(x => x.MetaTitle).MaximumLength(300);
-        RuleFor(x => x.MetaDescription).MaximumLength(500);
-        RuleFor(x => x.MetaKeywords).MaximumLength(500);
-        RuleFor(x => x.CanonicalUrl).MaximumLength(500);
         RuleFor(x => x.Status).IsInEnum();
     }
 }
@@ -60,10 +52,6 @@ public class CreateCmsPageCommandHandler : IRequestHandler<CreateCmsPageCommand,
             Title = request.Title,
             Slug = slug,
             Body = request.Body,
-            MetaTitle = request.MetaTitle,
-            MetaDescription = request.MetaDescription,
-            MetaKeywords = request.MetaKeywords,
-            CanonicalUrl = request.CanonicalUrl,
             Status = request.Status,
             PageGroupId = request.PageGroupId,
             DisplayOrder = request.DisplayOrder,

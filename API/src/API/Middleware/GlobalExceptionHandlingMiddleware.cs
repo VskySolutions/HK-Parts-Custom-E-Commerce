@@ -65,6 +65,12 @@ public class GlobalExceptionHandlingMiddleware
         };
         if (errors is not null)
             payload["errors"] = errors;
+        if (ex is ConflictException { Extensions: { } extensions })
+        {
+            // Never let an extension overwrite the standard problem members.
+            foreach (var (key, value) in extensions)
+                payload.TryAdd(key, value);
+        }
 
         await context.Response.WriteAsJsonAsync(payload);
     }

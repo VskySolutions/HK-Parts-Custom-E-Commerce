@@ -24,8 +24,8 @@ public class CmsBlogPostDto
     public CmsContentStatus Status { get; set; }
     public DateTime? PublishedOnUtc { get; set; }
 
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
+    /// <summary>Central SEO metadata — populated only by the public storefront lookup (null in admin views).</summary>
+    public HKPartsEcommerce.Application.Features.Seo.StorefrontSeoDto? Seo { get; set; }
 
     public static CmsBlogPostDto From(CMSBlogPost p) => new()
     {
@@ -40,7 +40,5 @@ public class CmsBlogPostDto
         FeaturedImageUrl = p.FeaturedImageMedia?.Url,
         Status = p.Status,
         PublishedOnUtc = p.PublishedOnUtc,
-        MetaTitle = p.MetaTitle,
-        MetaDescription = p.MetaDescription,
     };
 }

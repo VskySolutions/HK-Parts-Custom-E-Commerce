@@ -65,6 +65,15 @@
       @request="onRequest"
       @refresh="reload"
     >
+      <template #body-cell-image="cell">
+        <q-td :props="cell">
+          <q-avatar rounded size="36px" class="bg-grey-2">
+            <img v-if="cell.row.imageUrl" :src="$media(cell.row.imageUrl)" alt="">
+            <q-icon v-else name="o_image" color="grey-5" />
+          </q-avatar>
+        </q-td>
+      </template>
+
       <template #body-cell-name="cell">
         <q-td :props="cell">
           <a class="text-primary cursor-pointer text-weight-medium" @click="onManage(cell.row)">{{ cell.row.name }}</a>
@@ -90,14 +99,11 @@
         </q-td>
       </template>
 
-      <template #body-cell-isFeatured="cell">
-        <q-td :props="cell">
-          <q-icon v-if="cell.row.isFeatured" name="o_star" color="amber-7" size="20px"><q-tooltip>Featured</q-tooltip></q-icon>
-          <span v-else class="text-grey-5">—</span>
-        </q-td>
-      </template>
 
       <template #actions="{ row }">
+        <q-btn v-if="canWrite" flat round dense icon="o_content_copy" color="primary" :loading="copyingId === row.id" @click="onCopy(row)">
+          <q-tooltip>Copy — creates an unpublished duplicate</q-tooltip>
+        </q-btn>
         <q-btn
           flat
           round
@@ -125,7 +131,7 @@
 
 <script setup>
 /*
- * Products list page (WO-15; standardized). AppListHeader toolbar (search + type + published filters)
+ * Products list page (WO-15; standardized; PHP-parity image + Images/Options count columns + Copy action). AppListHeader toolbar (search + type + published filters)
  * + AppDataTable (server pagination, card title + refresh). Create and edit both use the full-page
  * product create/detail page (`catalog-product-new` / `catalog-product-detail`) — no drawer.
  */
@@ -143,13 +149,16 @@ const { has } = usePermissions()
 const canWrite = computed(() => has('Catalog.Write'))
 
 const columns = [
+  { name: 'image', label: 'Image', field: 'imageUrl', align: 'left', style: 'width: 56px' },
   { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
   { name: 'sku', label: 'SKU', field: 'sku', align: 'left', sortable: true },
   { name: 'productType', label: 'Type', field: 'productType', align: 'left', sortable: true },
   { name: 'price', label: 'Price', field: 'price', align: 'right', sortable: true },
-  { name: 'stockQuantity', label: 'Stock', field: 'stockQuantity', align: 'right' },
-  { name: 'isPublished', label: 'Published', field: 'isPublished', align: 'center', sortable: true },
-  { name: 'isFeatured', label: 'Featured', field: 'isFeatured', align: 'center', sortable: true }
+  { name: 'stockQuantity', label: 'Qty in stock', field: 'stockQuantity', align: 'right' },
+  // PHP-parity counters.
+  { name: 'imageCount', label: 'Images', field: 'imageCount', align: 'center' },
+  { name: 'optionCount', label: 'Options', field: 'optionCount', align: 'center' },
+  { name: 'isPublished', label: 'Published', field: 'isPublished', align: 'center', sortable: true }
 ]
 
 const publishedOptions = [
@@ -171,6 +180,7 @@ const typeFilter = ref(null)
 const publishedFilter = ref(null)
 const featuredFilter = ref(null)
 const filtersOpen = ref(false)
+const copyingId = ref(null)
 const pagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
 
 // Count of active advanced filters (drives the "Advanced" button badge).
@@ -240,7 +250,23 @@ function onManage (row) {
 // Storefront product URL (slug preferred, id fallback) for the "Preview in store" action — opened in a
 // new tab so the admin keeps their place in the list.
 function storePreviewUrl (row) {
-  return router.resolve({ name: 'shop-product', params: { idOrSlug: row.slug || row.id } }).href
+  return router.resolve({ name: 'shop-product', params: { idOrSlug: row.slug || row.id }, query: { preview: '1' } }).href
+}
+
+// PHP "Copy": duplicate the product server-side (unpublished, "(Copy)" name, "-COPY" SKU, no stock),
+// then open the copy so the merchant can adjust it straight away.
+async function onCopy (row) {
+  if (copyingId.value) return
+  copyingId.value = row.id
+  try {
+    const copy = await productApi.copy(row.id)
+    notify.success('Copied "' + row.name + '" — the copy is unpublished')
+    router.push({ name: 'catalog-product-detail', params: { id: copy.id } })
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+  } finally {
+    copyingId.value = null
+  }
 }
 
 async function onDelete (row) {

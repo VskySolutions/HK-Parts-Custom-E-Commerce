@@ -30,6 +30,7 @@ import integrationCredentialsRoutes from 'modules/integration-credentials/routes
 import usersRoutes from 'modules/users/routes'
 import rolesRoutes from 'modules/roles/routes'
 import catalogRoutes from 'modules/catalog/routes'
+import inventoryScannerRoutes from 'modules/inventory-scanner/routes'
 import ordersRoutes from 'modules/orders/routes'
 import inquiriesRoutes from 'modules/inquiries/routes'
 import pricingRoutes from 'modules/pricing/routes'
@@ -103,6 +104,8 @@ const routes = [
   // /shop/* pages. It MUST precede appShellRoute: both are mounted at "/", so whichever is
   // registered first wins the bare root.
   ...storefrontRoutes,
+  // Barcode inventory scanner: standalone mobile pages (own layout, requiresAuth) like the PHP admin.
+  ...inventoryScannerRoutes,
   appShellRoute,
   notAuthorizedRoute,
   catchAllRoute

@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Features.Seo;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
@@ -27,6 +28,8 @@ public class GetPublishedBlogPostBySlugQueryHandler : IRequestHandler<GetPublish
             .FirstOrDefaultAsync(p => p.Slug == slug && p.Status == CmsContentStatus.Published, cancellationToken)
             ?? throw new NotFoundException(nameof(CMSBlogPost), slug);
 
-        return CmsBlogPostDto.From(post);
+        var dto = CmsBlogPostDto.From(post);
+        dto.Seo = await SeoEntities.GetStorefrontSeoAsync(_db, SeoEntityType.BlogPost, post.Id, cancellationToken);
+        return dto;
     }
 }

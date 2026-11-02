@@ -1,11 +1,11 @@
 <template>
   <q-page class="app-page">
     <AppListHeader
-      title="Manufacturers"
-      subtitle="Manage brands / manufacturers."
-      :breadcrumbs="[{ label: 'Home', icon: 'o_home', to: '/dashboard' }, { label: 'Manufacturers' }]"
+      title="Brands"
+      subtitle="Manage the brands products are sold under."
+      :breadcrumbs="[{ label: 'Home', icon: 'o_home', to: '/dashboard' }, { label: 'Brands' }]"
       :show-add="canWrite"
-      add-label="New manufacturer"
+      add-label="New brand"
       @add="onAdd"
     >
       <template #actions>
@@ -27,7 +27,7 @@
     <AppDataTable
       page-key="catalog-manufacturers"
       row-key="id"
-      title="All manufacturers"
+      title="All brands"
       :rows="rows"
       :columns="columns"
       :loading="loading"
@@ -65,7 +65,7 @@
 
 <script setup>
 /*
- * Manufacturers list page. AppListHeader (search) + AppDataTable (server pagination). Create/edit open
+ * Brands list page (the Manufacturer entity; labelled "Brand" to match the PHP admin). AppListHeader (search) + AppDataTable (server pagination). Create/edit open
  * the full-page manufacturer detail (`catalog-manufacturer-new` / `catalog-manufacturer-detail`).
  */
 import { ref, computed, onMounted } from 'vue'
@@ -124,10 +124,10 @@ function onAdd () { router.push({ name: 'catalog-manufacturer-new' }) }
 function onManage (row) { router.push({ name: 'catalog-manufacturer-detail', params: { id: row.id } }) }
 
 async function onDelete (row) {
-  if (!(await deleteConfirmation(`the manufacturer "${row.name}"`))) return
+  if (!(await deleteConfirmation(`the brand "${row.name}"`))) return
   try {
     await manufacturerApi.remove(row.id)
-    notify.success('Manufacturer deleted')
+    notify.success('Brand deleted')
     reload()
   } catch (err) {
     notify.error(getApiErrorMessage(err))

@@ -67,6 +67,26 @@ export const productApi = {
   setCustomFieldValues (id, values) {
     return api.put(`/api/admin/products/${id}/custom-fields`, { values }).then(unwrap)
   },
+  // Specification-attribute option ids (Allow International Shipping, Condition, …); replace-semantics.
+  setSpecificationValues (id, specificationAttributeOptionIds) {
+    return api.put(`/api/admin/products/${id}/specification-values`, { specificationAttributeOptionIds }).then(unwrap)
+  },
+  // type: 'Related' | 'CrossSell' | 'UpSell' — only relationships of that type are replaced.
+  setRelationships (id, type, relatedProductIds) {
+    return api.put(`/api/admin/products/${id}/relationships`, { type, relatedProductIds }).then(unwrap)
+  },
+  // Member products of a Grouped product ("sub products"), in display order.
+  setGroupedMembers (id, memberProductIds) {
+    return api.put(`/api/admin/products/${id}/grouped-members`, { memberProductIds }).then(unwrap)
+  },
+  // [{ mediaId, title }] in display order → ProductAttachmentDto[]
+  setAttachments (id, attachments) {
+    return api.put(`/api/admin/products/${id}/attachments`, { attachments }).then(unwrap)
+  },
+  // Duplicates the product as an unpublished "(Copy)" draft → the new ProductDto.
+  copy (id) {
+    return api.post(`/api/admin/products/${id}/copy`).then(unwrap)
+  },
 
   // Video embeds are Media-backed pictures too (added by URL); images use the picture endpoints below.
   addVideo (id, payload) {

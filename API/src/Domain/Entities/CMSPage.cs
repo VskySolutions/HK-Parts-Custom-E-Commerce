@@ -11,10 +11,7 @@ public class CMSPage : AuditableEntity, ISoftDeletable
     public string Slug { get; set; } = string.Empty;
     public string? Body { get; set; }
 
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
-    public string? MetaKeywords { get; set; }
-    public string? CanonicalUrl { get; set; }
+    // SEO metadata lives in the central SeoMetadata table keyed by (SeoEntityType.CmsPage, Id).
 
     public CmsContentStatus Status { get; set; } = CmsContentStatus.Draft;
 

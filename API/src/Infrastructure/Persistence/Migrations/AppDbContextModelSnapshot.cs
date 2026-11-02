@@ -546,14 +546,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("FeaturedImageMediaId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("MetaDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaTitle")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
                     b.Property<DateTime?>("PublishedOnUtc")
                         .HasColumnType("datetime2");
 
@@ -762,10 +754,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<string>("Body")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("CanonicalUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uniqueidentifier");
 
@@ -783,18 +771,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsSystemPage")
                         .HasColumnType("bit");
-
-                    b.Property<string>("MetaDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaKeywords")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaTitle")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
 
                     b.Property<Guid?>("PageGroupId")
                         .HasColumnType("uniqueidentifier");
@@ -1113,10 +1089,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("CanonicalUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uniqueidentifier");
 
@@ -1135,10 +1107,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("DisplayOrder")
                         .HasColumnType("int");
-
-                    b.Property<string>("H1")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("Image2AltText")
                         .HasMaxLength(300)
@@ -1159,30 +1127,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsFeatured")
                         .HasColumnType("bit");
-
-                    b.Property<string>("MetaCustomTags")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MetaDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaFooterTags")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid?>("MetaImageMediaId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("MetaKeywords")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaOpenGraph")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MetaTitle")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1219,8 +1163,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.HasIndex("ImageMediaId");
 
                     b.HasIndex("IsFeatured");
-
-                    b.HasIndex("MetaImageMediaId");
 
                     b.HasIndex("ParentId");
 
@@ -1998,6 +1940,87 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("GroupedProductMembers", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.InventoryAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ClientIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("MatchedBy")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("NewPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("NewQty")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("OldPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("OldQty")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ProductVariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ScannedCode")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("StoreId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedOnUtc");
+
+                    b.HasIndex("ProductVariantId");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("ProductId", "CreatedOnUtc");
+
+                    b.ToTable("InventoryAuditLogs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryAuditLogs_NonNegative", "([NewQty] IS NULL OR [NewQty] >= 0) AND ([NewPrice] IS NULL OR [NewPrice] >= 0)");
+                        });
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.InventoryLevel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2130,18 +2153,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<string>("LogoUrl")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaKeywords")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaTitle")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2833,10 +2844,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("H1")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
                     b.Property<decimal?>("Height")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -2875,30 +2882,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<int?>("MaxOrderQuantity")
                         .HasColumnType("int");
-
-                    b.Property<string>("MetaCustomTags")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MetaDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaFooterTags")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid?>("MetaImageMediaId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("MetaKeywords")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("MetaOpenGraph")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MetaTitle")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
 
                     b.Property<int?>("MinOrderQuantity")
                         .HasColumnType("int");
@@ -2988,8 +2971,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ManufacturerId");
 
-                    b.HasIndex("MetaImageMediaId");
-
                     b.HasIndex("ProductType");
 
                     b.HasIndex("Sku")
@@ -3011,6 +2992,45 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_Products_SaleWindow", "[SaleStartDateUtc] IS NULL OR [SaleEndDateUtc] IS NULL OR [SaleEndDateUtc] >= [SaleStartDateUtc]");
                         });
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ProductAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("MediaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MediaId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("ProductAttachments", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ProductAttribute", b =>
@@ -3994,6 +4014,74 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Roles", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.SeoMetadata", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CanonicalUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("EntityType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("H1")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("MetaCustomTags")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MetaDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MetaFooterTags")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("MetaImageMediaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("MetaKeywords")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MetaOpenGraph")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MetaTitle")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("NoIndex")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MetaImageMediaId");
+
+                    b.HasIndex("EntityType", "EntityId")
+                        .IsUnique();
+
+                    b.ToTable("SeoMetadata", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.SettingsChangeHistory", b =>
@@ -6019,11 +6107,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ImageMediaId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("HKPartsEcommerce.Domain.Entities.Media", "MetaImage")
-                        .WithMany()
-                        .HasForeignKey("MetaImageMediaId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("HKPartsEcommerce.Domain.Entities.Category", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId")
@@ -6032,8 +6115,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("Image");
 
                     b.Navigation("Image2");
-
-                    b.Navigation("MetaImage");
 
                     b.Navigation("Parent");
                 });
@@ -6176,6 +6257,31 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("MemberProduct");
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.InventoryAuditLog", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Product");
+
+                    b.Navigation("ProductVariant");
+
+                    b.Navigation("Store");
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.InventoryLevel", b =>
                 {
                     b.HasOne("HKPartsEcommerce.Domain.Entities.Product", "Product")
@@ -6287,11 +6393,6 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ManufacturerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("HKPartsEcommerce.Domain.Entities.Media", "MetaImage")
-                        .WithMany()
-                        .HasForeignKey("MetaImageMediaId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("HKPartsEcommerce.Domain.Entities.TaxCategory", "TaxCategory")
                         .WithMany("Products")
                         .HasForeignKey("TaxCategoryId")
@@ -6300,9 +6401,26 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Manufacturer");
 
-                    b.Navigation("MetaImage");
-
                     b.Navigation("TaxCategory");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ProductAttachment", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Media", "Media")
+                        .WithMany()
+                        .HasForeignKey("MediaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Product", "Product")
+                        .WithMany("Attachments")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Media");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ProductAttributeMapping", b =>
@@ -6575,6 +6693,16 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Rma");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.SeoMetadata", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Media", "MetaImage")
+                        .WithMany()
+                        .HasForeignKey("MetaImageMediaId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("MetaImage");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Shipment", b =>
@@ -6889,6 +7017,8 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Product", b =>
                 {
+                    b.Navigation("Attachments");
+
                     b.Navigation("AttributeMappings");
 
                     b.Navigation("CustomFieldValues");

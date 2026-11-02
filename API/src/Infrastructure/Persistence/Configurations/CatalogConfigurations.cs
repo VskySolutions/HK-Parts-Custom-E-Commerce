@@ -26,11 +26,6 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         b.Property(x => x.Description).HasMaxLength(2000);
         b.Property(x => x.Slug).HasMaxLength(220);
-        b.Property(x => x.MetaTitle).HasMaxLength(300);
-        b.Property(x => x.MetaDescription).HasMaxLength(500);
-        b.Property(x => x.MetaKeywords).HasMaxLength(500);
-        b.Property(x => x.CanonicalUrl).HasMaxLength(500);
-        b.Property(x => x.H1).HasMaxLength(300);
         b.Property(x => x.Summary).HasMaxLength(2000);
         b.Property(x => x.ImageAltText).HasMaxLength(300);
         b.Property(x => x.Image2AltText).HasMaxLength(300);
@@ -40,8 +35,7 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
             .HasForeignKey(x => x.ParentId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // Media lookups: three FKs to the same table → NoAction (no multiple cascade paths).
-        b.HasOne(x => x.MetaImage).WithMany().HasForeignKey(x => x.MetaImageMediaId).OnDelete(DeleteBehavior.NoAction);
+        // Media lookups: two FKs to the same table → NoAction (no multiple cascade paths).
         b.HasOne(x => x.Image).WithMany().HasForeignKey(x => x.ImageMediaId).OnDelete(DeleteBehavior.NoAction);
         b.HasOne(x => x.Image2).WithMany().HasForeignKey(x => x.Image2MediaId).OnDelete(DeleteBehavior.NoAction);
 
@@ -62,9 +56,6 @@ public class ManufacturerConfiguration : IEntityTypeConfiguration<Manufacturer>
         b.Property(x => x.Description).HasMaxLength(2000);
         b.Property(x => x.LogoUrl).HasMaxLength(500);
         b.Property(x => x.Slug).HasMaxLength(220);
-        b.Property(x => x.MetaTitle).HasMaxLength(300);
-        b.Property(x => x.MetaDescription).HasMaxLength(500);
-        b.Property(x => x.MetaKeywords).HasMaxLength(500);
 
         b.HasOne(x => x.LogoMedia)
             .WithMany()
@@ -88,14 +79,10 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         b.Property(x => x.Sku).HasMaxLength(100);
         b.Property(x => x.InquiryButtonLabel).HasMaxLength(80);
         b.Property(x => x.SubscriptionIntervals).HasMaxLength(200);
-        b.Property(x => x.MetaTitle).HasMaxLength(300);
-        b.Property(x => x.MetaDescription).HasMaxLength(500);
-        b.Property(x => x.MetaKeywords).HasMaxLength(500);
         b.Property(x => x.Price).HasPrecision(18, 2);
         b.Property(x => x.GiftCardAmount).HasPrecision(18, 2);
         b.Property(x => x.ProductType).HasConversion<int>();
         b.Property(x => x.GiftCardType).HasConversion<int?>();
-        b.Property(x => x.H1).HasMaxLength(300);
         b.Property(x => x.Gtin).HasMaxLength(50);
         b.Property(x => x.Cost).HasPrecision(18, 2);
         b.Property(x => x.Msrp).HasPrecision(18, 2);
@@ -119,11 +106,6 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
                 "[SaleStartDateUtc] IS NULL OR [SaleEndDateUtc] IS NULL OR [SaleEndDateUtc] >= [SaleStartDateUtc]");
             t.HasCheckConstraint("CK_Products_PackagePieces", "[PackagePieces] >= 1");
         });
-
-        b.HasOne(x => x.MetaImage)
-            .WithMany()
-            .HasForeignKey(x => x.MetaImageMediaId)
-            .OnDelete(DeleteBehavior.NoAction);
 
         b.HasOne(x => x.TaxCategory)
             .WithMany(t => t.Products)
@@ -564,5 +546,30 @@ public class ProductDownloadConfiguration : IEntityTypeConfiguration<ProductDown
             .OnDelete(DeleteBehavior.Cascade);
 
         b.HasIndex(x => x.ProductId);
+    }
+}
+
+public class ProductAttachmentConfiguration : IEntityTypeConfiguration<ProductAttachment>
+{
+    public void Configure(EntityTypeBuilder<ProductAttachment> b)
+    {
+        b.ToTable("ProductAttachments");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Title).HasMaxLength(300);
+
+        b.HasOne(x => x.Product)
+            .WithMany(p => p.Attachments)
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Lookup FK: removing an attachment never deletes the shared Media asset, and a Media asset in
+        // use can't be hard-deleted out from under a product.
+        b.HasOne(x => x.Media)
+            .WithMany()
+            .HasForeignKey(x => x.MediaId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        b.HasIndex(x => x.ProductId);
+        b.HasIndex(x => x.MediaId);
     }
 }

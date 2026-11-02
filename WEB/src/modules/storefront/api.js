@@ -10,7 +10,7 @@
  * JSON is camelCase and enums serialize as string names (ProductMediaType =
  * Image|Video, ProductType = Simple|Grouped|WithVariants|Downloadable|GiftCard).
  */
-import { anonApi, customerApi, unwrap, qsSerializer } from 'services/api'
+import { api, anonApi, customerApi, unwrap, qsSerializer } from 'services/api'
 
 const CATALOG = '/api/storefront/catalog'
 const SEARCH = '/api/storefront/search'
@@ -29,6 +29,16 @@ export const storefrontApi = {
   // Full published product detail (variants, media, specs, relationship sections).
   productDetail (idOrSlug) {
     return anonApi.get(CATALOG + '/product/' + encodeURIComponent(idOrSlug)).then(unwrap)
+  },
+  // Admin draft preview: same payload, but unpublished drafts resolve too. Uses the ADMIN instance
+  // (Catalog module required) — the public endpoint above 404s on drafts. _noAuthRedirect: a stale
+  // admin session on a storefront page must fail quietly, never bounce the shopper to the admin login.
+  productPreview (idOrSlug) {
+    return api.get('/api/admin/products/preview/' + encodeURIComponent(idOrSlug), { _noAuthRedirect: true }).then(unwrap)
+  },
+  // schema.org Product JSON-LD for the detail page <head>.
+  productSchema (idOrSlug) {
+    return anonApi.get('/api/storefront/products/' + encodeURIComponent(idOrSlug) + '/schema').then(unwrap)
   },
   // Resolve a client-maintained list of product ids to summaries (published only, order preserved).
   recentlyViewed (productIds) {

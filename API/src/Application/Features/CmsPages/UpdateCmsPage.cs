@@ -15,10 +15,6 @@ public record UpdateCmsPageCommand(
     string Title,
     string? Slug = null,
     string? Body = null,
-    string? MetaTitle = null,
-    string? MetaDescription = null,
-    string? MetaKeywords = null,
-    string? CanonicalUrl = null,
     CmsContentStatus Status = CmsContentStatus.Draft,
     Guid? PageGroupId = null,
     int DisplayOrder = 0,
@@ -32,10 +28,6 @@ public class UpdateCmsPageCommandValidator : AbstractValidator<UpdateCmsPageComm
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.Title).NotEmpty().MaximumLength(300);
         RuleFor(x => x.Slug).MaximumLength(300);
-        RuleFor(x => x.MetaTitle).MaximumLength(300);
-        RuleFor(x => x.MetaDescription).MaximumLength(500);
-        RuleFor(x => x.MetaKeywords).MaximumLength(500);
-        RuleFor(x => x.CanonicalUrl).MaximumLength(500);
         RuleFor(x => x.Status).IsInEnum();
     }
 }
@@ -64,10 +56,6 @@ public class UpdateCmsPageCommandHandler : IRequestHandler<UpdateCmsPageCommand,
         entity.Title = request.Title;
         entity.Slug = slug;
         entity.Body = request.Body;
-        entity.MetaTitle = request.MetaTitle;
-        entity.MetaDescription = request.MetaDescription;
-        entity.MetaKeywords = request.MetaKeywords;
-        entity.CanonicalUrl = request.CanonicalUrl;
         entity.Status = request.Status;
         entity.PageGroupId = request.PageGroupId;
         entity.DisplayOrder = request.DisplayOrder;

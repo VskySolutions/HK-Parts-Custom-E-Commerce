@@ -104,21 +104,17 @@
           </q-tab-panel>
 
           <!-- ============ SEO ============ -->
-          <q-tab-panel name="seo" class="q-gutter-y-sm">
-            <q-card flat bordered class="q-pa-md q-mb-md seo-preview">
-              <div class="seo-preview__title ellipsis">{{ seoPreview.title }}</div>
-              <div class="seo-preview__url ellipsis">{{ seoPreview.url }}</div>
-              <div class="seo-preview__desc">{{ seoPreview.description }}</div>
-            </q-card>
-
-            <AppTextField v-model="form.metaTitle" label="Meta title" placeholder="Defaults to the page title" :disable="!canWrite" maxlength="300">
-              <template #hint>{{ metaTitleHint }}</template>
-            </AppTextField>
-            <AppTextField v-model="form.metaDescription" label="Meta description" type="textarea" autogrow placeholder="Plain-text summary for search engines" :disable="!canWrite" maxlength="500">
-              <template #hint>{{ metaDescriptionHint }}</template>
-            </AppTextField>
-            <AppTextField v-model="form.metaKeywords" label="Meta keywords" placeholder="Comma-separated keywords" :disable="!canWrite" maxlength="500" />
-            <AppTextField v-model="form.canonicalUrl" label="Canonical URL" placeholder="https://…" hint="Optional — the preferred URL for this content" :disable="!canWrite" maxlength="500" />
+          <q-tab-panel name="seo">
+            <AppSeoPanel
+              entity-type="CmsPage"
+              :entity-id="entity?.id"
+              :slug="form.slug"
+              :fallback-title="form.title"
+              :fallback-description="form.body"
+              fallback-label="page title"
+              :disable="!canWrite"
+              :run-save="runSave"
+            />
           </q-tab-panel>
         </q-tab-panels>
 
@@ -142,7 +138,7 @@
 <script setup>
 /*
  * CMS Page create + manage page (WO-54; full-page auto-save via useDetailForm). Content (title / slug /
- * body / group / status / display order) and SEO (meta title/description/keywords + canonical URL) all
+ * body / group / status / display order) and SEO (shared AppSeoPanel → central SEO table) all
  * auto-save on change in manage mode, with the live status chip in the header. Slug is derived from the
  * title locally (useDetailForm's built-in deriveSlug watches `form.name`, but the primary field here is
  * `title`). Page groups are loaded once for the group select. System pages are flagged with a read-only
@@ -154,6 +150,7 @@ import { cmsPageApi, cmsPageGroupApi, statusOptions, statusColor } from '../api'
 import { usePermissions } from 'composables/usePermissions'
 import { useDetailForm } from 'composables/useDetailForm'
 import { required, maxLength } from 'validators'
+import { slugify } from 'src/utils/slug'
 
 const router = useRouter()
 const { has } = usePermissions()
@@ -186,16 +183,12 @@ function buildPayload (form) {
     status: form.status,
     displayOrder: Number(form.displayOrder) || 0,
     showInTopBar: !!form.showInTopBar,
-    showInFooter: !!form.showInFooter,
-    metaTitle: form.metaTitle || null,
-    metaDescription: form.metaDescription || null,
-    metaKeywords: form.metaKeywords || null,
-    canonicalUrl: form.canonicalUrl || null
+    showInFooter: !!form.showInFooter
   }
 }
 
 const {
-  form, v$, entity, loading, creating, isCreate, saveStatus, create
+  form, v$, entity, loading, creating, isCreate, saveStatus, create, runSave
 } = useDetailForm({
   createRouteName: 'cms-page-new',
   detailRouteName: 'cms-page-detail',
@@ -204,23 +197,15 @@ const {
   buildPayload,
   empty: {
     title: '', slug: '', body: '', pageGroupId: null, status: 'Draft', displayOrder: 0,
-    showInTopBar: false, showInFooter: true,
-    metaTitle: '', metaDescription: '', metaKeywords: '', canonicalUrl: ''
+    showInTopBar: false, showInFooter: true
   },
   rules: {
     title: { required, maxLength: maxLength(300) },
-    slug: { maxLength: maxLength(320) },
-    canonicalUrl: { maxLength: maxLength(500) }
+    slug: { maxLength: maxLength(320) }
   }
 })
 
 // ---- Local slug derivation from the title (mirrors useDetailForm's deriveSlug, which is name-bound) ----
-function slugify (value) {
-  return (value || '').toString().trim().toLowerCase()
-    .replace(/['’"]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
 let lastAutoSlug = ''
 watch(() => form.title, (title) => {
   if (!form.slug || form.slug === lastAutoSlug) {
@@ -228,35 +213,10 @@ watch(() => form.title, (title) => {
     form.slug = lastAutoSlug
   }
 })
-
-// ---- SEO preview + length hints ----
-const seoPreview = computed(() => {
-  const raw = form.metaDescription || (form.body ? String(form.body).replace(/<[^>]+>/g, '').slice(0, 160) : 'A description of this page will appear here in search results.')
-  return {
-    title: form.metaTitle || form.title || 'Page title',
-    url: `yourstore.com › ${form.slug || 'page-slug'}`,
-    description: raw.length > 160 ? `${raw.slice(0, 157)}…` : raw
-  }
-})
-function lengthHint (value, ideal, fallbackLabel) {
-  const n = (value || '').length
-  if (!n) return `Falls back to the ${fallbackLabel}. Aim for ~${ideal} characters.`
-  const note = n > ideal ? ' — may be truncated in results' : (n < ideal * 0.5 ? ' — consider adding detail' : ' — good length')
-  return `${n} / ${ideal} recommended${note}`
-}
-const metaTitleHint = computed(() => lengthHint(form.metaTitle, 60, 'page title'))
-const metaDescriptionHint = computed(() => lengthHint(form.metaDescription, 160, 'body'))
 </script>
 
 <style scoped lang="scss">
 .app-detail-tabs {
   :deep(.q-tab) { min-height: 44px; }
-}
-
-.seo-preview {
-  max-width: 600px;
-  &__title { color: #1a0dab; font-size: 18px; line-height: 1.3; }
-  &__url { color: #006621; font-size: 13px; }
-  &__desc { color: #545454; font-size: 13px; margin-top: 2px; }
 }
 </style>

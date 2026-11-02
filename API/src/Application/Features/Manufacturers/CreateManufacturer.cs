@@ -1,3 +1,6 @@
+using HKPartsEcommerce.Application.Common.Utilities;
+using HKPartsEcommerce.Application.Common.Exceptions;
+using Microsoft.EntityFrameworkCore;
 using FluentValidation;
 using MediatR;
 using HKPartsEcommerce.Application.Common.Interfaces;
@@ -12,9 +15,6 @@ public record CreateManufacturerCommand(
     Guid? LogoMediaId = null,
     string? LogoUrl = null,
     string? Slug = null,
-    string? MetaTitle = null,
-    string? MetaDescription = null,
-    string? MetaKeywords = null,
     int DisplayOrder = 0,
     bool IsEnabled = true) : IRequest<ManufacturerDto>;
 
@@ -35,6 +35,10 @@ public class CreateManufacturerCommandHandler : IRequestHandler<CreateManufactur
 
     public async Task<ManufacturerDto> Handle(CreateManufacturerCommand request, CancellationToken cancellationToken)
     {
+        var slug = SlugGenerator.NormalizeOptional(request.Slug);
+        if (slug is not null && await _db.Manufacturers.AnyAsync(x => x.Slug == slug, cancellationToken))
+            throw new ConflictException($"Another manufacturer already uses the slug '{slug}'.");
+
         var entity = new Manufacturer
         {
             Name = request.Name,
@@ -42,10 +46,7 @@ public class CreateManufacturerCommandHandler : IRequestHandler<CreateManufactur
             LogoMediaId = request.LogoMediaId,
             // Going forward the logo lives in Media; only keep a raw URL when no Media asset is set.
             LogoUrl = request.LogoMediaId.HasValue ? null : request.LogoUrl,
-            Slug = request.Slug,
-            MetaTitle = request.MetaTitle,
-            MetaDescription = request.MetaDescription,
-            MetaKeywords = request.MetaKeywords,
+            Slug = slug,
             DisplayOrder = request.DisplayOrder,
             IsEnabled = request.IsEnabled,
         };

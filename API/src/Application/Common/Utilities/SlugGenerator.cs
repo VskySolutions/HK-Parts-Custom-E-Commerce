@@ -21,4 +21,11 @@ public static class SlugGenerator
         text = Regex.Replace(text, "[^a-z0-9]+", "-").Trim('-');
         return text.Length == 0 ? Guid.NewGuid().ToString("n")[..8] : text;
     }
+
+    /// <summary>
+    /// For entities whose slug is optional (products, categories, manufacturers): null when the input is
+    /// blank, otherwise the normalised <see cref="Generate"/> form.
+    /// </summary>
+    public static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : Generate(value);
 }

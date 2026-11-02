@@ -19,7 +19,11 @@ public record ListProductsQuery(
     Guid? ManufacturerId = null,
     bool? IsFeatured = null,
     string? SortBy = null,
-    bool SortDescending = false) : IRequest<PaginatedList<ProductListItemDto>>;
+    bool SortDescending = false,
+    // Restrict to these ids (resolving the rows behind already-picked related / sub products).
+    List<Guid>? Ids = null,
+    // Leave this product out (a product picker never offers the product being edited).
+    Guid? ExcludeId = null) : IRequest<PaginatedList<ProductListItemDto>>;
 
 public class ListProductsQueryHandler : IRequestHandler<ListProductsQuery, PaginatedList<ProductListItemDto>>
 {
@@ -56,6 +60,12 @@ public class ListProductsQueryHandler : IRequestHandler<ListProductsQuery, Pagin
                 || (p.Gtin != null && p.Gtin == term));
         }
 
+        if (request.Ids is { Count: > 0 })
+            query = query.Where(p => request.Ids.Contains(p.Id));
+
+        if (request.ExcludeId.HasValue)
+            query = query.Where(p => p.Id != request.ExcludeId.Value);
+
         if (request.Type.HasValue)
             query = query.Where(p => p.ProductType == request.Type.Value);
 
@@ -75,6 +85,30 @@ public class ListProductsQueryHandler : IRequestHandler<ListProductsQuery, Pagin
 
         var page = await PaginatedList<Product>.CreateAsync(ordered, request.Page, request.PageSize, cancellationToken);
         var items = page.Items.Select(ProductListItemDto.From).ToList();
+
+        // List counters in one aggregate query for just this page (no extra Includes on the main query).
+        var ids = items.Select(i => i.Id).ToList();
+        var counts = await _db.Products.AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .Select(p => new
+            {
+                p.Id,
+                Images = p.Pictures.Count(pic => pic.ProductVariantId == null && pic.Media!.MediaType == MediaType.Image),
+                Variants = p.Variants.Count(v => !v.Deleted),
+                Members = p.GroupedMembers.Count(),
+                Options = p.AttributeMappings.Count(),
+                Attachments = p.Attachments.Count(),
+            })
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
+        foreach (var item in items)
+        {
+            if (!counts.TryGetValue(item.Id, out var c)) continue;
+            item.ImageCount = c.Images;
+            item.SubProductCount = item.ProductType == ProductType.Grouped ? c.Members : c.Variants;
+            item.OptionCount = c.Options;
+            item.AttachmentCount = c.Attachments;
+        }
+
         return new PaginatedList<ProductListItemDto>(items, page.TotalCount, page.PageNumber, page.PageSize);
     }
 }

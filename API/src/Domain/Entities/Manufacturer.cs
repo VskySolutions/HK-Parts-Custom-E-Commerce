@@ -17,11 +17,9 @@ public class Manufacturer : AuditableEntity, ISoftDeletable
     /// <summary>Legacy logo URL, retained as a read fallback for records migrated before <see cref="LogoMediaId"/>.</summary>
     public string? LogoUrl { get; set; }
 
-    // SEO metadata (AC-CAT-005.1)
+    /// <summary>Storefront URL slug. The rest of the SEO metadata (AC-CAT-005.1) lives in the central
+    /// SeoMetadata table keyed by (SeoEntityType.Manufacturer, Id).</summary>
     public string? Slug { get; set; }
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
-    public string? MetaKeywords { get; set; }
 
     public int DisplayOrder { get; set; }
     public bool IsEnabled { get; set; } = true;

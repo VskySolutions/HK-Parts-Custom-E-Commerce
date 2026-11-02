@@ -67,11 +67,18 @@
           inline-label
         >
           <q-tab name="general" icon="o_info" label="General" />
-          <q-tab name="pricing" icon="o_sell" label="Pricing &amp; inventory" :disable="isCreate" />
+          <q-tab name="pricing" icon="o_sell" label="Pricing" :disable="isCreate" />
+          <q-tab name="inventory" icon="o_inventory_2" label="Inventory" :disable="isCreate" />
           <q-tab v-if="isVariantType" name="variants" :disable="isCreate">
             <div class="row items-center no-wrap">
               <q-icon name="o_style" class="q-mr-xs" />Variants
               <q-badge v-if="!isCreate && variants.length" color="grey-5" class="q-ml-xs">{{ variants.length }}</q-badge>
+            </div>
+          </q-tab>
+          <q-tab v-if="isGroupedType" name="subproducts" :disable="isCreate">
+            <div class="row items-center no-wrap">
+              <q-icon name="o_widgets" class="q-mr-xs" />Sub products
+              <q-badge v-if="!isCreate && groupedMemberIds.length" color="grey-5" class="q-ml-xs">{{ groupedMemberIds.length }}</q-badge>
             </div>
           </q-tab>
           <q-tab name="shipping" icon="o_local_shipping" label="Shipping" :disable="isCreate" />
@@ -79,6 +86,12 @@
             <div class="row items-center no-wrap">
               <q-icon name="o_account_tree" class="q-mr-xs" />Organization
               <q-badge v-if="!isCreate && orgCount" color="grey-5" class="q-ml-xs">{{ orgCount }}</q-badge>
+            </div>
+          </q-tab>
+          <q-tab name="related" :disable="isCreate">
+            <div class="row items-center no-wrap">
+              <q-icon name="o_link" class="q-mr-xs" />Related products
+              <q-badge v-if="!isCreate && relatedIds.length" color="grey-5" class="q-ml-xs">{{ relatedIds.length }}</q-badge>
             </div>
           </q-tab>
           <q-tab name="media" :disable="isCreate">
@@ -143,14 +156,17 @@
 
             <q-separator class="q-my-sm" />
             <div class="row q-col-gutter-sm items-start">
-              <div class="col-12 col-md-6">
+              <div class="col-12 col-md-4">
                 <AppSelect v-model="form.taxCategoryId" label="Tax category" required :options="taxCategoryOptions" :v="v$.taxCategoryId" :disable="!canWrite" hint="Drives tax calculation at checkout" />
                 <div v-if="!taxCategoryOptions.length" class="text-caption text-negative">
                   No tax categories exist yet. A default “Standard” category is normally seeded automatically.
                 </div>
               </div>
-              <div class="col-12 col-md-6">
-                <AppSelect v-model="form.manufacturerId" label="Manufacturer" :options="manufacturerOptions" clearable placeholder="None" :disable="!canWrite" />
+              <div class="col-12 col-md-4">
+                <AppSelect v-model="form.manufacturerId" label="Brand" :options="manufacturerOptions" clearable placeholder="None" :disable="!canWrite" />
+              </div>
+              <div class="col-12 col-md-4">
+                <AppTextField v-model="form.weight" label="Weight (in pounds)" type="number" step="0.01" min="0" :v="v$.weight" hint="Used for shipping rates" :disable="!canWrite" />
               </div>
             </div>
 
@@ -215,6 +231,29 @@
               />
             </template>
 
+            <!-- Specification attributes (edit only): the PHP Yes/No + dropdown fields such as Allow
+                 International Shipping, Restrict Non High Capacity Mags States, Shipping Package Size and
+                 Condition. One pick per attribute; the same values drive the category Filters. -->
+            <template v-if="!isCreate && specAttributes.length">
+              <q-separator class="q-my-sm" />
+              <AppFieldLabel label="Product specifications">
+                <template #hint>Defined under Catalog → Attributes (specification attributes) — also used as category filters</template>
+              </AppFieldLabel>
+              <div class="row q-col-gutter-sm">
+                <div v-for="a in specAttributes" :key="a.id" class="col-12 col-sm-6 col-md-4">
+                  <AppSelect
+                    :model-value="specPicks[a.id] || null"
+                    :label="a.name"
+                    :options="a.options.map((o) => ({ label: o.value, value: o.id }))"
+                    clearable
+                    placeholder="Not set"
+                    :disable="!canWrite"
+                    @update:model-value="(v) => onSpecPick(a.id, v)"
+                  />
+                </div>
+              </div>
+            </template>
+
             <!-- Merchant-defined custom fields (edit only) -->
             <template v-if="!isCreate && customFields.length">
               <q-separator class="q-my-sm" />
@@ -257,14 +296,11 @@
             </div>
           </q-tab-panel>
 
-          <!-- ============ PRICING & INVENTORY ============ -->
+          <!-- ============ PRICING ============ -->
           <q-tab-panel name="pricing" class="q-gutter-y-sm">
             <div class="row q-col-gutter-sm">
               <div class="col-6 col-md-4">
                 <AppTextField v-model="form.price" label="Price" type="number" step="0.01" placeholder="0.00" hint="Base price in the store currency" :disable="!canWrite" />
-              </div>
-              <div class="col-6 col-md-4">
-                <AppTextField :model-value="stockRollup" label="Stock quantity" type="number" readonly hint="Total on-hand across all stores — set it per store below" />
               </div>
             </div>
 
@@ -291,83 +327,6 @@
               <div class="col-6 col-md-4">
                 <AppTextField v-model="form.saleEndDateUtc" label="Sale ends" type="datetime-local" clearable :v="v$.saleEndDateUtc" :disable="!canWrite || !hasSalePrice" />
               </div>
-            </div>
-
-            <q-separator class="q-my-sm" />
-            <AppFieldLabel label="Ordering &amp; availability" />
-            <div class="row q-col-gutter-sm">
-              <div class="col-6 col-md-3">
-                <AppTextField v-model="form.minOrderQuantity" label="Min qty allowed" type="number" min="1" placeholder="No minimum" :v="v$.minOrderQuantity" :disable="!canWrite" />
-              </div>
-              <div class="col-6 col-md-3">
-                <AppTextField v-model="form.maxOrderQuantity" label="Max qty allowed" type="number" min="1" placeholder="No maximum" :v="v$.maxOrderQuantity" :disable="!canWrite" />
-              </div>
-              <div class="col-12 col-md-6">
-                <AppSelect v-model="form.stockStatusOverride" label="Stock status" :options="stockStatusOverrideOptions" :disable="!canWrite" hint="Override what the storefront shows, regardless of stock" />
-              </div>
-            </div>
-
-            <div class="row items-center q-gutter-md q-mt-none">
-              <q-toggle v-model="form.allowBackorder" label="Allow backorder" color="primary" :disable="!canWrite" />
-              <div v-if="form.allowBackorder" style="max-width: 220px">
-                <AppFieldLabel label="Estimated restock date">
-                  <template #hint>Shown to buyers on backordered items</template>
-                </AppFieldLabel>
-                <q-input v-model="form.estimatedRestockDate" dense outlined type="date" :disable="!canWrite" clearable />
-              </div>
-            </div>
-            <AppTextField
-              v-if="form.allowBackorder"
-              v-model="form.backorderMessage"
-              label="Backorder message"
-              maxlength="500"
-              placeholder="e.g. Ships in 2–3 weeks"
-              hint="Shown on the product page while backordered"
-              :v="v$.backorderMessage"
-              :disable="!canWrite"
-            />
-
-            <!-- Per-store stock (the authoritative fulfillment inventory read by checkout/routing) -->
-            <q-separator class="q-my-sm" />
-            <AppFieldLabel label="Stock by store">
-              <template #hint>Per-store on-hand — this is what checkout uses to route and reserve orders</template>
-            </AppFieldLabel>
-
-            <div v-if="!stores.length" class="text-grey-6 text-caption q-mt-xs">
-              No stores exist yet — create a store first, then stock can be held against it.
-            </div>
-
-            <template v-else-if="!isVariantType">
-              <q-markup-table flat bordered dense class="q-mt-xs inv-table">
-                <thead>
-                  <tr>
-                    <th class="text-left">Store</th>
-                    <th class="text-right" style="width: 130px">Stock qty</th>
-                    <th class="text-right" style="width: 150px">Low-stock alert</th>
-                    <th style="width: 40px"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="s in stores" :key="s.id">
-                    <td class="text-left">{{ s.name }}</td>
-                    <td>
-                      <q-input :model-value="invEntry(null, s.id).qty" dense borderless type="number" min="0" input-class="text-right" :disable="!canWrite" @update:model-value="(v) => onInvInput(null, s.id, 'qty', v)" />
-                    </td>
-                    <td>
-                      <q-input :model-value="invEntry(null, s.id).threshold" dense borderless type="number" min="0" input-class="text-right" placeholder="0" :disable="!canWrite" @update:model-value="(v) => onInvInput(null, s.id, 'threshold', v)" />
-                    </td>
-                    <td class="text-center">
-                      <q-spinner v-if="invEntry(null, s.id).saving" size="16px" color="primary" />
-                      <q-icon v-else-if="invEntry(null, s.id).saved" name="o_check_circle" color="positive" size="18px"><q-tooltip>Saved</q-tooltip></q-icon>
-                    </td>
-                  </tr>
-                </tbody>
-              </q-markup-table>
-            </template>
-
-            <div v-else class="text-grey-6 text-caption q-mt-xs">
-              This product has variants — set stock per variant and store on the
-              <a class="text-primary cursor-pointer" @click="tab = 'variants'">Variants</a> tab.
             </div>
 
             <!-- Downloadable settings -->
@@ -403,6 +362,126 @@
               <div class="col"><q-input v-model.number="tier.price" dense outlined type="number" step="0.01" label="Price" :disable="!canWrite" @update:model-value="queueTiers" /></div>
               <div class="col-auto"><q-btn v-if="canWrite" flat round dense icon="o_delete" color="negative" @click="removeTier(i)" /></div>
             </div>
+          </q-tab-panel>
+
+          <!-- ============ INVENTORY ============ -->
+          <!-- PHP parity: one "Qty in stock" + "Notification level" per product. Stock still lives in a
+               store-level row (what checkout reserves against) — the single fields edit the primary
+               store's row; the per-store breakdown is only needed when stock is held in several stores. -->
+          <q-tab-panel name="inventory" class="q-gutter-y-sm">
+            <div v-if="!stores.length" class="text-grey-6 text-caption">
+              No stores exist yet — create a store first, then stock can be held against it.
+            </div>
+
+            <template v-else-if="!isVariantType">
+              <div class="row q-col-gutter-sm items-start">
+                <div class="col-6 col-md-4">
+                  <AppTextField
+                    :model-value="stockSplit ? stockRollup : primaryEntry.qty"
+                    label="Qty in stock"
+                    type="number"
+                    min="0"
+                    :readonly="stockSplit"
+                    :hint="stockSplit ? 'Held in several stores — edit per store below' : 'On-hand quantity'"
+                    :disable="!canWrite"
+                    @update:model-value="(v) => onInvInput(null, primaryStoreId, 'qty', v)"
+                  />
+                </div>
+                <div class="col-6 col-md-4">
+                  <AppTextField
+                    :model-value="primaryEntry.threshold"
+                    label="Notification level"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    :readonly="stockSplit"
+                    :hint="stockSplit ? 'Set per store below' : 'Low-stock alert when the quantity drops to this level'"
+                    :disable="!canWrite"
+                    @update:model-value="(v) => onInvInput(null, primaryStoreId, 'threshold', v)"
+                  />
+                </div>
+                <div class="col-auto q-pt-md">
+                  <q-spinner v-if="primaryEntry.saving" size="18px" color="primary" class="q-mt-sm" />
+                  <q-icon v-else-if="primaryEntry.saved" name="o_check_circle" color="positive" size="20px" class="q-mt-sm"><q-tooltip>Saved</q-tooltip></q-icon>
+                </div>
+              </div>
+
+              <q-expansion-item
+                v-if="stores.length > 1"
+                v-model="stockByStoreOpen"
+                dense
+                dense-toggle
+                icon="o_store"
+                label="Stock by store"
+                caption="Only needed when stock is physically held in more than one store"
+                header-class="text-grey-8 q-px-none"
+              >
+                <q-markup-table flat bordered dense class="q-mt-xs inv-table">
+                  <thead>
+                    <tr>
+                      <th class="text-left">Store</th>
+                      <th class="text-right" style="width: 130px">Stock qty</th>
+                      <th class="text-right" style="width: 150px">Low-stock alert</th>
+                      <th style="width: 40px"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="s in stores" :key="s.id">
+                      <td class="text-left">{{ s.name }}</td>
+                      <td>
+                        <q-input :model-value="invEntry(null, s.id).qty" dense borderless type="number" min="0" input-class="text-right" :disable="!canWrite" @update:model-value="(v) => onInvInput(null, s.id, 'qty', v)" />
+                      </td>
+                      <td>
+                        <q-input :model-value="invEntry(null, s.id).threshold" dense borderless type="number" min="0" input-class="text-right" placeholder="0" :disable="!canWrite" @update:model-value="(v) => onInvInput(null, s.id, 'threshold', v)" />
+                      </td>
+                      <td class="text-center">
+                        <q-spinner v-if="invEntry(null, s.id).saving" size="16px" color="primary" />
+                        <q-icon v-else-if="invEntry(null, s.id).saved" name="o_check_circle" color="positive" size="18px"><q-tooltip>Saved</q-tooltip></q-icon>
+                      </td>
+                    </tr>
+                  </tbody>
+                </q-markup-table>
+              </q-expansion-item>
+            </template>
+
+            <div v-else class="text-grey-6 text-caption">
+              This product has variants — set stock per variant and store on the
+              <a class="text-primary cursor-pointer" @click="tab = 'variants'">Variants</a> tab.
+            </div>
+
+            <q-separator class="q-my-sm" />
+            <AppFieldLabel label="Ordering &amp; availability" />
+            <div class="row q-col-gutter-sm">
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.minOrderQuantity" label="Min qty allowed" type="number" min="1" placeholder="No minimum" :v="v$.minOrderQuantity" :disable="!canWrite" />
+              </div>
+              <div class="col-6 col-md-3">
+                <AppTextField v-model="form.maxOrderQuantity" label="Max qty allowed" type="number" min="1" placeholder="No maximum" :v="v$.maxOrderQuantity" :disable="!canWrite" />
+              </div>
+              <div class="col-12 col-md-6">
+                <AppSelect v-model="form.stockStatusOverride" label="Stock status" :options="stockStatusOverrideOptions" :disable="!canWrite" hint="Override what the storefront shows, regardless of stock" />
+              </div>
+            </div>
+
+            <div class="row items-center q-gutter-md q-mt-none">
+              <q-toggle v-model="form.allowBackorder" label="Allow backorder" color="primary" :disable="!canWrite" />
+              <div v-if="form.allowBackorder" style="max-width: 220px">
+                <AppFieldLabel label="Estimated restock date">
+                  <template #hint>Shown to buyers on backordered items</template>
+                </AppFieldLabel>
+                <q-input v-model="form.estimatedRestockDate" dense outlined type="date" :disable="!canWrite" clearable />
+              </div>
+            </div>
+            <AppTextField
+              v-if="form.allowBackorder"
+              v-model="form.backorderMessage"
+              label="Backorder message"
+              maxlength="500"
+              placeholder="e.g. Ships in 2–3 weeks"
+              hint="Shown on the product page while backordered"
+              :v="v$.backorderMessage"
+              :disable="!canWrite"
+            />
           </q-tab-panel>
 
           <!-- ============ VARIANTS ============ -->
@@ -542,19 +621,16 @@
           <!-- ============ SHIPPING ============ -->
           <q-tab-panel name="shipping" class="q-gutter-y-sm">
             <AppFieldLabel label="Package">
-              <template #hint>Weight in pounds, dimensions in inches — used for carrier rate quotes</template>
+              <template #hint>Dimensions in inches — used with the weight (General tab) for carrier rate quotes</template>
             </AppFieldLabel>
             <div class="row q-col-gutter-sm">
-              <div class="col-6 col-md-3">
-                <AppTextField v-model="form.weight" label="Weight (lb)" type="number" step="0.01" min="0" :v="v$.weight" :disable="!canWrite" />
-              </div>
-              <div class="col-6 col-md-3">
+              <div class="col-6 col-md-4">
                 <AppTextField v-model="form.length" label="Length (in)" type="number" step="0.01" min="0" :v="v$.length" :disable="!canWrite" />
               </div>
-              <div class="col-6 col-md-3">
+              <div class="col-6 col-md-4">
                 <AppTextField v-model="form.width" label="Width (in)" type="number" step="0.01" min="0" :v="v$.width" :disable="!canWrite" />
               </div>
-              <div class="col-6 col-md-3">
+              <div class="col-6 col-md-4">
                 <AppTextField v-model="form.height" label="Height (in)" type="number" step="0.01" min="0" :v="v$.height" :disable="!canWrite" />
               </div>
             </div>
@@ -622,6 +698,33 @@
             </div>
           </q-tab-panel>
 
+          <!-- ============ SUB PRODUCTS (Grouped) ============ -->
+          <q-tab-panel v-if="isGroupedType" name="subproducts" class="q-gutter-y-sm">
+            <ProductPickerPanel
+              v-model="groupedMemberIds"
+              :exclude-id="product?.id || null"
+              :exclude-types="['Grouped']"
+              selected-label="Sub products"
+              selected-hint="Sold together on this product's page, in this order"
+              empty-text="No sub products yet — search below and tick the products this group contains."
+              :disable="!canWrite"
+              @update:model-value="queueGroupedMembers"
+            />
+          </q-tab-panel>
+
+          <!-- ============ RELATED PRODUCTS ============ -->
+          <q-tab-panel name="related" class="q-gutter-y-sm">
+            <ProductPickerPanel
+              v-model="relatedIds"
+              :exclude-id="product?.id || null"
+              selected-label="Related products"
+              selected-hint="Shown as “Related products” on this product's storefront page"
+              empty-text="No related products yet — search by SKU or name below and tick products to relate them."
+              :disable="!canWrite"
+              @update:model-value="queueRelated"
+            />
+          </q-tab-panel>
+
           <!-- ============ MEDIA ============ -->
           <q-tab-panel name="media" class="q-gutter-y-sm">
             <!-- Images: centralized media library (two-step upload → ProductPicture) -->
@@ -679,45 +782,65 @@
               </template>
             </q-input>
 
+            <!-- Attachments: public files (manuals, spec sheets…) listed on the storefront product page -->
+            <q-separator class="q-my-md" />
+            <AppFieldLabel label="Attachments">
+              <template #hint>Files shoppers can download from the product page — manuals, spec sheets, warranty cards</template>
+            </AppFieldLabel>
+            <q-list v-if="attachments.length" bordered separator class="q-mb-sm rounded-borders">
+              <q-item v-for="(att, i) in attachments" :key="att.mediaId">
+                <q-item-section avatar><q-icon :name="attachmentIcon(att)" color="grey-7" /></q-item-section>
+                <q-item-section>
+                  <q-input
+                    v-model="att.title"
+                    dense borderless
+                    :placeholder="att.fileName || 'Title'"
+                    maxlength="300"
+                    :disable="!canWrite"
+                    @update:model-value="queueAttachments"
+                  />
+                  <q-item-label caption>
+                    <a :href="$media(att.url)" target="_blank" rel="noopener" class="text-primary">{{ att.fileName }}</a>
+                    <span v-if="att.fileSizeBytes"> · {{ formatBytes(att.fileSizeBytes) }}</span>
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section v-if="canWrite" side>
+                  <div class="row no-wrap items-center">
+                    <q-btn flat round dense icon="o_arrow_upward" :disable="i === 0" @click="moveAttachment(i, -1)"><q-tooltip>Move up</q-tooltip></q-btn>
+                    <q-btn flat round dense icon="o_arrow_downward" :disable="i === attachments.length - 1" @click="moveAttachment(i, 1)"><q-tooltip>Move down</q-tooltip></q-btn>
+                    <q-btn flat round dense icon="o_delete" color="negative" @click="removeAttachment(i)"><q-tooltip>Remove</q-tooltip></q-btn>
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <div v-else class="text-grey-6 text-caption q-mb-sm">No attachments yet.</div>
+            <q-file
+              v-if="canWrite"
+              v-model="attachmentFiles"
+              multiple dense outlined
+              label="Upload attachments"
+              hint="PDF, DOC, XLS, images… — added to the media library"
+              :loading="uploadingAttachments"
+              @update:model-value="onAttachmentFiles"
+            >
+              <template #prepend><q-icon name="o_attach_file" /></template>
+            </q-file>
+
             <MediaSeoDialog v-model="lightboxOpen" :media-id="selectedMediaId" :fallback-url="lightboxUrl" @saved="onPictureSaved" />
           </q-tab-panel>
 
           <!-- ============ SEO ============ -->
-          <q-tab-panel name="seo" class="q-gutter-y-sm">
-            <!-- Search-result preview -->
-            <div class="text-caption text-grey-7 q-mb-xs">Search engine preview</div>
-            <q-card flat bordered class="q-pa-md q-mb-md seo-preview">
-              <div class="seo-preview__title ellipsis">{{ seoPreview.title }}</div>
-              <div class="seo-preview__url ellipsis">{{ seoPreview.url }}</div>
-              <div class="seo-preview__desc">{{ seoPreview.description }}</div>
-            </q-card>
-
-            <AppTextField v-model="form.metaTitle" label="Meta title" placeholder="Defaults to the product name" :disable="!canWrite" maxlength="300">
-              <template #hint>{{ metaTitleHint }}</template>
-            </AppTextField>
-
-            <AppTextField v-model="form.metaDescription" label="Meta description" type="textarea" autogrow placeholder="Defaults to the short description" :disable="!canWrite" maxlength="500">
-              <template #hint>{{ metaDescriptionHint }}</template>
-            </AppTextField>
-
-            <AppTextField v-model="form.metaKeywords" label="Meta keywords" placeholder="e.g. polo shirt, cotton, menswear" :disable="!canWrite" maxlength="500">
-              <template #hint>Comma-separated keywords (minor SEO impact on modern search engines)</template>
-            </AppTextField>
-
-            <AppTextField v-model="form.h1" label="H1 tag" placeholder="Defaults to the product name" :v="v$.h1" :disable="!canWrite" maxlength="300" />
-
-            <MediaImageField
-              v-model="form.metaImageMediaId"
-              v-model:url="metaImageUrl"
-              label="Meta image"
-              hint="Social-share (og:image) picture — 1200×630 recommended"
-              :alt="form.name"
+          <q-tab-panel name="seo">
+            <AppSeoPanel
+              entity-type="Product"
+              :entity-id="product?.id"
+              :slug="form.slug"
+              :fallback-title="form.name"
+              :fallback-description="form.shortDescription || form.fullDescription"
+              fallback-label="product name"
               :disable="!canWrite"
+              :run-save="runSave"
             />
-
-            <AppTextField v-model="form.metaOpenGraph" label="Open Graph override" type="textarea" autogrow placeholder='&lt;meta property="og:title" content="…" /&gt;' hint="Raw og: tags — replaces the generated Open Graph markup" :disable="!canWrite" />
-            <AppTextField v-model="form.metaCustomTags" label="Custom head tags / scripts" type="textarea" autogrow hint="Injected into the page &lt;head&gt;" :disable="!canWrite" />
-            <AppTextField v-model="form.metaFooterTags" label="Custom footer tags / scripts" type="textarea" autogrow hint="Injected before &lt;/body&gt;" :disable="!canWrite" />
           </q-tab-panel>
 
           <!-- ============ REVIEWS ============ -->
@@ -778,6 +901,7 @@ import { debounce } from 'quasar'
 import { getApiErrorMessage } from 'services/api'
 import {
   productApi, inventoryApi, mediaApi, categoryApi, productAttributeApi, manufacturerApi, taxCategoryApi, productCustomFieldApi,
+  specificationAttributeApi,
   productTypeOptions, giftCardTypeOptions, stockStatusOverrideOptions, freightClassOptions, packageTypeOptions
 } from 'modules/catalog/api'
 import { storeApi } from 'modules/stores/api'
@@ -793,7 +917,8 @@ import AppRichText from 'components/common/AppRichText.vue'
 import AppFieldLabel from 'components/common/AppFieldLabel.vue'
 import ProductReviewsPanel from 'modules/catalog/components/ProductReviewsPanel.vue'
 import ProductQuestionsPanel from 'modules/catalog/components/ProductQuestionsPanel.vue'
-import MediaImageField from 'modules/catalog/components/MediaImageField.vue'
+import ProductPickerPanel from 'modules/catalog/components/ProductPickerPanel.vue'
+import { slugify } from 'src/utils/slug'
 
 const route = useRoute()
 const router = useRouter()
@@ -820,7 +945,6 @@ function onReviewsEnabledToggled (val) {
 // ---- Core scalar form ---------------------------------------------------------
 const EMPTY = {
   productType: 'Simple', name: '', slug: '', sku: '', shortDescription: '', fullDescription: '',
-  metaTitle: '', metaDescription: '', metaKeywords: '',
   price: null, stockQuantity: 0, allowBackorder: false, estimatedRestockDate: null,
   taxCategoryId: '', manufacturerId: null,
   isPublished: false, displayOrder: 0, isFeatured: false, featuredDisplayOrder: 0,
@@ -831,8 +955,7 @@ const EMPTY = {
   cost: null, msrp: null, salePrice: null, saleStartDateUtc: '', saleEndDateUtc: '',
   minOrderQuantity: null, maxOrderQuantity: null, stockStatusOverride: '', backorderMessage: '',
   weight: null, length: null, width: null, height: null,
-  packagePieces: 1, packageType: null, freightClass: null, isHazardous: false,
-  h1: '', metaImageMediaId: null, metaOpenGraph: '', metaCustomTags: '', metaFooterTags: ''
+  packagePieces: 1, packageType: null, freightClass: null, isHazardous: false
 }
 const CORE_KEYS = Object.keys(EMPTY)
 const form = reactive({ ...EMPTY })
@@ -842,7 +965,10 @@ const form = reactive({ ...EMPTY })
 const storePreviewUrl = computed(() =>
   router.resolve({
     name: 'shop-product',
-    params: { idOrSlug: form.slug || product.value?.id || route.params.id }
+    // By id, never the slug field: the field can hold an unsaved/edited slug the API doesn't know yet.
+    params: { idOrSlug: product.value?.id || route.params.id },
+    // Admin preview: drafts render too (see storefront product.vue / AdminProductsController.Preview).
+    query: { preview: '1' }
   }).href
 )
 
@@ -854,7 +980,6 @@ const rules = {
   sku: { maxLength: maxLength(400) },
   gtin: { maxLength: maxLength(50) },
   taxCode: { maxLength: maxLength(50) },
-  h1: { maxLength: maxLength(300) },
   backorderMessage: { maxLength: maxLength(500) },
   cost: { minValue: optionalMin(0) },
   msrp: { minValue: optionalMin(0) },
@@ -884,9 +1009,9 @@ function optionalMin (min) {
 }
 
 const hasSalePrice = computed(() => !isBlank(form.salePrice))
-const metaImageUrl = ref(null)
 
 const isVariantType = computed(() => form.productType === 'WithVariants')
+const isGroupedType = computed(() => form.productType === 'Grouped')
 
 // ---- Options ------------------------------------------------------------------
 const manufacturerOptions = ref([])
@@ -916,6 +1041,15 @@ const newVideoUrl = ref('')
 const addingVideo = ref(false)
 const generating = ref(false)
 
+// PHP-parity sub-resources: specification picks, related products, grouped "sub products", attachments.
+const specAttributes = ref([])      // SpecificationAttributeDto[] (with options)
+const specOptionIds = ref([])       // assigned option ids — the persisted set
+const relatedIds = ref([])          // RelationshipType = Related, in display order
+const groupedMemberIds = ref([])    // Grouped product members, in display order
+const attachments = ref([])         // [{ mediaId, title, fileName, url, mimeType, fileSizeBytes }]
+const attachmentFiles = ref(null)
+const uploadingAttachments = ref(false)
+
 // ---- Per-store inventory (the authoritative fulfillment stock; catalog StockQuantity is a display
 // rollup only). Levels are edited per (variant?, store) and saved via the inventory upsert endpoint.
 const stores = ref([])              // [{ id, name }]
@@ -927,6 +1061,16 @@ const EMPTY_ENTRY = Object.freeze({ qty: 0, threshold: 0, reserved: 0, alerted: 
 
 const storeOptions = computed(() => stores.value.map((s) => ({ label: s.name, value: s.id })))
 const stockRollup = computed(() => invLevels.value.reduce((sum, l) => sum + (Number(l.stockQuantity) || 0), 0))
+
+// The Inventory tab's single "Qty in stock" / "Notification level" edit the primary (first) store's
+// product-level row. If stock is also held in another store the single field can't represent it, so it
+// turns read-only (showing the total) and the per-store breakdown opens.
+const stockByStoreOpen = ref(false)
+const primaryStoreId = computed(() => stores.value[0]?.id || null)
+const primaryEntry = computed(() => (primaryStoreId.value ? invEntry(null, primaryStoreId.value) : EMPTY_ENTRY))
+const stockSplit = computed(() => invLevels.value.some((l) =>
+  !l.productVariantId && l.storeId !== primaryStoreId.value && Number(l.stockQuantity) > 0))
+watch(stockSplit, (v) => { if (v) stockByStoreOpen.value = true }, { immediate: true })
 
 const invKey = (variantId, storeId) => `${variantId || ''}|${storeId}`
 function invEntry (variantId, storeId) {
@@ -1022,27 +1166,8 @@ async function loadInventoryData () {
 // Pictures now hold both images and video embeds (unified Media-backed gallery). Split by media type.
 const imagePictures = computed(() => pictures.value.filter((p) => p.mediaType === 'Image'))
 const videoImages = computed(() => pictures.value.filter((p) => p.mediaType === 'Video'))
-const mediaCount = computed(() => pictures.value.length)
+const mediaCount = computed(() => pictures.value.length + attachments.value.length)
 const orgCount = computed(() => categoryIds.value.length + tagNames.value.length)
-
-// SEO: a Google-style search-result preview + character-budget hints. Meta fields fall back to the
-// product name / short description, mirroring how the storefront renders the page's <head>.
-const seoPreview = computed(() => {
-  const raw = form.metaDescription || form.shortDescription || 'A description of this product will appear here in search results.'
-  return {
-    title: form.metaTitle || form.name || 'Product title',
-    url: `yourstore.com › shop › ${form.slug || 'product-slug'}`,
-    description: raw.length > 160 ? `${raw.slice(0, 157)}…` : raw
-  }
-})
-function lengthHint (value, ideal, fallbackLabel) {
-  const n = (value || '').length
-  if (!n) return `Falls back to the ${fallbackLabel}. Aim for ~${ideal} characters.`
-  const note = n > ideal ? ' — may be truncated in results' : (n < ideal * 0.5 ? ' — consider adding detail' : ' — good length')
-  return `${n} / ${ideal} recommended${note}`
-}
-const metaTitleHint = computed(() => lengthHint(form.metaTitle, 60, 'product name'))
-const metaDescriptionHint = computed(() => lengthHint(form.metaDescription, 160, 'short description'))
 
 // ---- Auto-save status ---------------------------------------------------------
 const saving = ref(0)
@@ -1080,16 +1205,7 @@ async function runSave (fn) {
 }
 
 // ---- Slug / SKU derivation ----------------------------------------------------
-// "Men's Red Polo Shirt" -> slug "mens-red-polo-shirt", SKU "MENS-RED-POLO-SHIRT".
-function slugify (value) {
-  return (value || '')
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/['’"]/g, '')       // drop apostrophes/quotes so "Men's" -> "mens"
-    .replace(/[^a-z0-9]+/g, '-') // any other run of non-alphanumerics -> a single hyphen
-    .replace(/^-+|-+$/g, '')     // trim leading/trailing hyphens
-}
+// "Men's Red Polo Shirt" -> slug "mens-red-polo-shirt" (shared slugify), SKU "MENS-RED-POLO-SHIRT".
 function skuify (value) {
   return slugify(value).toUpperCase()
 }
@@ -1124,9 +1240,6 @@ function buildPayload () {
     slug: form.slug || null,
     shortDescription: form.shortDescription || null,
     fullDescription: form.fullDescription || null,
-    metaTitle: form.metaTitle || null,
-    metaDescription: form.metaDescription || null,
-    metaKeywords: form.metaKeywords || null,
     sku: form.sku || null,
     price: toNumberOrNull(form.price),
     stockQuantity: toNumberOrNull(form.stockQuantity) || 0,
@@ -1159,12 +1272,7 @@ function buildPayload () {
     packagePieces: toNumberOrNull(form.packagePieces) || 1,
     packageType: form.packageType || null,
     freightClass: form.freightClass || null,
-    isHazardous: form.isHazardous,
-    h1: form.h1 || null,
-    metaImageMediaId: form.metaImageMediaId || null,
-    metaOpenGraph: form.metaOpenGraph || null,
-    metaCustomTags: form.metaCustomTags || null,
-    metaFooterTags: form.metaFooterTags || null
+    isHazardous: form.isHazardous
   }
   if (form.productType === 'Downloadable') {
     payload.downloadExpiryDays = toNumberOrNull(form.downloadExpiryDays)
@@ -1188,7 +1296,6 @@ function hydrate (p) {
   if (form.estimatedRestockDate) form.estimatedRestockDate = String(form.estimatedRestockDate).slice(0, 10)
   form.saleStartDateUtc = utcIsoToLocal(p.saleStartDateUtc)
   form.saleEndDateUtc = utcIsoToLocal(p.saleEndDateUtc)
-  metaImageUrl.value = p.metaImageUrl || null
   storeIds.value = [...(p.storeIds || [])]
   for (const k of Object.keys(customValues)) delete customValues[k]
   for (const cv of p.customFieldValues || []) customValues[cv.productCustomFieldId] = cv.value || ''
@@ -1203,6 +1310,7 @@ function hydrate (p) {
     allowBackorder: v.allowBackorder, isEnabled: v.isEnabled, displayOrder: v.displayOrder,
     attributeValueIds: v.attributeValueIds || [], _saving: false, _saved: false
   }))
+  hydrateParity(p)
   lastCore = JSON.stringify(buildPayload())
   nextTick(() => { hydrating = false })
 }
@@ -1228,6 +1336,9 @@ watch(form, () => { if (!hydrating && !isCreate.value) saveCore() }, { deep: tru
 // value we last derived. Once the merchant types their own slug/SKU it stops tracking; clearing the
 // field (then editing the name) resumes it. In edit mode this also triggers the core auto-save.
 watch(() => form.name, (name) => {
+  // Loading a saved product sets form.name too — don't derive then: auto-save is paused while
+  // hydrating, so a derived slug/SKU would show in the form but never be saved.
+  if (hydrating) return
   if (!form.slug || form.slug === lastAutoSlug) {
     lastAutoSlug = slugify(name)
     form.slug = lastAutoSlug
@@ -1260,6 +1371,163 @@ const queueCategories = debounce(() => {
   if (hydrating) return
   runSave(async () => { product.value = await productApi.setCategories(pid.value, categoryIds.value) })
 }, 700)
+
+
+// ---- PHP-parity sub-resources ---------------------------------------------------
+function hydrateParity (p) {
+  specOptionIds.value = [...(p.specificationOptionIds || [])]
+  relatedIds.value = (p.relationships || [])
+    .filter((r) => r.relationshipType === 'Related')
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .map((r) => r.relatedProductId)
+  groupedMemberIds.value = [...(p.groupedMemberIds || [])]
+  attachments.value = (p.attachments || []).map(toAttachmentRow)
+}
+
+function resetParity () {
+  specOptionIds.value = []
+  relatedIds.value = []
+  groupedMemberIds.value = []
+  attachments.value = []
+}
+
+// Specification attributes: one pick per attribute, derived from the assigned option ids.
+const specPicks = computed(() => {
+  const picks = {}
+  for (const a of specAttributes.value) {
+    const hit = (a.options || []).find((o) => specOptionIds.value.includes(o.id))
+    if (hit) picks[a.id] = hit.id
+  }
+  return picks
+})
+
+function onSpecPick (attributeId, optionId) {
+  const attr = specAttributes.value.find((a) => a.id === attributeId)
+  const ownIds = new Set((attr?.options || []).map((o) => o.id))
+  const next = specOptionIds.value.filter((id) => !ownIds.has(id))
+  if (optionId) next.push(optionId)
+  specOptionIds.value = next
+  queueSpecs()
+}
+
+const queueSpecs = debounce(() => {
+  if (hydrating) return
+  runSave(async () => { product.value = await productApi.setSpecificationValues(pid.value, specOptionIds.value) })
+}, 500)
+
+async function loadSpecAttributes () {
+  try {
+    const result = await specificationAttributeApi.list({ page: 1, pageSize: 200 })
+    const items = Array.isArray(result) ? result : result?.items || []
+    specAttributes.value = items.filter((a) => (a.options || []).length)
+  } catch (err) { specAttributes.value = [] }
+}
+
+const queueRelated = debounce(() => {
+  if (hydrating) return
+  runSave(async () => { product.value = await productApi.setRelationships(pid.value, 'Related', relatedIds.value) })
+}, 600)
+
+const queueGroupedMembers = debounce(() => {
+  if (hydrating) return
+  runSave(async () => { product.value = await productApi.setGroupedMembers(pid.value, groupedMemberIds.value) })
+}, 600)
+
+// Attachments: Media-backed public files, saved as one ordered set.
+function toAttachmentRow (a) {
+  return {
+    mediaId: a.mediaId,
+    // The DTO falls back to the file name when no title was stored — show that as "no title".
+    title: a.title && a.title !== a.fileName ? a.title : '',
+    fileName: a.fileName,
+    url: a.url,
+    mimeType: a.mimeType,
+    fileSizeBytes: a.fileSizeBytes
+  }
+}
+
+const queueAttachments = debounce(() => saveAttachments(), 700)
+
+function saveAttachments () {
+  if (hydrating) return Promise.resolve()
+  const payload = attachments.value.map((a) => ({ mediaId: a.mediaId, title: (a.title || '').trim() || null }))
+  return runSave(async () => {
+    const rows = await productApi.setAttachments(pid.value, payload)
+    // Keep any title still being typed; refresh file facts from the server.
+    const typed = new Map(attachments.value.map((a) => [a.mediaId, a.title]))
+    attachments.value = (rows || []).map((r) => {
+      const row = toAttachmentRow(r)
+      return { ...row, title: typed.has(r.mediaId) ? typed.get(r.mediaId) : row.title }
+    })
+  })
+}
+
+async function onAttachmentFiles (selection) {
+  const files = Array.isArray(selection) ? selection : (selection ? [selection] : [])
+  if (!files.length) return
+  uploadingAttachments.value = true
+  try {
+    for (const file of files) {
+      const draft = await mediaApi.prepare(file)
+      const committed = await mediaApi.commit({
+        tempId: draft.tempId,
+        seoFileName: draft.suggestedSeoFileName,
+        altText: null,
+        title: file.name,
+        caption: null,
+        description: null
+      })
+      if (!attachments.value.some((a) => a.mediaId === committed.mediaId)) {
+        attachments.value.push({ mediaId: committed.mediaId, title: '', fileName: file.name, url: committed.publicUrl, mimeType: file.type, fileSizeBytes: file.size })
+      }
+    }
+    await saveAttachments()
+    notify.success(files.length > 1 ? `${files.length} attachments added` : 'Attachment added')
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+  } finally {
+    uploadingAttachments.value = false
+    attachmentFiles.value = null
+  }
+}
+
+function moveAttachment (i, delta) {
+  const list = [...attachments.value]
+  const j = i + delta
+  if (j < 0 || j >= list.length) return
+  const tmp = list[i]
+  list[i] = list[j]
+  list[j] = tmp
+  attachments.value = list
+  saveAttachments()
+}
+
+async function removeAttachment (i) {
+  const att = attachments.value[i]
+  const label = att.title || att.fileName
+  if (!(await deleteConfirmation(`the attachment "${label}"`, { title: 'Remove', okLabel: 'Remove', message: 'Remove this attachment from the product? The file stays in the media library.' }))) return
+  attachments.value = attachments.value.filter((_, k) => k !== i)
+  saveAttachments()
+}
+
+function attachmentIcon (att) {
+  const t = (att.mimeType || '').toLowerCase()
+  if (t.includes('pdf')) return 'o_picture_as_pdf'
+  if (t.startsWith('image/')) return 'o_image'
+  if (t.includes('sheet') || t.includes('excel') || t.includes('csv')) return 'o_table_chart'
+  if (t.includes('word') || t.includes('document') || t.startsWith('text/')) return 'o_description'
+  return 'o_insert_drive_file'
+}
+
+function formatBytes (n) {
+  if (!n) return ''
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+// If the type stops being Grouped while that tab is open, fall back to General.
+watch(isGroupedType, (v) => { if (!v && tab.value === 'subproducts') tab.value = 'general' })
 
 const queueTags = debounce(() => {
   if (hydrating) return
@@ -1610,7 +1878,8 @@ async function init () {
     hydrating = true
     Object.assign(form, EMPTY)
     categoryIds.value = []; tagNames.value = []; tiers.value = []; attributeIds.value = []; variants.value = []; pictures.value = []
-    storeIds.value = []; metaImageUrl.value = null
+    storeIds.value = []
+    resetParity()
     for (const k of Object.keys(customValues)) delete customValues[k]
     product.value = null
     loading.value = false
@@ -1628,6 +1897,7 @@ onMounted(() => {
   loadAttributes()
   loadManufacturers()
   loadCustomFields()
+  loadSpecAttributes()
   if (!isCreate.value) loadTaxCategories()
 })
 
@@ -1643,14 +1913,6 @@ watch(() => route.fullPath, () => { init(); if (!isCreate.value) loadTaxCategori
 .variant-total-row td {
   background: rgba(0, 0, 0, 0.03);
   border-top: 1px solid rgba(0, 0, 0, 0.12);
-}
-
-// Google-style search-result preview on the SEO tab.
-.seo-preview {
-  max-width: 600px;
-  &__title { color: #1a0dab; font-size: 18px; line-height: 1.3; }
-  &__url { color: #006621; font-size: 13px; margin: 2px 0 4px; }
-  &__desc { color: #4d5156; font-size: 13px; line-height: 1.4; }
 }
 
 // Media-backed picture thumbnails.

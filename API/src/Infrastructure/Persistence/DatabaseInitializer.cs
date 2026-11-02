@@ -194,6 +194,7 @@ public class DatabaseInitializer
         if (pagesToAdd.Count > 0)
         {
             await _db.CMSPages.AddRangeAsync(pagesToAdd, ct);
+            await _db.SeoMetadata.AddRangeAsync(DefaultCmsContent.BuildPageSeo(pagesToAdd), ct);
             await _db.SaveChangesAsync(ct);
             _logger.LogInformation("Seeded {Count} default CMS pages.", pagesToAdd.Count);
         }

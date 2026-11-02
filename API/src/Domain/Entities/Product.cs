@@ -20,23 +20,8 @@ public class Product : AuditableEntity, ISoftDeletable
     public string? ShortDescription { get; set; }
     public string? FullDescription { get; set; }
 
-    // SEO metadata (REQ-CAT-001) — overrides the name/description in the storefront page's
-    // search-engine markup. Fall back to Name / ShortDescription when null.
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
-    public string? MetaKeywords { get; set; }
-
-    /// <summary>Page heading override; the storefront falls back to <see cref="Name"/>.</summary>
-    public string? H1 { get; set; }
-    /// <summary>Social-share (og:image) picture from the media library.</summary>
-    public Guid? MetaImageMediaId { get; set; }
-    public Media? MetaImage { get; set; }
-    /// <summary>Raw Open Graph markup that replaces the generated og: tags.</summary>
-    public string? MetaOpenGraph { get; set; }
-    /// <summary>Raw tags/scripts injected into the page &lt;head&gt;.</summary>
-    public string? MetaCustomTags { get; set; }
-    /// <summary>Raw tags/scripts injected before &lt;/body&gt;.</summary>
-    public string? MetaFooterTags { get; set; }
+    // SEO metadata (meta title/description/keywords, H1, og image, custom tags) lives in the central
+    // SeoMetadata table keyed by (SeoEntityType.Product, Id).
 
     // Simple-product fields (also the default/base for other types).
     public string? Sku { get; set; }
@@ -149,6 +134,7 @@ public class Product : AuditableEntity, ISoftDeletable
     public ICollection<ProductRelationship> Relationships { get; set; } = new List<ProductRelationship>();
     public ICollection<GroupedProductMember> GroupedMembers { get; set; } = new List<GroupedProductMember>();
     public ICollection<ProductDownload> Downloads { get; set; } = new List<ProductDownload>();
+    public ICollection<ProductAttachment> Attachments { get; set; } = new List<ProductAttachment>();
     public ICollection<InventoryLevel> InventoryLevels { get; set; } = new List<InventoryLevel>();
     /// <summary>Stores the product is listed in; empty = every store.</summary>
     public ICollection<ProductStoreMapping> StoreMappings { get; set; } = new List<ProductStoreMapping>();

@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Features.Seo;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
@@ -27,6 +28,8 @@ public class GetCmsPageBySlugQueryHandler : IRequestHandler<GetCmsPageBySlugQuer
             .FirstOrDefaultAsync(p => p.Slug == slug && p.Status == CmsContentStatus.Published, cancellationToken)
             ?? throw new NotFoundException(nameof(CMSPage), slug);
 
-        return CmsPageDto.From(page);
+        var dto = CmsPageDto.From(page);
+        dto.Seo = await SeoEntities.GetStorefrontSeoAsync(_db, SeoEntityType.CmsPage, page.Id, cancellationToken);
+        return dto;
     }
 }

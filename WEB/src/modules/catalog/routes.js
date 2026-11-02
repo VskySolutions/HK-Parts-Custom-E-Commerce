@@ -54,20 +54,20 @@ export default [
   {
     path: 'catalog/manufacturers',
     name: 'catalog-manufacturers',
-    meta: { title: 'Manufacturers', permissions: ['Catalog.Read'] },
+    meta: { title: 'Brands', permissions: ['Catalog.Read'] },
     component: () => import('modules/catalog/pages/manufacturers.vue')
   },
   {
     // Create: the same detail page in "create mode" (must precede the :id route).
     path: 'catalog/manufacturers/new',
     name: 'catalog-manufacturer-new',
-    meta: { title: 'New manufacturer', permissions: ['Catalog.Write'] },
+    meta: { title: 'New brand', permissions: ['Catalog.Write'] },
     component: () => import('modules/catalog/pages/manufacturer-detail.vue')
   },
   {
     path: 'catalog/manufacturers/:id',
     name: 'catalog-manufacturer-detail',
-    meta: { title: 'Manufacturer', permissions: ['Catalog.Read'] },
+    meta: { title: 'Brand', permissions: ['Catalog.Read'] },
     component: () => import('modules/catalog/pages/manufacturer-detail.vue')
   },
   {

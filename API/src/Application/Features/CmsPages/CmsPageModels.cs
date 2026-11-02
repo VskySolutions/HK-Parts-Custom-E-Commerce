@@ -3,7 +3,7 @@ using HKPartsEcommerce.Domain.Enums;
 
 namespace HKPartsEcommerce.Application.Features.CmsPages;
 
-/// <summary>Full view of a CMS content page (SEO metadata, publish status, grouping).</summary>
+/// <summary>Full view of a CMS content page (content, publish status, grouping).</summary>
 public class CmsPageDto
 {
     public Guid Id { get; set; }
@@ -11,10 +11,8 @@ public class CmsPageDto
     public string Slug { get; set; } = string.Empty;
     public string? Body { get; set; }
 
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
-    public string? MetaKeywords { get; set; }
-    public string? CanonicalUrl { get; set; }
+    /// <summary>Central SEO metadata — populated only by the public storefront lookup (null in admin views).</summary>
+    public HKPartsEcommerce.Application.Features.Seo.StorefrontSeoDto? Seo { get; set; }
 
     public CmsContentStatus Status { get; set; }
 
@@ -40,10 +38,6 @@ public class CmsPageDto
         Title = p.Title,
         Slug = p.Slug,
         Body = p.Body,
-        MetaTitle = p.MetaTitle,
-        MetaDescription = p.MetaDescription,
-        MetaKeywords = p.MetaKeywords,
-        CanonicalUrl = p.CanonicalUrl,
         Status = p.Status,
         PageGroupId = p.PageGroupId,
         PageGroupName = p.PageGroup?.Name,

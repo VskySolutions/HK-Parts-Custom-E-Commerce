@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Common.Utilities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
@@ -42,7 +43,7 @@ public class SetProductTagsCommandHandler : IRequestHandler<SetProductTagsComman
             var tag = await _db.ProductTags.FirstOrDefaultAsync(t => t.Name.ToLower() == lowered, cancellationToken);
             if (tag is null)
             {
-                tag = new ProductTag { Name = name, Slug = Slugify(name) };
+                tag = new ProductTag { Name = name, Slug = SlugGenerator.Generate(name) };
                 _db.ProductTags.Add(tag);
             }
             desiredTags.Add(tag);
@@ -58,13 +59,5 @@ public class SetProductTagsCommandHandler : IRequestHandler<SetProductTagsComman
 
         await _db.SaveChangesAsync(cancellationToken);
         return ProductDto.From(product);
-    }
-
-    private static string Slugify(string value)
-    {
-        var slug = new string(value.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
-        while (slug.Contains("--"))
-            slug = slug.Replace("--", "-");
-        return slug.Trim('-');
     }
 }

@@ -53,6 +53,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
 
     // Central media library (WO-122)
     public DbSet<Media> Media => Set<Media>();
+    public DbSet<SeoMetadata> SeoMetadata => Set<SeoMetadata>();
 
     // Per-integration credential tables (Credentials_*)
     public DbSet<StripeCredential> StripeCredentials => Set<StripeCredential>();
@@ -91,6 +92,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ProductSpecificationValue> ProductSpecificationValues => Set<ProductSpecificationValue>();
     public DbSet<GroupedProductMember> GroupedProductMembers => Set<GroupedProductMember>();
     public DbSet<ProductDownload> ProductDownloads => Set<ProductDownload>();
+    public DbSet<ProductAttachment> ProductAttachments => Set<ProductAttachment>();
     public DbSet<ProductStoreMapping> ProductStoreMappings => Set<ProductStoreMapping>();
     public DbSet<CategoryFilterAttribute> CategoryFilterAttributes => Set<CategoryFilterAttribute>();
     public DbSet<ProductCustomField> ProductCustomFields => Set<ProductCustomField>();
@@ -98,6 +100,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
 
     // Inventory (WO-12)
     public DbSet<InventoryLevel> InventoryLevels => Set<InventoryLevel>();
+    public DbSet<InventoryAuditLog> InventoryAuditLogs => Set<InventoryAuditLog>();
 
     // Customer accounts (WO-20, WO-21)
     public DbSet<Address> Addresses => Set<Address>();

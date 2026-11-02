@@ -21,6 +21,10 @@ public static class DependencyInjection
         services.AddControllers()
             .AddJsonOptions(options =>
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        // Same enum format for bodies written outside MVC (the exception middleware's problem payloads,
+        // which can carry DTO extensions such as a 409's candidate list).
+        services.ConfigureHttpJsonOptions(options =>
+            options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
         services.AddEndpointsApiExplorer();
         services.AddOpenApi();
 

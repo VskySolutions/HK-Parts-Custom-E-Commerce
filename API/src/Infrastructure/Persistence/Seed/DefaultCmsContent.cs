@@ -134,12 +134,26 @@ public static class DefaultCmsContent
             Title = p.Title,
             Slug = p.Slug,
             Body = p.Body,
-            MetaTitle = p.Title,
-            MetaDescription = p.MetaDescription,
             Status = CmsContentStatus.Published,
             IsSystemPage = true,
             PageGroupId = groupIdBySlug.TryGetValue(p.GroupSlug, out var groupId) ? groupId : null,
             DisplayOrder = p.DisplayOrder,
         }).ToList();
+    }
+
+    /// <summary>Central SEO rows (meta title + description) for the given seeded pages, matched by id.</summary>
+    public static IReadOnlyList<SeoMetadata> BuildPageSeo(IEnumerable<CMSPage> pages)
+    {
+        var seedById = PageSeeds.ToDictionary(s => s.Id);
+        return pages
+            .Where(p => seedById.ContainsKey(p.Id))
+            .Select(p => new SeoMetadata
+            {
+                EntityType = SeoEntityType.CmsPage,
+                EntityId = p.Id,
+                MetaTitle = seedById[p.Id].Title,
+                MetaDescription = seedById[p.Id].MetaDescription,
+            })
+            .ToList();
     }
 }

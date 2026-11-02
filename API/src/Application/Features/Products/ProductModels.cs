@@ -12,9 +12,6 @@ public class ProductDto
     public ProductType ProductType { get; set; }
     public string? ShortDescription { get; set; }
     public string? FullDescription { get; set; }
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
-    public string? MetaKeywords { get; set; }
     public string? Sku { get; set; }
     public decimal? Price { get; set; }
     public int StockQuantity { get; set; }
@@ -37,11 +34,6 @@ public class ProductDto
     public int? DownloadLimit { get; set; }
     public GiftCardType? GiftCardType { get; set; }
     public decimal? GiftCardAmount { get; set; }
-    public string? H1 { get; set; }
-    public Guid? MetaImageMediaId { get; set; }
-    public string? MetaOpenGraph { get; set; }
-    public string? MetaCustomTags { get; set; }
-    public string? MetaFooterTags { get; set; }
     public string? Gtin { get; set; }
     public decimal? Cost { get; set; }
     public decimal? Msrp { get; set; }
@@ -63,8 +55,6 @@ public class ProductDto
     public string? PackageType { get; set; }
     public string? FreightClass { get; set; }
     public bool IsHazardous { get; set; }
-    /// <summary>Resolved public URL of <see cref="MetaImageMediaId"/>.</summary>
-    public string? MetaImageUrl { get; set; }
     /// <summary>Stores the product is listed in; empty = every store.</summary>
     public List<Guid> StoreIds { get; set; } = new();
     public List<ProductCustomFieldValueDto> CustomFieldValues { get; set; } = new();
@@ -79,6 +69,7 @@ public class ProductDto
     public List<ProductRelationshipDto> Relationships { get; set; } = new();
     public List<Guid> GroupedMemberIds { get; set; } = new();
     public List<ProductDownloadDto> Downloads { get; set; } = new();
+    public List<ProductAttachmentDto> Attachments { get; set; } = new();
 
     /// <summary>Projects a fully-loaded product graph into a DTO (see <c>ProductQueries.WithFullGraph</c>).</summary>
     public static ProductDto From(Product p) => new()
@@ -89,9 +80,6 @@ public class ProductDto
         ProductType = p.ProductType,
         ShortDescription = p.ShortDescription,
         FullDescription = p.FullDescription,
-        MetaTitle = p.MetaTitle,
-        MetaDescription = p.MetaDescription,
-        MetaKeywords = p.MetaKeywords,
         Sku = p.Sku,
         Price = p.Price,
         StockQuantity = p.StockQuantity,
@@ -110,11 +98,6 @@ public class ProductDto
         DownloadLimit = p.DownloadLimit,
         GiftCardType = p.GiftCardType,
         GiftCardAmount = p.GiftCardAmount,
-        H1 = p.H1,
-        MetaImageMediaId = p.MetaImageMediaId,
-        MetaOpenGraph = p.MetaOpenGraph,
-        MetaCustomTags = p.MetaCustomTags,
-        MetaFooterTags = p.MetaFooterTags,
         Gtin = p.Gtin,
         Cost = p.Cost,
         Msrp = p.Msrp,
@@ -136,7 +119,6 @@ public class ProductDto
         PackageType = p.PackageType,
         FreightClass = p.FreightClass,
         IsHazardous = p.IsHazardous,
-        MetaImageUrl = p.MetaImage?.Url,
         StoreIds = p.StoreMappings.Select(m => m.StoreId).ToList(),
         CustomFieldValues = p.CustomFieldValues.Select(ProductCustomFieldValueDto.From).ToList(),
         Variants = p.Variants
@@ -182,6 +164,10 @@ public class ProductDto
             .OrderBy(d => d.DisplayOrder)
             .Select(ProductDownloadDto.From)
             .ToList(),
+        Attachments = p.Attachments
+            .OrderBy(a => a.DisplayOrder)
+            .Select(ProductAttachmentDto.From)
+            .ToList(),
     };
 }
 
@@ -203,6 +189,15 @@ public class ProductListItemDto
     public string? Gtin { get; set; }
     /// <summary>First image (by display order); requires <c>Pictures.Media</c> to be loaded.</summary>
     public string? ImageUrl { get; set; }
+
+    // Admin list counters (filled by ListProductsQueryHandler, 0 elsewhere).
+    /// <summary>Product-level gallery images (videos excluded).</summary>
+    public int ImageCount { get; set; }
+    /// <summary>Variants (WithVariants) or member products (Grouped).</summary>
+    public int SubProductCount { get; set; }
+    /// <summary>Product attributes assigned to the product (the options a shopper picks).</summary>
+    public int OptionCount { get; set; }
+    public int AttachmentCount { get; set; }
 
     public static ProductListItemDto From(Product p) => new()
     {
@@ -339,5 +334,31 @@ public class ProductCustomFieldValueDto
     {
         ProductCustomFieldId = v.ProductCustomFieldId,
         Value = v.Value,
+    };
+}
+
+/// <summary>A public file attached to a product (manual, spec sheet…), with its resolved Media URL.</summary>
+public class ProductAttachmentDto
+{
+    public Guid Id { get; set; }
+    public Guid MediaId { get; set; }
+    /// <summary>The stored title, or the media file name when no title was given.</summary>
+    public string Title { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public string? MimeType { get; set; }
+    public long FileSizeBytes { get; set; }
+    public int DisplayOrder { get; set; }
+
+    public static ProductAttachmentDto From(ProductAttachment a) => new()
+    {
+        Id = a.Id,
+        MediaId = a.MediaId,
+        Title = !string.IsNullOrWhiteSpace(a.Title) ? a.Title! : (a.Media?.OriginalFileName ?? string.Empty),
+        FileName = a.Media?.OriginalFileName ?? string.Empty,
+        Url = a.Media?.Url ?? string.Empty,
+        MimeType = a.Media?.MimeType,
+        FileSizeBytes = a.Media?.FileSizeBytes ?? 0,
+        DisplayOrder = a.DisplayOrder,
     };
 }

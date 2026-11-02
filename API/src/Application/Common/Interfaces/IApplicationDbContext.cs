@@ -32,6 +32,7 @@ public interface IApplicationDbContext
 
     // Central media library (WO-122)
     DbSet<Media> Media { get; }
+    DbSet<SeoMetadata> SeoMetadata { get; }
 
     // Per-integration credential tables (Credentials_*)
     DbSet<StripeCredential> StripeCredentials { get; }
@@ -70,6 +71,7 @@ public interface IApplicationDbContext
     DbSet<ProductSpecificationValue> ProductSpecificationValues { get; }
     DbSet<GroupedProductMember> GroupedProductMembers { get; }
     DbSet<ProductDownload> ProductDownloads { get; }
+    DbSet<ProductAttachment> ProductAttachments { get; }
     DbSet<ProductStoreMapping> ProductStoreMappings { get; }
     DbSet<CategoryFilterAttribute> CategoryFilterAttributes { get; }
     DbSet<ProductCustomField> ProductCustomFields { get; }
@@ -77,6 +79,7 @@ public interface IApplicationDbContext
 
     // Inventory (WO-12)
     DbSet<InventoryLevel> InventoryLevels { get; }
+    DbSet<InventoryAuditLog> InventoryAuditLogs { get; }
 
     // Customer accounts (WO-20, WO-21)
     DbSet<Address> Addresses { get; }
@@ -163,4 +166,10 @@ public interface IApplicationDbContext
     /// types. Satisfied by <see cref="DbContext.FindAsync(Type, object?[], CancellationToken)"/>.
     /// </summary>
     ValueTask<object?> FindAsync(Type entityType, object?[]? keyValues, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Explicit transactions and row locks for handlers that need a read-check-write to be atomic (e.g. the
+    /// barcode scanner's optimistic-concurrency update). Satisfied by <see cref="DbContext.Database"/>.
+    /// </summary>
+    Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade Database { get; }
 }

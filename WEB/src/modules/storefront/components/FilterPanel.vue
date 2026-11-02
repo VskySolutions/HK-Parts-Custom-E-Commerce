@@ -47,7 +47,7 @@
 
     <!-- Manufacturer (only when the caller supplies a list) -->
     <template v-if="manufacturers.length">
-      <div class="text-caption text-grey-7 q-mb-xs">Manufacturer</div>
+      <div class="text-caption text-grey-7 q-mb-xs">Brand</div>
       <q-select
         :model-value="manufacturerId"
         dense

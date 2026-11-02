@@ -46,3 +46,32 @@ public enum ProductCustomFieldType
     Text = 0,
     TextArea = 1
 }
+
+/// <summary>What a barcode-scanner inventory update changed (PHP inventory_audit_log.action).</summary>
+public enum InventoryAuditAction
+{
+    QtyUpdate = 1,
+    PriceUpdate = 2,
+    Both = 3
+}
+
+/// <summary>How the barcode scanner reached the product (recorded on each inventory audit row).</summary>
+public enum InventoryScanSource
+{
+    /// <summary>Live camera decode.</summary>
+    Camera = 1,
+    /// <summary>Decoded from an uploaded / gallery photo.</summary>
+    Gallery = 2,
+    /// <summary>SKU typed by hand.</summary>
+    Manual = 3,
+    /// <summary>USB / Bluetooth keyboard-wedge handheld scanner.</summary>
+    Hardware = 4
+}
+
+/// <summary>Which field the scanned code matched.</summary>
+public enum InventoryMatchType
+{
+    Sku = 1,
+    /// <summary>GTIN / UPC / EAN.</summary>
+    Barcode = 2
+}

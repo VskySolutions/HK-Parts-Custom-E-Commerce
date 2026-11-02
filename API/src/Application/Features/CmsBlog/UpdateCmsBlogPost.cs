@@ -20,9 +20,7 @@ public record UpdateCmsBlogPostCommand(
     string? Author = null,
     string? Tags = null,
     Guid? FeaturedImageMediaId = null,
-    CmsContentStatus Status = CmsContentStatus.Draft,
-    string? MetaTitle = null,
-    string? MetaDescription = null) : IRequest<CmsBlogPostDto>;
+    CmsContentStatus Status = CmsContentStatus.Draft) : IRequest<CmsBlogPostDto>;
 
 public class UpdateCmsBlogPostCommandValidator : AbstractValidator<UpdateCmsBlogPostCommand>
 {
@@ -34,8 +32,6 @@ public class UpdateCmsBlogPostCommandValidator : AbstractValidator<UpdateCmsBlog
         RuleFor(x => x.Summary).MaximumLength(1000);
         RuleFor(x => x.Author).MaximumLength(200);
         RuleFor(x => x.Tags).MaximumLength(1000);
-        RuleFor(x => x.MetaTitle).MaximumLength(300);
-        RuleFor(x => x.MetaDescription).MaximumLength(500);
         RuleFor(x => x.Status).IsInEnum();
     }
 }
@@ -74,8 +70,6 @@ public class UpdateCmsBlogPostCommandHandler : IRequestHandler<UpdateCmsBlogPost
         entity.Tags = request.Tags;
         entity.FeaturedImageMediaId = request.FeaturedImageMediaId;
         entity.Status = request.Status;
-        entity.MetaTitle = request.MetaTitle;
-        entity.MetaDescription = request.MetaDescription;
 
         // Stamp the publish date the first time the post goes live; keep it stable afterwards.
         if (request.Status == CmsContentStatus.Published && entity.PublishedOnUtc is null)

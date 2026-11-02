@@ -23,6 +23,7 @@ import AppFileUpload from 'components/common/AppFileUpload.vue'
 import AppRecordMeta from 'components/common/AppRecordMeta.vue'
 import AppLineCustomAttributes from 'components/common/AppLineCustomAttributes.vue'
 import MediaSeoDialog from 'components/common/MediaSeoDialog.vue'
+import AppSeoPanel from 'components/common/AppSeoPanel.vue'
 import ConfirmDialog from 'components/common/ConfirmDialog.vue'
 import { mediaUrl } from 'services/api'
 import { formatDate, formatDateTime } from 'src/utils/datetime'
@@ -50,6 +51,7 @@ const globalComponents = {
   AppRecordMeta,
   AppLineCustomAttributes,
   MediaSeoDialog,
+  AppSeoPanel,
   ConfirmDialog
 }
 

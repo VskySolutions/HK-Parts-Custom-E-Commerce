@@ -13,7 +13,6 @@ public static class CategoryQueries
         query
             .Include(c => c.Image)
             .Include(c => c.Image2)
-            .Include(c => c.MetaImage)
             .Include(c => c.FilterAttributes);
 
     public static async Task<CategoryDto> GetDtoAsync(IApplicationDbContext db, Guid id, CancellationToken cancellationToken)

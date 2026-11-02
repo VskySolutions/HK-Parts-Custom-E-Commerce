@@ -20,7 +20,7 @@
             <q-icon name="o_home" size="15px" /> Home
           </router-link>
           <q-icon name="o_chevron_right" size="16px" class="sf-crumbs__sep" />
-          <h1 class="sf-crumbs__current">{{ category.name || 'Category' }}</h1>
+          <h1 class="sf-crumbs__current">{{ heading || category.name || 'Category' }}</h1>
         </nav>
         <div v-if="category.description" class="text-body2 text-grey-7 q-mb-md">{{ category.description }}</div>
 
@@ -225,6 +225,7 @@ import { storefrontApi, normalizeFacets, listingSortOptions, formatPrice, produc
 import { catalogCmsApi, sanitizeCmsHtml } from 'modules/storefront/catalog-cms-api'
 import { useNotify } from 'composables/useNotify'
 import { getApiErrorMessage } from 'services/api'
+import { useStorefrontSeo } from 'composables/useStorefrontSeo'
 import { useCategories } from 'modules/storefront/composables/useCategories'
 import { useRecentlyViewed } from 'modules/storefront/composables/useStorefrontStorage'
 import { useCart } from 'modules/storefront/composables/useCart'
@@ -243,6 +244,13 @@ const PAGE_SIZE = 12
 const sortOptions = listingSortOptions
 
 const category = ref({})
+
+// <head> SEO from the central SEO record, falling back to the category's name / description.
+const { heading } = useStorefrontSeo(() => category.value.categoryId && {
+  seo: category.value.seo,
+  title: category.value.name,
+  description: category.value.description
+})
 const categoryId = ref(null)
 const items = ref([])
 const totalCount = ref(0)

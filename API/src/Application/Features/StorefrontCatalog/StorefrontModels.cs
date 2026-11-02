@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Features.Seo;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
 
@@ -153,6 +154,8 @@ public class StorefrontProductDetailDto
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Slug { get; set; }
+    /// <summary>Always true on the public endpoint; false only in an admin preview of a draft.</summary>
+    public bool IsPublished { get; set; }
     public ProductType ProductType { get; set; }
     public string? ShortDescription { get; set; }
     public string? FullDescription { get; set; }
@@ -187,6 +190,11 @@ public class StorefrontProductDetailDto
     public List<StorefrontProductSummaryDto> RelatedProducts { get; set; } = new();
     public List<StorefrontProductSummaryDto> CrossSells { get; set; } = new();
     public List<StorefrontProductSummaryDto> UpSells { get; set; } = new();
+    /// <summary>Public files attached to the product (manuals, spec sheets…), in display order.</summary>
+    public List<StorefrontAttachmentDto> Attachments { get; set; } = new();
+
+    /// <summary>Central SEO metadata for the product (null fields fall back to Name / ShortDescription).</summary>
+    public StorefrontSeoDto Seo { get; set; } = new();
 
     /// <summary>
     /// Projects the product's own display fields, media, specs and tags. Relationship sections are
@@ -197,6 +205,7 @@ public class StorefrontProductDetailDto
         Id = p.Id,
         Name = p.Name,
         Slug = p.Slug,
+        IsPublished = p.IsPublished,
         ProductType = p.ProductType,
         ShortDescription = p.ShortDescription,
         FullDescription = p.FullDescription,
@@ -337,9 +346,9 @@ public class CategoryPageDto
     public string? Slug { get; set; }
     public string? Description { get; set; }
     public Guid? ParentId { get; set; }
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
-    public string? MetaKeywords { get; set; }
+
+    /// <summary>Central SEO metadata for the category (null fields fall back to Name / Description).</summary>
+    public StorefrontSeoDto Seo { get; set; } = new();
 
     public List<StorefrontProductSummaryDto> Items { get; set; } = new();
     public int PageNumber { get; set; }
@@ -386,4 +395,13 @@ public class ComparisonSpecValueDto
     public Guid SpecificationAttributeId { get; set; }
     public Guid SpecificationAttributeOptionId { get; set; }
     public string Value { get; set; } = string.Empty;
+}
+
+/// <summary>A public file attached to a product, as listed on the storefront product page.</summary>
+public class StorefrontAttachmentDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public string? MimeType { get; set; }
+    public long FileSizeBytes { get; set; }
 }

@@ -130,35 +130,17 @@
           </q-tab-panel>
 
           <!-- ============ SEO ============ -->
-          <q-tab-panel name="seo" class="q-gutter-y-sm">
-            <q-card flat bordered class="q-pa-md q-mb-md seo-preview">
-              <div class="seo-preview__title ellipsis">{{ seoPreview.title }}</div>
-              <div class="seo-preview__url ellipsis">{{ seoPreview.url }}</div>
-              <div class="seo-preview__desc">{{ seoPreview.description }}</div>
-            </q-card>
-
-            <AppTextField v-model="form.metaTitle" label="Meta title" placeholder="Defaults to the category name" :disable="!canWrite" maxlength="300">
-              <template #hint>{{ metaTitleHint }}</template>
-            </AppTextField>
-            <AppTextField v-model="form.metaDescription" label="Meta description" type="textarea" autogrow placeholder="Plain-text summary for search engines" :disable="!canWrite" maxlength="500">
-              <template #hint>{{ metaDescriptionHint }}</template>
-            </AppTextField>
-            <AppTextField v-model="form.metaKeywords" label="Meta keywords" placeholder="Comma-separated keywords" :disable="!canWrite" maxlength="500" />
-            <AppTextField v-model="form.canonicalUrl" label="Canonical URL" placeholder="Optional — for duplicate-content canonicalization" :disable="!canWrite" />
-            <AppTextField v-model="form.h1" label="H1 tag" placeholder="Defaults to the category name" maxlength="300" :v="v$.h1" :disable="!canWrite" />
-
-            <MediaImageField
-              v-model="form.metaImageMediaId"
-              v-model:url="metaImageUrl"
-              label="Meta image"
-              hint="Social-share (og:image) picture — 1200×630 recommended"
-              :alt="form.name"
+          <q-tab-panel name="seo">
+            <AppSeoPanel
+              entity-type="Category"
+              :entity-id="entity?.id"
+              :slug="form.slug"
+              :fallback-title="form.name"
+              :fallback-description="form.description"
+              fallback-label="category name"
               :disable="!canWrite"
+              :run-save="runSave"
             />
-
-            <AppTextField v-model="form.metaOpenGraph" label="Open Graph override" type="textarea" autogrow hint="Raw og: tags — replaces the generated Open Graph markup" :disable="!canWrite" />
-            <AppTextField v-model="form.metaCustomTags" label="Custom head tags / scripts" type="textarea" autogrow hint="Injected into the page &lt;head&gt;" :disable="!canWrite" />
-            <AppTextField v-model="form.metaFooterTags" label="Custom footer tags / scripts" type="textarea" autogrow hint="Injected before &lt;/body&gt;" :disable="!canWrite" />
           </q-tab-panel>
 
           <!-- ============ FILTERS ============ -->
@@ -311,10 +293,6 @@ function buildPayload (form) {
     parentId: form.parentId || null,
     slug: form.slug || null,
     description: form.description || null,
-    metaTitle: form.metaTitle || null,
-    metaDescription: form.metaDescription || null,
-    metaKeywords: form.metaKeywords || null,
-    canonicalUrl: form.canonicalUrl || null,
     displayOrder: Number(form.displayOrder) || 0,
     isEnabled: form.isEnabled,
     summary: form.summary || null,
@@ -322,22 +300,16 @@ function buildPayload (form) {
     imageMediaId: form.imageMediaId || null,
     imageAltText: form.imageAltText || null,
     image2MediaId: form.image2MediaId || null,
-    image2AltText: form.image2AltText || null,
-    h1: form.h1 || null,
-    metaImageMediaId: form.metaImageMediaId || null,
-    metaOpenGraph: form.metaOpenGraph || null,
-    metaCustomTags: form.metaCustomTags || null,
-    metaFooterTags: form.metaFooterTags || null
+    image2AltText: form.image2AltText || null
   }
 }
 
 // Preview URLs for the media-backed image fields (the form only holds media ids).
 const imageUrl = ref(null)
 const image2Url = ref(null)
-const metaImageUrl = ref(null)
 
 const {
-  form, v$, entity, loading, creating, isCreate, id, saveStatus, create, markSaved
+  form, v$, entity, loading, creating, isCreate, id, saveStatus, create, markSaved, runSave
 } = useDetailForm({
   createRouteName: 'catalog-category-new',
   detailRouteName: 'catalog-category-detail',
@@ -347,29 +319,25 @@ const {
   buildPayload,
   empty: {
     name: '', parentId: null, slug: '', description: '',
-    metaTitle: '', metaDescription: '', metaKeywords: '', canonicalUrl: '',
     displayOrder: 0, isEnabled: true,
     summary: '', showInMenu: true,
-    imageMediaId: null, imageAltText: '', image2MediaId: null, image2AltText: '',
-    h1: '', metaImageMediaId: null, metaOpenGraph: '', metaCustomTags: '', metaFooterTags: ''
+    imageMediaId: null, imageAltText: '', image2MediaId: null, image2AltText: ''
   },
   rules: {
     name: { required, maxLength: maxLength(200) },
     slug: { maxLength: maxLength(220) },
     summary: { maxLength: maxLength(2000) },
     imageAltText: { maxLength: maxLength(300) },
-    image2AltText: { maxLength: maxLength(300) },
-    h1: { maxLength: maxLength(300) }
+    image2AltText: { maxLength: maxLength(300) }
   },
   hydrateForm: (f, e) => {
     imageUrl.value = e.imageUrl || null
     image2Url.value = e.image2Url || null
-    metaImageUrl.value = e.metaImageUrl || null
   },
   afterLoad: (e) => { loadTree(); loadPictures(); hydrateFilters(e); loadSpecAttributes(); reloadProducts() },
   resetExtra: () => {
     pictures.value = []; products.value = []; productTotal.value = 0
-    imageUrl.value = null; image2Url.value = null; metaImageUrl.value = null
+    imageUrl.value = null; image2Url.value = null
     loadTree()
   }
 })
@@ -469,24 +437,6 @@ async function loadTree () {
   } catch (err) { parentOptions.value = [] }
 }
 
-// ---- SEO preview ---------------------------------------------------------------
-const seoPreview = computed(() => {
-  const raw = form.metaDescription || 'A description of this category will appear here in search results.'
-  return {
-    title: form.metaTitle || form.name || 'Category title',
-    url: `yourstore.com › shop › c › ${form.slug || 'category-slug'}`,
-    description: raw.length > 160 ? `${raw.slice(0, 157)}…` : raw
-  }
-})
-function lengthHint (value, ideal, fallbackLabel) {
-  const n = (value || '').length
-  if (!n) return `Falls back to the ${fallbackLabel}. Aim for ~${ideal} characters.`
-  const note = n > ideal ? ' — may be truncated in results' : (n < ideal * 0.5 ? ' — consider adding detail' : ' — good length')
-  return `${n} / ${ideal} recommended${note}`
-}
-const metaTitleHint = computed(() => lengthHint(form.metaTitle, 60, 'category name'))
-const metaDescriptionHint = computed(() => lengthHint(form.metaDescription, 160, 'name'))
-
 // ---- Media (CategoryPictures) --------------------------------------------------
 const pictures = ref([])
 const imageFiles = ref(null)
@@ -555,13 +505,6 @@ async function removePicture (pic) {
 <style scoped lang="scss">
 .app-detail-tabs {
   :deep(.q-tab) { min-height: 44px; }
-}
-
-.seo-preview {
-  max-width: 600px;
-  &__title { color: #1a0dab; font-size: 18px; line-height: 1.3; }
-  &__url { color: #006621; font-size: 13px; }
-  &__desc { color: #545454; font-size: 13px; margin-top: 2px; }
 }
 
 .filter-list {

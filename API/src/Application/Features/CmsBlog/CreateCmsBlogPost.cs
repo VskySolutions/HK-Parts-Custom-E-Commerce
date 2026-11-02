@@ -19,9 +19,7 @@ public record CreateCmsBlogPostCommand(
     string? Author = null,
     string? Tags = null,
     Guid? FeaturedImageMediaId = null,
-    CmsContentStatus Status = CmsContentStatus.Draft,
-    string? MetaTitle = null,
-    string? MetaDescription = null) : IRequest<CmsBlogPostDto>;
+    CmsContentStatus Status = CmsContentStatus.Draft) : IRequest<CmsBlogPostDto>;
 
 public class CreateCmsBlogPostCommandValidator : AbstractValidator<CreateCmsBlogPostCommand>
 {
@@ -32,8 +30,6 @@ public class CreateCmsBlogPostCommandValidator : AbstractValidator<CreateCmsBlog
         RuleFor(x => x.Summary).MaximumLength(1000);
         RuleFor(x => x.Author).MaximumLength(200);
         RuleFor(x => x.Tags).MaximumLength(1000);
-        RuleFor(x => x.MetaTitle).MaximumLength(300);
-        RuleFor(x => x.MetaDescription).MaximumLength(500);
         RuleFor(x => x.Status).IsInEnum();
     }
 }
@@ -69,8 +65,6 @@ public class CreateCmsBlogPostCommandHandler : IRequestHandler<CreateCmsBlogPost
             Tags = request.Tags,
             FeaturedImageMediaId = request.FeaturedImageMediaId,
             Status = request.Status,
-            MetaTitle = request.MetaTitle,
-            MetaDescription = request.MetaDescription,
             PublishedOnUtc = request.Status == CmsContentStatus.Published ? _clock.UtcNow : null,
         };
 

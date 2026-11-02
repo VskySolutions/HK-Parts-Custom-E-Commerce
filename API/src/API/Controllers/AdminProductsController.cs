@@ -26,8 +26,18 @@ public class AdminProductsController : ApiControllerBase
         [FromQuery] Guid? manufacturerId = null,
         [FromQuery] bool? isFeatured = null,
         [FromQuery] string? sortBy = null,
-        [FromQuery] bool sortDescending = false)
-        => Ok(await Mediator.Send(new ListProductsQuery(page, pageSize, search, type, isPublished, categoryId, manufacturerId, isFeatured, sortBy, sortDescending)));
+        [FromQuery] bool sortDescending = false,
+        [FromQuery] List<Guid>? ids = null,
+        [FromQuery] Guid? excludeId = null)
+        => Ok(await Mediator.Send(new ListProductsQuery(page, pageSize, search, type, isPublished, categoryId, manufacturerId, isFeatured, sortBy, sortDescending, ids, excludeId)));
+
+    /// <summary>
+    /// "Preview in store": the storefront product-detail payload for an admin, including unpublished
+    /// drafts (the public <c>/api/storefront/catalog/product/{idOrSlug}</c> returns 404 for those).
+    /// </summary>
+    [HttpGet("preview/{idOrSlug}")]
+    public async Task<ActionResult<Application.Features.StorefrontCatalog.StorefrontProductDetailDto>> Preview(string idOrSlug)
+        => Ok(await Mediator.Send(new Application.Features.StorefrontCatalog.GetProductDetailQuery(idOrSlug, IncludeUnpublished: true)));
 
     /// <summary>Get a single product with its full child graph.</summary>
     [HttpGet("{id:guid}")]
@@ -145,6 +155,16 @@ public class AdminProductsController : ApiControllerBase
         await Mediator.Send(new RemoveProductPictureCommand(pictureId));
         return NoContent();
     }
+
+    /// <summary>Replace the public files (manuals, spec sheets…) attached to the product; list order = display order.</summary>
+    [HttpPut("{id:guid}/attachments")]
+    public async Task<ActionResult<List<ProductAttachmentDto>>> SetAttachments(Guid id, [FromBody] SetProductAttachmentsCommand command)
+        => Ok(await Mediator.Send(command with { ProductId = id }));
+
+    /// <summary>Duplicate the product as a new unpublished draft ("{name} (Copy)"); returns the copy.</summary>
+    [HttpPost("{id:guid}/copy")]
+    public async Task<ActionResult<ProductDto>> Copy(Guid id)
+        => Ok(await Mediator.Send(new CopyProductCommand(id)));
 
     /// <summary>Replace the downloadable files/URLs attached to the product.</summary>
     [HttpPut("{id:guid}/downloads")]

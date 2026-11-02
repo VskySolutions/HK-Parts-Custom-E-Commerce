@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using HKPartsEcommerce.Application.Common.Interfaces;
+using HKPartsEcommerce.Application.Features.Seo;
 using HKPartsEcommerce.Domain.Enums;
 
 namespace HKPartsEcommerce.Infrastructure.Seo;
@@ -20,14 +21,12 @@ public class SeoService : ISeoService
     private const string SitemapNamespace = "http://www.sitemaps.org/schemas/sitemap/0.9";
     private const int DefaultCacheMinutes = 15;
 
-    // Storefront URL path templates: an absolute loc is base + template + slug. The "/shop/*" prefix matches
-    // the storefront SPA (WEB storefront routes.js). NOTE: product & category routes exist today; the page
-    // and blog templates are the assumed convention (the SPA has no dedicated route yet) — adjust here if the
-    // storefront settles on different paths.
-    private const string ProductPath = "/shop/product/";
-    private const string CategoryPath = "/shop/category/";
-    private const string PagePath = "/shop/page/";
-    private const string BlogPath = "/shop/blog/";
+    // Storefront URL path templates: an absolute loc is base + template + slug. Single source of truth is
+    // SeoEntities.StorefrontPathFor (mirrors WEB modules/storefront/routes.js).
+    private static readonly string ProductPath = SeoEntities.StorefrontPathFor(SeoEntityType.Product)!;
+    private static readonly string CategoryPath = SeoEntities.StorefrontPathFor(SeoEntityType.Category)!;
+    private static readonly string PagePath = SeoEntities.StorefrontPathFor(SeoEntityType.CmsPage)!;
+    private static readonly string BlogPath = SeoEntities.StorefrontPathFor(SeoEntityType.BlogPost)!;
 
     private const string InStockUrl = "https://schema.org/InStock";
     private const string OutOfStockUrl = "https://schema.org/OutOfStock";
@@ -130,24 +129,31 @@ public class SeoService : ISeoService
 
     private async Task<SitemapCacheEntry> BuildSitemapAsync(CancellationToken ct)
     {
-        // Soft-deleted rows are excluded by each entity's global query filter.
+        // Soft-deleted rows are excluded by each entity's global query filter. Records flagged NoIndex in the
+        // central SEO table are left out. Products without a slug are listed by id (the route accepts both).
+        var noIndex = _db.SeoMetadata.AsNoTracking().Where(s => s.NoIndex);
+
         var products = await _db.Products.AsNoTracking()
-            .Where(p => p.IsPublished && p.Slug != null && p.Slug != "")
-            .Select(p => new { Slug = p.Slug!, LastMod = p.UpdatedOnUtc })
+            .Where(p => p.IsPublished
+                && !noIndex.Any(s => s.EntityType == SeoEntityType.Product && s.EntityId == p.Id))
+            .Select(p => new { p.Id, p.Slug, LastMod = p.UpdatedOnUtc })
             .ToListAsync(ct);
 
         var categories = await _db.Categories.AsNoTracking()
-            .Where(c => c.IsEnabled && c.Slug != null && c.Slug != "")
-            .Select(c => new { Slug = c.Slug!, LastMod = c.UpdatedOnUtc })
+            .Where(c => c.IsEnabled
+                && !noIndex.Any(s => s.EntityType == SeoEntityType.Category && s.EntityId == c.Id))
+            .Select(c => new { c.Id, c.Slug, LastMod = c.UpdatedOnUtc })
             .ToListAsync(ct);
 
         var pages = await _db.CMSPages.AsNoTracking()
-            .Where(p => p.Status == CmsContentStatus.Published && p.Slug != "")
+            .Where(p => p.Status == CmsContentStatus.Published && p.Slug != ""
+                && !noIndex.Any(s => s.EntityType == SeoEntityType.CmsPage && s.EntityId == p.Id))
             .Select(p => new { p.Slug, LastMod = p.UpdatedOnUtc })
             .ToListAsync(ct);
 
         var posts = await _db.CMSBlogPosts.AsNoTracking()
-            .Where(b => b.Status == CmsContentStatus.Published && b.Slug != "")
+            .Where(b => b.Status == CmsContentStatus.Published && b.Slug != ""
+                && !noIndex.Any(s => s.EntityType == SeoEntityType.BlogPost && s.EntityId == b.Id))
             .Select(b => new { b.Slug, LastMod = b.PublishedOnUtc ?? b.UpdatedOnUtc })
             .ToListAsync(ct);
 
@@ -157,8 +163,8 @@ public class SeoService : ISeoService
         // Home page (site root).
         urlset.Add(UrlElement(ns, _baseUrl + "/", null));
 
-        foreach (var p in products) urlset.Add(UrlElement(ns, Absolute(ProductPath + p.Slug), p.LastMod));
-        foreach (var c in categories) urlset.Add(UrlElement(ns, Absolute(CategoryPath + c.Slug), c.LastMod));
+        foreach (var p in products) urlset.Add(UrlElement(ns, Absolute(ProductPath + KeyOf(p.Slug, p.Id)), p.LastMod));
+        foreach (var c in categories) urlset.Add(UrlElement(ns, Absolute(CategoryPath + KeyOf(c.Slug, c.Id)), c.LastMod));
         foreach (var p in pages) urlset.Add(UrlElement(ns, Absolute(PagePath + p.Slug), p.LastMod));
         foreach (var b in posts) urlset.Add(UrlElement(ns, Absolute(BlogPath + b.Slug), b.LastMod));
 
@@ -180,6 +186,10 @@ public class SeoService : ISeoService
     }
 
     private string Absolute(string relativePath) => _baseUrl + relativePath;
+
+    /// <summary>Storefront routes resolve "idOrSlug"; prefer the slug, fall back to the id.</summary>
+    private static string KeyOf(string? slug, Guid id) =>
+        string.IsNullOrWhiteSpace(slug) ? id.ToString() : Uri.EscapeDataString(slug.Trim());
 
     private string? ToAbsoluteUrl(string? url)
     {

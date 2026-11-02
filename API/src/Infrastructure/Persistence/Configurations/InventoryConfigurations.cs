@@ -32,3 +32,34 @@ public class InventoryLevelConfiguration : IEntityTypeConfiguration<InventoryLev
         b.HasIndex(x => x.StoreId);
     }
 }
+
+public class InventoryAuditLogConfiguration : IEntityTypeConfiguration<InventoryAuditLog>
+{
+    public void Configure(EntityTypeBuilder<InventoryAuditLog> b)
+    {
+        // Append-only history: the scanner validates these too, the constraint guards hand-written SQL.
+        b.ToTable("InventoryAuditLogs", t => t.HasCheckConstraint("CK_InventoryAuditLogs_NonNegative",
+            "([NewQty] IS NULL OR [NewQty] >= 0) AND ([NewPrice] IS NULL OR [NewPrice] >= 0)"));
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Action).HasConversion<int>();
+        b.Property(x => x.OldPrice).HasPrecision(18, 2);
+        b.Property(x => x.NewPrice).HasPrecision(18, 2);
+        b.Property(x => x.ScannedCode).HasMaxLength(400);
+        b.Property(x => x.Notes).HasMaxLength(500);
+        b.Property(x => x.Source).HasConversion<int>();
+        b.Property(x => x.MatchedBy).HasConversion<int?>();
+        b.Property(x => x.ClientIp).HasMaxLength(45);
+        b.Property(x => x.UserAgent).HasMaxLength(300);
+
+        // Products / variants / stores are soft-deleted, so plain no-action lookups keep the history rows
+        // intact and never cascade a log away.
+        b.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.NoAction);
+        b.HasOne(x => x.ProductVariant).WithMany().HasForeignKey(x => x.ProductVariantId).OnDelete(DeleteBehavior.NoAction);
+        b.HasOne(x => x.Store).WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.NoAction);
+
+        b.HasIndex(x => x.CreatedOnUtc);
+        b.HasIndex(x => new { x.ProductId, x.CreatedOnUtc });
+        b.HasIndex(x => x.ProductVariantId);
+        b.HasIndex(x => x.StoreId);
+    }
+}

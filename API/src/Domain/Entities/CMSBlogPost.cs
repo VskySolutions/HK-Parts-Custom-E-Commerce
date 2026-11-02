@@ -22,8 +22,7 @@ public class CMSBlogPost : AuditableEntity, ISoftDeletable
     public CmsContentStatus Status { get; set; } = CmsContentStatus.Draft;
     public DateTime? PublishedOnUtc { get; set; }
 
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
+    // SEO metadata lives in the central SeoMetadata table keyed by (SeoEntityType.BlogPost, Id).
 
     public bool Deleted { get; set; }
     public DateTime? DeletedOnUtc { get; set; }

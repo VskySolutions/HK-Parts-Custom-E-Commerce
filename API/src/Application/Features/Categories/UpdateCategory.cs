@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Common.Utilities;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -14,10 +15,6 @@ public record UpdateCategoryCommand(
     string? Description = null,
     Guid? ParentId = null,
     string? Slug = null,
-    string? MetaTitle = null,
-    string? MetaDescription = null,
-    string? MetaKeywords = null,
-    string? CanonicalUrl = null,
     int DisplayOrder = 0,
     bool IsEnabled = true,
     string? Summary = null,
@@ -25,12 +22,7 @@ public record UpdateCategoryCommand(
     Guid? ImageMediaId = null,
     string? ImageAltText = null,
     Guid? Image2MediaId = null,
-    string? Image2AltText = null,
-    string? H1 = null,
-    Guid? MetaImageMediaId = null,
-    string? MetaOpenGraph = null,
-    string? MetaCustomTags = null,
-    string? MetaFooterTags = null) : IRequest<CategoryDto>;
+    string? Image2AltText = null) : IRequest<CategoryDto>;
 
 public class UpdateCategoryCommandValidator : AbstractValidator<UpdateCategoryCommand>
 {
@@ -42,7 +34,6 @@ public class UpdateCategoryCommandValidator : AbstractValidator<UpdateCategoryCo
         RuleFor(x => x.Summary).MaximumLength(2000);
         RuleFor(x => x.ImageAltText).MaximumLength(300);
         RuleFor(x => x.Image2AltText).MaximumLength(300);
-        RuleFor(x => x.H1).MaximumLength(300);
         RuleFor(x => x.ParentId).NotEqual(x => x.Id).When(x => x.ParentId.HasValue);
     }
 }
@@ -59,20 +50,20 @@ public class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategoryComman
             .FirstOrDefaultAsync(c => c.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException(nameof(Category), request.Id);
 
+        var slug = SlugGenerator.NormalizeOptional(request.Slug);
+        if (slug is not null && await _db.Categories.AnyAsync(x => x.Slug == slug && x.Id != request.Id, cancellationToken))
+            throw new ConflictException($"Another category already uses the slug '{slug}'.");
+
         if (request.ParentId.HasValue && request.ParentId.Value == request.Id)
             throw new ConflictException("A category cannot be its own parent.");
 
         await CategoryQueries.EnsureMediaExistsAsync(_db, cancellationToken,
-            request.ImageMediaId, request.Image2MediaId, request.MetaImageMediaId);
+            request.ImageMediaId, request.Image2MediaId);
 
         entity.Name = request.Name;
         entity.Description = request.Description;
         entity.ParentId = request.ParentId;
-        entity.Slug = request.Slug;
-        entity.MetaTitle = request.MetaTitle;
-        entity.MetaDescription = request.MetaDescription;
-        entity.MetaKeywords = request.MetaKeywords;
-        entity.CanonicalUrl = request.CanonicalUrl;
+        entity.Slug = slug;
         entity.DisplayOrder = request.DisplayOrder;
         entity.IsEnabled = request.IsEnabled;
         entity.Summary = request.Summary;
@@ -81,11 +72,6 @@ public class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategoryComman
         entity.ImageAltText = request.ImageAltText;
         entity.Image2MediaId = request.Image2MediaId;
         entity.Image2AltText = request.Image2AltText;
-        entity.H1 = request.H1;
-        entity.MetaImageMediaId = request.MetaImageMediaId;
-        entity.MetaOpenGraph = request.MetaOpenGraph;
-        entity.MetaCustomTags = request.MetaCustomTags;
-        entity.MetaFooterTags = request.MetaFooterTags;
 
         await _db.SaveChangesAsync(cancellationToken);
         return await CategoryQueries.GetDtoAsync(_db, entity.Id, cancellationToken);

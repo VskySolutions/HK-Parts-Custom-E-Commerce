@@ -192,10 +192,6 @@ async function toggleEnabled (row) {
       parentId: row.parentId || null,
       slug: row.slug || null,
       description: row.description || null,
-      metaTitle: row.metaTitle || null,
-      metaDescription: row.metaDescription || null,
-      metaKeywords: row.metaKeywords || null,
-      canonicalUrl: row.canonicalUrl || null,
       displayOrder: row.displayOrder || 0,
       isEnabled: !row.isEnabled
     })

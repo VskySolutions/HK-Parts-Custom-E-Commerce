@@ -1,3 +1,5 @@
+using HKPartsEcommerce.Domain.Enums;
+using HKPartsEcommerce.Application.Features.Seo;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
@@ -70,9 +72,7 @@ public class GetCategoryPageQueryHandler : IRequestHandler<GetCategoryPageQuery,
             Slug = category.Slug,
             Description = category.Description,
             ParentId = category.ParentId,
-            MetaTitle = category.MetaTitle,
-            MetaDescription = category.MetaDescription,
-            MetaKeywords = category.MetaKeywords,
+            Seo = await SeoEntities.GetStorefrontSeoAsync(_db, SeoEntityType.Category, category.Id, cancellationToken),
             Items = items,
             PageNumber = page.PageNumber,
             PageSize = page.PageSize,

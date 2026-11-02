@@ -113,9 +113,10 @@ const sections = [
   {
     header: 'Catalog',
     items: [
-      { label: 'Manufacturers', icon: 'o_factory', to: '/catalog/manufacturers', permissions: [Permissions.CatalogRead] },
+      { label: 'Brands', icon: 'o_factory', to: '/catalog/manufacturers', permissions: [Permissions.CatalogRead] },
       { label: 'Categories', icon: 'o_account_tree', to: '/catalog/categories', permissions: [Permissions.CatalogRead] },
       { label: 'Products', icon: 'o_inventory_2', to: '/catalog/products', permissions: [Permissions.CatalogRead] },
+      { label: 'Barcode Scanner', icon: 'o_qr_code_scanner', to: '/inventory-scanner', permissions: [Permissions.CatalogRead] },
       { label: 'Attributes', icon: 'o_tune', to: '/catalog/attributes', permissions: [Permissions.CatalogRead] },
       { label: 'Custom fields', icon: 'o_text_fields', to: '/catalog/custom-fields', permissions: [Permissions.CatalogRead] },
       { label: 'Promotions', icon: 'o_local_offer', to: '/promotions', permissions: [Permissions.CatalogRead] },

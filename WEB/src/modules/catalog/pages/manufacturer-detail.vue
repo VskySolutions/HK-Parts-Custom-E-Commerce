@@ -1,11 +1,11 @@
 <template>
   <q-page class="app-page">
     <AppDetailHeader
-      :title="isCreate ? 'New manufacturer' : (entity?.name || 'Manufacturer')"
+      :title="isCreate ? 'New brand' : (entity?.name || 'Brand')"
       :breadcrumbs="[
         { label: 'Home', icon: 'o_home', to: '/dashboard' },
-        { label: 'Manufacturers', to: { name: 'catalog-manufacturers' } },
-        { label: isCreate ? 'New manufacturer' : (entity?.name || 'Manufacturer') }
+        { label: 'Brands', to: { name: 'catalog-manufacturers' } },
+        { label: isCreate ? 'New brand' : (entity?.name || 'Brand') }
       ]"
       :status="!isCreate && entity ? (form.isEnabled ? 'Enabled' : 'Disabled') : ''"
       :status-color="form.isEnabled ? 'positive' : 'grey'"
@@ -31,7 +31,7 @@
     <q-inner-loading :showing="loading" color="primary" />
 
     <q-banner v-if="!loading && !isCreate && !entity" class="bg-grey-2 rounded-borders">
-      Manufacturer not found.
+      Brand not found.
     </q-banner>
 
     <template v-if="isCreate || entity">
@@ -77,20 +77,17 @@
           </q-tab-panel>
 
           <!-- ============ SEO ============ -->
-          <q-tab-panel name="seo" class="q-gutter-y-sm">
-            <q-card flat bordered class="q-pa-md q-mb-md seo-preview">
-              <div class="seo-preview__title ellipsis">{{ seoPreview.title }}</div>
-              <div class="seo-preview__url ellipsis">{{ seoPreview.url }}</div>
-              <div class="seo-preview__desc">{{ seoPreview.description }}</div>
-            </q-card>
-
-            <AppTextField v-model="form.metaTitle" label="Meta title" placeholder="Defaults to the brand name" :disable="!canWrite" maxlength="300">
-              <template #hint>{{ metaTitleHint }}</template>
-            </AppTextField>
-            <AppTextField v-model="form.metaDescription" label="Meta description" type="textarea" autogrow placeholder="Plain-text summary for search engines" :disable="!canWrite" maxlength="500">
-              <template #hint>{{ metaDescriptionHint }}</template>
-            </AppTextField>
-            <AppTextField v-model="form.metaKeywords" label="Meta keywords" placeholder="Comma-separated keywords" :disable="!canWrite" maxlength="500" />
+          <q-tab-panel name="seo">
+            <AppSeoPanel
+              entity-type="Manufacturer"
+              :entity-id="entity?.id"
+              :slug="form.slug"
+              :fallback-title="form.name"
+              :fallback-description="form.description"
+              fallback-label="brand name"
+              :disable="!canWrite"
+              :run-save="runSave"
+            />
           </q-tab-panel>
         </q-tab-panels>
 
@@ -98,10 +95,10 @@
           <q-separator />
           <q-card-actions class="q-pa-md">
             <div class="text-caption text-grey-7">
-              Create the manufacturer to unlock SEO — all auto-saved from then on.
+              Create the brand to unlock SEO — all auto-saved from then on.
             </div>
             <q-space />
-            <q-btn v-if="canWrite" unelevated color="primary" no-caps icon="o_check" label="Create manufacturer" :loading="creating" @click="create" />
+            <q-btn v-if="canWrite" unelevated color="primary" no-caps icon="o_check" label="Create brand" :loading="creating" @click="create" />
           </q-card-actions>
         </template>
       </q-card>
@@ -113,7 +110,7 @@
 
 <script setup>
 /*
- * Manufacturer create + manage page (full-page auto-save pattern via useDetailForm). Logo is a single
+ * Brand (Manufacturer entity) create + manage page (full-page auto-save pattern via useDetailForm). Logo is a single
  * central Media asset (AppFileUpload media mode) — its id lives on the form and auto-saves like any field.
  */
 import { ref, computed } from 'vue'
@@ -141,60 +138,33 @@ function buildPayload (form) {
     logoMediaId: form.logoMediaId || null,
     // Only forward a raw URL for un-migrated legacy records (no Media asset chosen).
     logoUrl: form.logoMediaId ? null : (form.logoUrl || null),
-    metaTitle: form.metaTitle || null,
-    metaDescription: form.metaDescription || null,
-    metaKeywords: form.metaKeywords || null,
     displayOrder: Number(form.displayOrder) || 0,
     isEnabled: form.isEnabled
   }
 }
 
 const {
-  form, v$, entity, loading, creating, isCreate, saveStatus, create
+  form, v$, entity, loading, creating, isCreate, saveStatus, create, runSave
 } = useDetailForm({
   createRouteName: 'catalog-manufacturer-new',
   detailRouteName: 'catalog-manufacturer-detail',
-  entityLabel: 'manufacturer',
+  entityLabel: 'brand',
   deriveSlug: true,
   api: manufacturerApi,
   buildPayload,
   empty: {
     name: '', slug: '', description: '', logoMediaId: null, logoUrl: '',
-    metaTitle: '', metaDescription: '', metaKeywords: '', displayOrder: 0, isEnabled: true
+    displayOrder: 0, isEnabled: true
   },
   rules: {
     name: { required, maxLength: maxLength(200) },
     slug: { maxLength: maxLength(220) }
   }
 })
-
-const seoPreview = computed(() => {
-  const raw = form.metaDescription || (form.description ? String(form.description).replace(/<[^>]+>/g, '').slice(0, 160) : 'A description of this brand will appear here in search results.')
-  return {
-    title: form.metaTitle || form.name || 'Brand title',
-    url: `yourstore.com › shop › m › ${form.slug || 'brand-slug'}`,
-    description: raw.length > 160 ? `${raw.slice(0, 157)}…` : raw
-  }
-})
-function lengthHint (value, ideal, fallbackLabel) {
-  const n = (value || '').length
-  if (!n) return `Falls back to the ${fallbackLabel}. Aim for ~${ideal} characters.`
-  const note = n > ideal ? ' — may be truncated in results' : (n < ideal * 0.5 ? ' — consider adding detail' : ' — good length')
-  return `${n} / ${ideal} recommended${note}`
-}
-const metaTitleHint = computed(() => lengthHint(form.metaTitle, 60, 'brand name'))
-const metaDescriptionHint = computed(() => lengthHint(form.metaDescription, 160, 'name'))
 </script>
 
 <style scoped lang="scss">
 .app-detail-tabs {
   :deep(.q-tab) { min-height: 44px; }
-}
-
-.seo-preview {
-  max-width: 600px;
-  &__title { color: #1a0dab; font-size: 18px; line-height: 1.3; }
-  &__url { color: #006621; font-size: 13px; }
-  &__desc { color: #545454; font-size: 13px; margin-top: 2px; }
 }
 </style>

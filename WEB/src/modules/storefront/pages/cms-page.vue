@@ -21,7 +21,7 @@
             <q-icon name="o_home" size="15px" /> Home
           </router-link>
           <q-icon name="o_chevron_right" size="16px" class="sf-crumbs__sep" />
-          <h1 class="sf-crumbs__current">{{ page.title }}</h1>
+          <h1 class="sf-crumbs__current">{{ heading || page.title }}</h1>
         </nav>
 
         <!-- eslint-disable-next-line vue/no-v-html -->
@@ -40,7 +40,7 @@
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useMeta } from 'quasar'
+import { useStorefrontSeo } from 'composables/useStorefrontSeo'
 import { cmsApi, sanitizeCmsHtml } from 'modules/storefront/cms-api'
 
 const route = useRoute()
@@ -51,12 +51,12 @@ const notFound = ref(false)
 
 const safeBody = computed(() => sanitizeCmsHtml(page.value && page.value.body))
 
-useMeta(() => ({
-  title: (page.value && (page.value.metaTitle || page.value.title)) || 'Page',
-  meta: page.value && page.value.metaDescription
-    ? { description: { name: 'description', content: page.value.metaDescription } }
-    : {}
-}))
+// <head> SEO from the central SEO record, falling back to the page title / body.
+const { heading } = useStorefrontSeo(() => page.value && {
+  seo: page.value.seo,
+  title: page.value.title,
+  description: page.value.body
+})
 
 async function load () {
   loading.value = true

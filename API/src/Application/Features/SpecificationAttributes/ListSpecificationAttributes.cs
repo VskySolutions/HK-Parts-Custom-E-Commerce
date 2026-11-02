@@ -26,7 +26,8 @@ public class ListSpecificationAttributesQueryHandler : IRequestHandler<ListSpeci
 
     public async Task<PaginatedList<SpecificationAttributeDto>> Handle(ListSpecificationAttributesQuery request, CancellationToken cancellationToken)
     {
-        IQueryable<SpecificationAttribute> query = _db.SpecificationAttributes.AsNoTracking();
+        // Options ride along so callers (product page dropdowns, category filters) need no second call.
+        IQueryable<SpecificationAttribute> query = _db.SpecificationAttributes.AsNoTracking().Include(a => a.Options);
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {

@@ -97,6 +97,8 @@ export default ({ router }) => {
           return http(original)
         } catch (refreshError) {
           auth.clearSession()
+          // Opt-out for calls made from public pages (e.g. the storefront draft preview): fail quietly.
+          if (original._noAuthRedirect) return Promise.reject(refreshError)
           const redirect = router.currentRoute.value.fullPath
           router.push({
             path: '/auth/login',

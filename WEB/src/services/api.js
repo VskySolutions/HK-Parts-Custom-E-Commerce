@@ -202,6 +202,19 @@ export const mediaApi = {
   }
 }
 
+// ---- central SEO metadata (shared by every module's SEO tab) ----------------
+// entityType: 'Product' | 'Category' | 'Manufacturer' | 'CmsPage' | 'BlogPost' | 'ProductTag' | 'ProductCollection'
+export const seoMetadataApi = {
+  // GET -> SeoMetadataDto (empty fields + exists:false when nothing saved yet).
+  get (entityType, entityId) {
+    return api.get(`/api/admin/seo/entities/${entityType}/${entityId}`).then(unwrap)
+  },
+  // PUT — create or replace the record's SEO metadata.
+  save (entityType, entityId, payload) {
+    return api.put(`/api/admin/seo/entities/${entityType}/${entityId}`, payload).then(unwrap)
+  }
+}
+
 // ---- widget resource group (CRUD template, WO-94 Step 12) -------------------
 export const widgetApi = {
   list (params = {}) {

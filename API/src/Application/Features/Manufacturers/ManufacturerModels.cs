@@ -15,9 +15,6 @@ public class ManufacturerDto
     /// <summary>Resolved logo URL: the Media asset's URL when present, else the legacy fallback column.</summary>
     public string? LogoUrl { get; set; }
     public string? Slug { get; set; }
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
-    public string? MetaKeywords { get; set; }
     public int DisplayOrder { get; set; }
     public bool IsEnabled { get; set; }
 
@@ -29,9 +26,6 @@ public class ManufacturerDto
         LogoMediaId = m.LogoMediaId,
         LogoUrl = m.LogoMedia?.Url ?? m.LogoUrl,
         Slug = m.Slug,
-        MetaTitle = m.MetaTitle,
-        MetaDescription = m.MetaDescription,
-        MetaKeywords = m.MetaKeywords,
         DisplayOrder = m.DisplayOrder,
         IsEnabled = m.IsEnabled,
     };

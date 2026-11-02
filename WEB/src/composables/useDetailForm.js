@@ -15,13 +15,8 @@ import { debounce } from 'quasar'
 import useVuelidate from '@vuelidate/core'
 import { getApiErrorMessage } from 'services/api'
 import { useNotify } from 'composables/useNotify'
+import { slugify } from 'src/utils/slug'
 
-function slugify (value) {
-  return (value || '').toString().trim().toLowerCase()
-    .replace(/['’"]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
 
 function capitalize (s) {
   return (s || '').charAt(0).toUpperCase() + (s || '').slice(1)

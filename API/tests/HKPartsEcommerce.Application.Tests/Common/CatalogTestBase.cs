@@ -24,7 +24,9 @@ public abstract class CatalogTestBase : IDisposable
         Environment.GetEnvironmentVariable("VSKY_TEST_SQLSERVER")
         ?? "Server=VSky-MT\\SQLEXPRESS;User Id=sa;Password=soft;TrustServerCertificate=True;MultipleActiveResultSets=True;";
 
-    private static readonly string TestConnectionString =
+    // Exposed (with EnsureDatabaseCreated) for the few tests that need real commits on their own connections,
+    // e.g. two concurrent writers racing for a row lock.
+    protected static readonly string TestConnectionString =
         new SqlConnectionStringBuilder(ServerConnectionString) { InitialCatalog = DatabaseName }.ConnectionString;
 
     private static readonly object InitLock = new();
@@ -56,7 +58,7 @@ public abstract class CatalogTestBase : IDisposable
         return ctx;
     }
 
-    private static void EnsureDatabaseCreated()
+    protected static void EnsureDatabaseCreated()
     {
         if (_initialized) return;
         lock (InitLock)

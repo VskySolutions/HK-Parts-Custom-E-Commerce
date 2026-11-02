@@ -11,6 +11,12 @@
       </q-banner>
 
       <template v-if="product">
+        <!-- Admin preview of an unpublished draft (only reachable through the admin "Preview in store") -->
+        <q-banner v-if="!product.isPublished" dense class="bg-amber-1 text-amber-10 rounded-borders q-mb-md">
+          <template #avatar><q-icon name="o_visibility_off" color="amber-9" /></template>
+          Preview — this product is <strong>unpublished</strong>. Only admins can see this page; shoppers get “not found” until it is published.
+        </q-banner>
+
         <!-- Breadcrumb (the product name is the H1 in the info column, so keep it compact here) -->
         <nav class="sf-crumbs" aria-label="Breadcrumb">
           <router-link class="sf-crumbs__link" :to="{ name: 'shop-home' }">
@@ -34,7 +40,7 @@
 
           <!-- Info -->
           <div class="col-12 col-md-5">
-            <h1 class="text-h4 text-weight-bold q-mb-xs" style="line-height: 1.2">{{ product.name }}</h1>
+            <h1 class="text-h4 text-weight-bold q-mb-xs" style="line-height: 1.2">{{ heading || product.name }}</h1>
 
             <!-- Rating bar (no rating data yet — invites the first review) -->
             <div class="row items-center q-gutter-sm q-mb-md" style="display: none !important;">
@@ -156,6 +162,7 @@
         <div class="q-mt-xl">
           <q-tabs v-model="tab" dense no-caps align="left" active-color="primary" indicator-color="primary" class="text-grey-7 sf-tabs">
             <q-tab name="description" label="Description" />
+            <q-tab v-if="product.attachments && product.attachments.length" name="attachments" :label="'Attachments (' + product.attachments.length + ')'" />
             <q-tab name="reviews" :label="`Reviews${reviewCount != null ? ' (' + reviewCount + ')' : ''}`" style="display: none !important;" />
             <q-tab name="qa" label="Q&A" />
           </q-tabs>
@@ -166,6 +173,20 @@
               <!-- eslint-disable-next-line vue/no-v-html -->
               <div v-if="product.fullDescription" class="storefront-rich-text" v-html="product.fullDescription" />
               <div v-else class="text-grey-6">No description available.</div>
+            </q-tab-panel>
+
+            <!-- Attachments: public files (manuals, spec sheets…) set on the admin Media tab -->
+            <q-tab-panel v-if="product.attachments && product.attachments.length" name="attachments" class="q-px-none">
+              <q-list bordered separator class="rounded-borders">
+                <q-item v-for="att in product.attachments" :key="att.url" clickable tag="a" :href="$media(att.url)" target="_blank" rel="noopener">
+                  <q-item-section avatar><q-icon :name="att.mimeType && att.mimeType.includes('pdf') ? 'o_picture_as_pdf' : 'o_insert_drive_file'" color="grey-7" /></q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ att.title }}</q-item-label>
+                    <q-item-label v-if="att.fileSizeBytes" caption>{{ att.fileSizeBytes < 1048576 ? Math.max(1, Math.round(att.fileSizeBytes / 1024)) + ' KB' : (att.fileSizeBytes / 1048576).toFixed(1) + ' MB' }}</q-item-label>
+                  </q-item-section>
+                  <q-item-section side><q-icon name="o_download" /></q-item-section>
+                </q-item>
+              </q-list>
             </q-tab-panel>
 
             <!-- Reviews (WO-14) -->
@@ -218,6 +239,9 @@ import { useRecentlyViewed, useCompare } from 'modules/storefront/composables/us
 import { useCart } from 'modules/storefront/composables/useCart'
 import { useNotify } from 'composables/useNotify'
 import { getApiErrorMessage } from 'services/api'
+import { useAuthStore } from 'stores/auth'
+import { usePermissions } from 'composables/usePermissions'
+import { useStorefrontSeo } from 'composables/useStorefrontSeo'
 import { formatDate } from 'src/utils/datetime'
 import ProductGalleryView from 'modules/catalog/components/ProductGalleryView.vue'
 import VariantSelector from 'modules/storefront/components/VariantSelector.vue'
@@ -259,6 +283,17 @@ function onReviewSummary (s) {
 const galleryImages = computed(() =>
   (product.value?.images || []).map((img, i) => ({ ...img, id: 'img-' + i }))
 )
+
+// <head> SEO from the central SEO record, falling back to the product's own fields.
+const schema = ref(null)
+const { heading } = useStorefrontSeo(() => product.value && {
+  seo: product.value.seo,
+  title: product.value.name,
+  description: product.value.shortDescription || product.value.fullDescription,
+  image: (product.value.images || []).find((i) => i.mediaType === 'Image' && !i.productVariantId)?.url,
+  type: 'product',
+  jsonLd: schema.value
+})
 
 const selectedVariant = computed(
   () => (product.value?.variants || []).find((v) => v.id === variantId.value) || null
@@ -354,6 +389,35 @@ async function copyLink () {
   }
 }
 
+// schema.org JSON-LD is best-effort: a failure only drops the structured data, never the page.
+async function loadSchema (productId) {
+  schema.value = null
+  try {
+    schema.value = await storefrontApi.productSchema(productId)
+  } catch (e) {
+    schema.value = null
+  }
+}
+
+// Draft preview: when an admin with catalog access is signed in on this browser, product pages load
+// through the Catalog-gated admin preview endpoint, so unpublished drafts render (with a banner) by ANY
+// link — "Preview in store", an old tab, a typed URL. Everyone else uses the public, published-only
+// endpoint. If the preview call fails for any reason other than "not found" (no catalog access,
+// expired session…), the page quietly falls back to the public endpoint.
+const authStore = useAuthStore()
+const { has: hasPermission } = usePermissions()
+const canPreviewDrafts = computed(() => authStore.isAuthenticated && hasPermission('Catalog.Read'))
+
+async function fetchProduct (idOrSlug) {
+  if (!canPreviewDrafts.value) return storefrontApi.productDetail(idOrSlug)
+  try {
+    return await storefrontApi.productPreview(idOrSlug)
+  } catch (err) {
+    if (err?.response?.status === 404) throw err
+    return storefrontApi.productDetail(idOrSlug)
+  }
+}
+
 async function load () {
   loading.value = true
   variantId.value = null
@@ -362,8 +426,11 @@ async function load () {
   tab.value = 'description'
   reviewSummary.value = null
   try {
-    product.value = await storefrontApi.productDetail(route.params.idOrSlug)
-    if (product.value?.id) record(product.value.id)
+    product.value = await fetchProduct(route.params.idOrSlug)
+    if (product.value?.id && product.value.isPublished !== false) {
+      record(product.value.id)
+      loadSchema(product.value.id)
+    }
   } catch (err) {
     product.value = null
     notify.error(getApiErrorMessage(err))

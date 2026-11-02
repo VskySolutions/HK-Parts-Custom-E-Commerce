@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Features.Seo;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
@@ -14,7 +15,11 @@ namespace HKPartsEcommerce.Application.Features.StorefrontCatalog;
 /// sections resolved to published summaries (AC-CAT-007.2). Throws <see cref="NotFoundException"/>
 /// when the product is missing or unpublished.
 /// </summary>
-public record GetProductDetailQuery(string IdOrSlug) : IRequest<StorefrontProductDetailDto>;
+/// <param name="IncludeUnpublished">
+/// Admin "Preview in store" only (sent by the Catalog-gated admin endpoint, never the public one):
+/// also resolves unpublished drafts. Related / cross-sell / up-sell sections stay published-only.
+/// </param>
+public record GetProductDetailQuery(string IdOrSlug, bool IncludeUnpublished = false) : IRequest<StorefrontProductDetailDto>;
 
 public class GetProductDetailQueryHandler : IRequestHandler<GetProductDetailQuery, StorefrontProductDetailDto>
 {
@@ -35,7 +40,7 @@ public class GetProductDetailQueryHandler : IRequestHandler<GetProductDetailQuer
         var query = _db.Products
             .AsNoTracking()
             .AsSplitQuery()
-            .Where(p => p.IsPublished)
+            .Where(p => request.IncludeUnpublished || p.IsPublished)
             .Include(p => p.InventoryLevels)
             .Include(p => p.Variants).ThenInclude(v => v.InventoryLevels)
             .Include(p => p.Variants).ThenInclude(v => v.AttributeValues)
@@ -110,6 +115,19 @@ public class GetProductDetailQueryHandler : IRequestHandler<GetProductDetailQuer
             dto.UpSells = Section(ProductRelationshipType.UpSell);
         }
 
+        dto.Attachments = await _db.ProductAttachments.AsNoTracking()
+            .Where(a => a.ProductId == product.Id && a.Media != null && a.Media.Url != null)
+            .OrderBy(a => a.DisplayOrder)
+            .Select(a => new StorefrontAttachmentDto
+            {
+                Title = a.Title ?? a.Media!.OriginalFileName,
+                Url = a.Media!.Url!,
+                MimeType = a.Media.MimeType,
+                FileSizeBytes = a.Media.FileSizeBytes,
+            })
+            .ToListAsync(cancellationToken);
+
+        dto.Seo = await SeoEntities.GetStorefrontSeoAsync(_db, SeoEntityType.Product, product.Id, cancellationToken);
         return dto;
     }
 }

@@ -16,20 +16,9 @@ public class Category : AuditableEntity, ISoftDeletable
     public Guid? ParentId { get; set; }
     public Category? Parent { get; set; }
 
-    // SEO metadata (AC-CAT-004.3)
+    /// <summary>Storefront URL slug. The rest of the SEO metadata (AC-CAT-004.3) lives in the central
+    /// SeoMetadata table keyed by (SeoEntityType.Category, Id).</summary>
     public string? Slug { get; set; }
-    public string? MetaTitle { get; set; }
-    public string? MetaDescription { get; set; }
-    public string? MetaKeywords { get; set; }
-    public string? CanonicalUrl { get; set; }
-
-    /// <summary>Page heading override; the storefront falls back to <see cref="Name"/>.</summary>
-    public string? H1 { get; set; }
-    public Guid? MetaImageMediaId { get; set; }
-    public Media? MetaImage { get; set; }
-    public string? MetaOpenGraph { get; set; }
-    public string? MetaCustomTags { get; set; }
-    public string? MetaFooterTags { get; set; }
 
     /// <summary>Short plain-text teaser shown on category tiles / listings.</summary>
     public string? Summary { get; set; }

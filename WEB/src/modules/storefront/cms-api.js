@@ -17,7 +17,7 @@ import { sanitizeCmsHtml } from 'modules/storefront/catalog-cms-api'
 const CMS = '/api/storefront/cms'
 
 export const cmsApi = {
-  // A single published CMS page by slug → { title, body (HTML), metaTitle, metaDescription }.
+  // A single published CMS page by slug → { title, body (HTML), seo: { metaTitle, metaDescription, … } }.
   // Returns 404 when the page is missing or unpublished.
   page (slug) {
     return anonApi.get(CMS + '/pages/' + encodeURIComponent(slug)).then(unwrap)

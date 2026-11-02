@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Common.Utilities;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -16,9 +17,6 @@ public record CreateProductCommand(
     string? Slug = null,
     string? ShortDescription = null,
     string? FullDescription = null,
-    string? MetaTitle = null,
-    string? MetaDescription = null,
-    string? MetaKeywords = null,
     string? Sku = null,
     decimal? Price = null,
     int StockQuantity = 0,
@@ -36,11 +34,6 @@ public record CreateProductCommand(
     int? DownloadLimit = null,
     GiftCardType? GiftCardType = null,
     decimal? GiftCardAmount = null,
-    string? H1 = null,
-    Guid? MetaImageMediaId = null,
-    string? MetaOpenGraph = null,
-    string? MetaCustomTags = null,
-    string? MetaFooterTags = null,
     string? Gtin = null,
     decimal? Cost = null,
     decimal? Msrp = null,
@@ -71,10 +64,6 @@ public class CreateProductCommandValidator : AbstractValidator<CreateProductComm
         RuleFor(x => x.TaxCategoryId).NotEmpty();
         RuleFor(x => x.Slug).MaximumLength(400);
         RuleFor(x => x.Sku).MaximumLength(400);
-        RuleFor(x => x.MetaTitle).MaximumLength(300);
-        RuleFor(x => x.MetaDescription).MaximumLength(500);
-        RuleFor(x => x.MetaKeywords).MaximumLength(500);
-        RuleFor(x => x.H1).MaximumLength(300);
         RuleFor(x => x.Gtin).MaximumLength(50);
         RuleFor(x => x.TaxCode).MaximumLength(50);
         RuleFor(x => x.BackorderMessage).MaximumLength(500);
@@ -114,20 +103,17 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
             && !await _db.Manufacturers.AnyAsync(m => m.Id == manufacturerId, cancellationToken))
             throw new NotFoundException(nameof(Manufacturer), manufacturerId);
 
-        if (request.MetaImageMediaId is Guid metaImageId
-            && !await _db.Media.AnyAsync(m => m.Id == metaImageId, cancellationToken))
-            throw new NotFoundException(nameof(Media), metaImageId);
+        var slug = SlugGenerator.NormalizeOptional(request.Slug);
+        if (slug is not null && await _db.Products.AnyAsync(x => x.Slug == slug, cancellationToken))
+            throw new ConflictException($"Another product already uses the slug '{slug}'.");
 
         var entity = new Product
         {
             Name = request.Name,
-            Slug = request.Slug,
+            Slug = slug,
             ProductType = request.ProductType,
             ShortDescription = request.ShortDescription,
             FullDescription = request.FullDescription,
-            MetaTitle = request.MetaTitle,
-            MetaDescription = request.MetaDescription,
-            MetaKeywords = request.MetaKeywords,
             Sku = request.Sku,
             Price = request.Price,
             AllowBackorder = request.AllowBackorder,
@@ -145,11 +131,6 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
             DownloadLimit = request.DownloadLimit,
             GiftCardType = request.GiftCardType,
             GiftCardAmount = request.GiftCardAmount,
-            H1 = request.H1,
-            MetaImageMediaId = request.MetaImageMediaId,
-            MetaOpenGraph = request.MetaOpenGraph,
-            MetaCustomTags = request.MetaCustomTags,
-            MetaFooterTags = request.MetaFooterTags,
             Gtin = request.Gtin,
             Cost = request.Cost,
             Msrp = request.Msrp,

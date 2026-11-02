@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Common.Utilities;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -15,9 +16,6 @@ public record UpdateManufacturerCommand(
     Guid? LogoMediaId = null,
     string? LogoUrl = null,
     string? Slug = null,
-    string? MetaTitle = null,
-    string? MetaDescription = null,
-    string? MetaKeywords = null,
     int DisplayOrder = 0,
     bool IsEnabled = true) : IRequest<ManufacturerDto>;
 
@@ -43,15 +41,16 @@ public class UpdateManufacturerCommandHandler : IRequestHandler<UpdateManufactur
             .FirstOrDefaultAsync(m => m.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException(nameof(Manufacturer), request.Id);
 
+        var slug = SlugGenerator.NormalizeOptional(request.Slug);
+        if (slug is not null && await _db.Manufacturers.AnyAsync(x => x.Slug == slug && x.Id != request.Id, cancellationToken))
+            throw new ConflictException($"Another manufacturer already uses the slug '{slug}'.");
+
         entity.Name = request.Name;
         entity.Description = request.Description;
         entity.LogoMediaId = request.LogoMediaId;
         // Going forward the logo lives in Media; clear the legacy URL once a Media asset is chosen.
         entity.LogoUrl = request.LogoMediaId.HasValue ? null : request.LogoUrl;
-        entity.Slug = request.Slug;
-        entity.MetaTitle = request.MetaTitle;
-        entity.MetaDescription = request.MetaDescription;
-        entity.MetaKeywords = request.MetaKeywords;
+        entity.Slug = slug;
         entity.DisplayOrder = request.DisplayOrder;
         entity.IsEnabled = request.IsEnabled;
 

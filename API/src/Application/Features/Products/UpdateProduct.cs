@@ -1,3 +1,4 @@
+using HKPartsEcommerce.Application.Common.Utilities;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -17,9 +18,6 @@ public record UpdateProductCommand(
     string? Slug = null,
     string? ShortDescription = null,
     string? FullDescription = null,
-    string? MetaTitle = null,
-    string? MetaDescription = null,
-    string? MetaKeywords = null,
     string? Sku = null,
     decimal? Price = null,
     int StockQuantity = 0,
@@ -37,11 +35,6 @@ public record UpdateProductCommand(
     int? DownloadLimit = null,
     GiftCardType? GiftCardType = null,
     decimal? GiftCardAmount = null,
-    string? H1 = null,
-    Guid? MetaImageMediaId = null,
-    string? MetaOpenGraph = null,
-    string? MetaCustomTags = null,
-    string? MetaFooterTags = null,
     string? Gtin = null,
     decimal? Cost = null,
     decimal? Msrp = null,
@@ -73,10 +66,6 @@ public class UpdateProductCommandValidator : AbstractValidator<UpdateProductComm
         RuleFor(x => x.TaxCategoryId).NotEmpty();
         RuleFor(x => x.Slug).MaximumLength(400);
         RuleFor(x => x.Sku).MaximumLength(400);
-        RuleFor(x => x.MetaTitle).MaximumLength(300);
-        RuleFor(x => x.MetaDescription).MaximumLength(500);
-        RuleFor(x => x.MetaKeywords).MaximumLength(500);
-        RuleFor(x => x.H1).MaximumLength(300);
         RuleFor(x => x.Gtin).MaximumLength(50);
         RuleFor(x => x.TaxCode).MaximumLength(50);
         RuleFor(x => x.BackorderMessage).MaximumLength(500);
@@ -115,6 +104,10 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
             .FirstOrDefaultAsync(p => p.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException(nameof(Product), request.Id);
 
+        var slug = SlugGenerator.NormalizeOptional(request.Slug);
+        if (slug is not null && await _db.Products.AnyAsync(x => x.Slug == slug && x.Id != request.Id, cancellationToken))
+            throw new ConflictException($"Another product already uses the slug '{slug}'.");
+
         if (!await _db.TaxCategories.AnyAsync(t => t.Id == request.TaxCategoryId, cancellationToken))
             throw new NotFoundException(nameof(TaxCategory), request.TaxCategoryId);
 
@@ -122,18 +115,11 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
             && !await _db.Manufacturers.AnyAsync(m => m.Id == manufacturerId, cancellationToken))
             throw new NotFoundException(nameof(Manufacturer), manufacturerId);
 
-        if (request.MetaImageMediaId is Guid metaImageId
-            && !await _db.Media.AnyAsync(m => m.Id == metaImageId, cancellationToken))
-            throw new NotFoundException(nameof(Media), metaImageId);
-
         entity.Name = request.Name;
-        entity.Slug = request.Slug;
+        entity.Slug = slug;
         entity.ProductType = request.ProductType;
         entity.ShortDescription = request.ShortDescription;
         entity.FullDescription = request.FullDescription;
-        entity.MetaTitle = request.MetaTitle;
-        entity.MetaDescription = request.MetaDescription;
-        entity.MetaKeywords = request.MetaKeywords;
         entity.Sku = request.Sku;
         entity.Price = request.Price;
         entity.AllowBackorder = request.AllowBackorder;
@@ -151,11 +137,6 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
         entity.DownloadLimit = request.DownloadLimit;
         entity.GiftCardType = request.GiftCardType;
         entity.GiftCardAmount = request.GiftCardAmount;
-        entity.H1 = request.H1;
-        entity.MetaImageMediaId = request.MetaImageMediaId;
-        entity.MetaOpenGraph = request.MetaOpenGraph;
-        entity.MetaCustomTags = request.MetaCustomTags;
-        entity.MetaFooterTags = request.MetaFooterTags;
         entity.Gtin = request.Gtin;
         entity.Cost = request.Cost;
         entity.Msrp = request.Msrp;
