@@ -12,7 +12,8 @@
   .q-item.q-router-link--active {
     color: $primary;
     font-weight: 600;
-    background: rgba($primary, 0.08);
+    // background: rgba($primary, 0.08);
+    background: white;
   }
 }
 
@@ -40,3 +41,15 @@
 .StoreSelector .app-field{
   margin-bottom: 0px;
 }
+
+.bg-7a{ background-color: #7a7a7a !important; }
+.br-8{ border-radius: 8px !important; }
+
+// .q-tabs{
+//   .row{
+//     .q-badge{
+//       background: #d4e5f8 !important;
+//       color: #1565C0 !important;
+//     }
+//   }
+// }

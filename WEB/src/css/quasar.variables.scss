@@ -19,7 +19,8 @@ $warning   : #F9A825;
 // ---- Typography ------------------------------------------------------------
 // Poppins (self-hosted via @fontsource, loaded in boot/fonts.js) is the admin
 // portal's default font, falling back to the platform sans-serif stack.
-$typography-font-family: 'Poppins', sans-serif;
+// $typography-font-family: 'Poppins', sans-serif;
+$typography-font-family: Verdana, Geneva, sans-serif;
 
 // ---- Layout tokens ---------------------------------------------------------
 $app-drawer-width: 292px;

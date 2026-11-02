@@ -45,7 +45,7 @@
     </q-banner>
 
     <template v-if="isCreate || entity">
-      <div v-if="!isCreate" class="row items-center text-caption text-grey-7 q-mb-sm q-px-xs">
+      <div v-if="!isCreate" class="row items-center text-caption text-grey-5 q-mb-sm q-px-xs">
         <q-icon name="o_cloud_sync" size="16px" class="q-mr-xs" />
         Changes are saved automatically as you edit — no need to press save.
       </div>

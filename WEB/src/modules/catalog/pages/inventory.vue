@@ -59,9 +59,9 @@
     </q-banner>
 
     <template v-else>
-      <div class="row items-center text-caption text-grey-7 q-mb-sm q-px-xs">
+      <div class="row items-center text-caption text-grey-5 q-mb-sm q-px-xs">
         <q-icon name="o_cloud_sync" size="16px" class="q-mr-xs" />
-        Editing on-hand stock for <span class="text-weight-medium text-dark q-mx-xs">{{ storeName }}</span>
+        Editing on-hand stock for <span class="text-weight-medium text-grey-5 q-mx-xs">{{ storeName }}</span>
         — changes are saved automatically. Variant products expand to show per-variant stock.
       </div>
 

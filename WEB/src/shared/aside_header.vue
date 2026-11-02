@@ -1,7 +1,7 @@
 <template>
   <router-link
     :to="{ name: 'shop-home' }"
-    class="aside-header row items-center no-wrap q-px-md q-py-md"
+    class="aside-header row items-center no-wrap q-px-md q-py-md bg-7a"
     aria-label="Go to storefront"
   >
     <q-avatar
@@ -10,7 +10,7 @@
       class="q-mr-sm"
       square
     >
-      <img :src="$media(tenant.logoUrl)" alt="logo" />
+      <img :src="$media(tenant.logoUrl)" alt="logo" style="object-fit: cover; object-position: left;" />
     </q-avatar>
     <q-icon
       v-else
@@ -41,7 +41,8 @@ const tenant = useTenantStore()
 <style scoped>
 .aside-header {
   min-height: 64px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  /* border-bottom: 1px solid rgba(0, 0, 0, 0.08); */
+  /* border-bottom: 1px solid white; */
   color: inherit;
   text-decoration: none;
   cursor: pointer;

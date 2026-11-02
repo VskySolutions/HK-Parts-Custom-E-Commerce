@@ -157,7 +157,7 @@ function toHeroSlides (banners) {
     subtitle: b.subtitle,
     align: 'left',
     background: b.imageUrl
-      ? `linear-gradient(rgba(255,255,255,0.55), rgba(255,255,255,0.35)), url("${mediaUrl(b.imageUrl)}") center / cover no-repeat`
+      ? `linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0)), url("${mediaUrl(b.imageUrl)}") center / cover no-repeat`
       : HERO_GRADIENTS[i % HERO_GRADIENTS.length],
     primaryLabel: b.ctaLabel || (b.linkUrl ? 'Shop now' : null),
     // linkUrl is treated as an internal storefront path (e.g. /shop/category/x);

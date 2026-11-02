@@ -8,14 +8,14 @@
         outlined
         bg-color="white"
         :dark="false"
-        placeholder="Your email address"
+        placeholder="Enter Email"
         class="col"
         :rules="[(v) => !!v || 'Enter your email']"
         hide-bottom-space
       />
       <q-btn
         type="submit"
-        color="primary"
+        color="red"
         unelevated
         no-caps
         :loading="loading"
