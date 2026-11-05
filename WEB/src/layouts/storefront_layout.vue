@@ -199,9 +199,9 @@
     </q-page-container>
 
     <!-- ===== Footer ===== -->
-    <div class="sf-footer">
+    <div class="sf-footer q-pb-md">
       <div class="sf-container">
-        <div class="row q-col-gutter-xl q-pb-lg">
+        <div class="row q-col-gutter-xl">
           <!-- Brand + social -->
           <div class="col-12 col-sm-6 col-md-3">
             <div class="row items-center q-gutter-sm q-mb-md">
@@ -265,15 +265,17 @@
         </div>
 
         <!-- Bottom bar -->
-        <div class="sf-footer__bottom row items-center justify-between">
-          <div>&copy; {{ year }} {{ branding.brandName }}. All rights reserved.</div>
-          <div class="row items-center q-gutter-xs" style="display: none !important;">
+        <div class="sf-footer__bottom column items-center justify-between">
+          <!-- <div>&copy; {{ year }} {{ branding.brandName }}. All rights reserved.</div> -->
+          <div class="q-mb-md">&copy; {{ year }}. {{ branding.brandName }} | HKPartsPro.com. All Rights Reserved.</div>
+          <!-- <div class="row items-center q-gutter-xs">
             <span class="sf-footer__pay">VISA</span>
             <span class="sf-footer__pay">MC</span>
             <span class="sf-footer__pay">AMEX</span>
             <span class="sf-footer__pay">PayPal</span>
             <span class="sf-footer__pay">Stripe</span>
-          </div>
+          </div> -->
+          <q-img src="~modules/storefront/hkpartspro-safesecurepayments.png" width="260px" height="66px" />
         </div>
       </div>
     </div>
