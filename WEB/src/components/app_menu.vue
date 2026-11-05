@@ -1,5 +1,5 @@
 <template>
-  <q-list padding class="app-menu q-mt-sm bg-22 text-white">
+  <q-list padding class="app-menu q-mt-sm">
     <template v-for="(section, si) in visibleSections" :key="si">
       <!-- Header-less section (Dashboard): always visible, never collapsible. The
            collapse/expand-all control is merged into the Dashboard row, on the right. -->
@@ -44,7 +44,7 @@
           dense
           dense-toggle
           :duration="180"
-          header-class="app-menu__header text-uppercase text-caption text-white"
+          header-class="app-menu__header text-uppercase text-caption text-weight-medium text-grey-6"
           expand-icon-class="app-menu__chevron"
           :content-inset-level="0"
           @update:model-value="(val) => setOpen(section.header, val)"

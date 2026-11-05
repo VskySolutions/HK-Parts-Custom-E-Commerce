@@ -11,7 +11,7 @@
         aria-label="Browse categories"
         @click="drawer = true"
       />
-      <span class="lt-md text-weight-medium q-ml-sm">Shop by category</span>
+      <span class="lt-md text-weight-medium q-ml-sm cursor-pointer" @click="drawer = true">Shop by category</span>
 
       <!-- ===== Desktop ===== -->
       <div class="gt-sm row items-center no-wrap full-width">
@@ -308,7 +308,7 @@
                 class="q-pl-lg"
                 @click="drawer = false"
               >
-                <q-item-section>{{ child.name }}</q-item-section>
+                <q-item-section class="sf-mobile-nav__category">{{ child.name }}</q-item-section>
                 <q-item-section side>
                   <span class="sf-mobile-nav__count">{{ child.productCount }}</span>
                 </q-item-section>
