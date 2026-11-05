@@ -14,6 +14,7 @@ public class ShippingMethodConfiguration : IEntityTypeConfiguration<ShippingMeth
         b.Property(x => x.MethodType).HasConversion<int>();
         b.Property(x => x.FlatRate).HasPrecision(18, 2);
         b.Property(x => x.FreeShippingThreshold).HasPrecision(18, 2);
+        b.Property(x => x.FflFlatRate).HasPrecision(18, 2);
         b.HasQueryFilter(x => !x.Deleted);
     }
 }

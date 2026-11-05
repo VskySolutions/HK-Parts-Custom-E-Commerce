@@ -41,10 +41,12 @@ public class GlobalExceptionHandlingMiddleware
             NotFoundException => (StatusCodes.Status404NotFound, ex.Message, null),
             ForbiddenAccessException => (StatusCodes.Status403Forbidden, "You do not have permission to perform this action.", null),
             ConflictException => (StatusCodes.Status409Conflict, ex.Message, null),
+            ExternalBusinessException => (StatusCodes.Status422UnprocessableEntity, ex.Message, null),
+            ServiceUnavailableException => (StatusCodes.Status503ServiceUnavailable, ex.Message, null),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", null),
         };
 
-        if (status >= 500)
+        if (status >= 500 && ex is not ServiceUnavailableException)
             _logger.LogError(ex, "Unhandled exception. CorrelationId={CorrelationId}", correlationId);
         else
             _logger.LogWarning(ex, "Request failed with {Status}. CorrelationId={CorrelationId}", status, correlationId);
@@ -65,6 +67,8 @@ public class GlobalExceptionHandlingMiddleware
         };
         if (errors is not null)
             payload["errors"] = errors;
+        if (ex is ExternalBusinessException business)
+            payload["errors"] = business.Errors;
         if (ex is ConflictException { Extensions: { } extensions })
         {
             // Never let an extension overwrite the standard problem members.

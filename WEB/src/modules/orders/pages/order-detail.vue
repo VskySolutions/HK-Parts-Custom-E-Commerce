@@ -22,6 +22,11 @@
       <!-- Left: summary + lines + timeline + shipments -->
       <div class="col-12 col-md-8">
         <AppSection title="Summary">
+          <q-banner v-if="order.ebayOrderId" dense class="bg-indigo-1 text-indigo-10 rounded-borders q-mb-md">
+            <template #avatar><q-badge color="indigo-7" label="eBay" /></template>
+            <div><span class="text-weight-medium">eBay Order Number:</span> {{ order.ebayOrderId }}</div>
+            <div v-if="order.ebayBuyerMessage" class="text-caption q-mt-xs"><span class="text-weight-medium">Buyer message:</span> {{ order.ebayBuyerMessage }}</div>
+          </q-banner>
           <div class="row q-col-gutter-md text-body2">
             <div class="col-12 col-sm-6">
               <div class="text-caption text-grey-7">Customer</div>
@@ -195,6 +200,36 @@
             <div class="row justify-between items-center">
               <span class="text-weight-medium">Total</span>
               <span class="text-h6">{{ money(order.totalAmount) }}</span>
+            </div>
+            <!-- Paid (partly or fully) with a gift certificate -->
+            <template v-if="order.giftCertificateAppliedAmount > 0">
+              <div class="row justify-between q-py-xs">
+                <span class="text-grey-7">
+                  Gift Certificate
+                  (<router-link v-if="order.giftCertificateId" :to="{ name: 'gift-certificate-detail', params: { id: order.giftCertificateId } }" class="text-primary">{{ order.giftCertificateCode }}</router-link><span v-else>{{ order.giftCertificateCode }}</span>)
+                </span>
+                <span class="text-negative">−{{ money(order.giftCertificateAppliedAmount) }}</span>
+              </div>
+              <div class="row justify-between q-py-xs">
+                <span class="text-grey-7">Charged to the payment method</span>
+                <span>{{ money(Math.max(0, order.totalAmount - order.giftCertificateAppliedAmount)) }}</span>
+              </div>
+            </template>
+          </div>
+        </AppSection>
+
+        <!-- Gift certificates this order purchased (staff mail physical cards with these codes) -->
+        <AppSection v-if="order.issuedGiftCertificates && order.issuedGiftCertificates.length" title="Gift certificates issued" class="q-mt-md">
+          <div v-for="g in order.issuedGiftCertificates" :key="g.id" class="row items-center justify-between q-py-xs">
+            <div>
+              <router-link :to="{ name: 'gift-certificate-detail', params: { id: g.id } }" class="text-primary text-weight-medium" style="font-family: monospace">{{ g.code }}</router-link>
+              <div class="text-caption text-grey-7">
+                {{ g.isOnline ? (g.emailSentAtUtc ? `Emailed to ${g.recipientEmail}` : `Email to ${g.recipientEmail || '—'} pending`) : 'Physical card: mail it to the customer' }}
+              </div>
+            </div>
+            <div class="text-right">
+              <div>{{ money(g.amount) }}</div>
+              <div class="text-caption text-grey-7">Balance {{ money(g.balance) }}</div>
             </div>
           </div>
         </AppSection>

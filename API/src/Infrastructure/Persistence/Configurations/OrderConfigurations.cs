@@ -11,6 +11,8 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         b.ToTable("Orders");
         b.HasKey(x => x.Id);
         b.Property(x => x.OrderNumber).HasMaxLength(40).IsRequired();
+        b.Property(x => x.EbayOrderId).HasMaxLength(50);
+        b.HasIndex(x => x.EbayOrderId).IsUnique().HasFilter("[EbayOrderId] IS NOT NULL");
         b.Property(x => x.Status).HasConversion<int>();
         b.Property(x => x.TotalAmount).HasPrecision(18, 2);
         b.Property(x => x.Subtotal).HasPrecision(18, 2);
@@ -20,6 +22,9 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         b.Property(x => x.PaymentFeePercent).HasPrecision(5, 2);
         b.Property(x => x.PaymentFeeTotal).HasPrecision(18, 2);
         b.Property(x => x.PointsDiscountAmount).HasPrecision(18, 2);
+        b.Property(x => x.GiftCertificateCode).HasMaxLength(50);
+        b.Property(x => x.GiftCertificateAppliedAmount).HasPrecision(18, 2).HasDefaultValue(0m);
+        b.HasIndex(x => x.GiftCertificateId);
         b.Property(x => x.CurrencyCode).HasMaxLength(3);
         b.Property(x => x.AppliedCouponCode).HasMaxLength(64);
         b.Property(x => x.ShippingMethodId).HasMaxLength(200);
@@ -65,6 +70,12 @@ public class OrderLineItemConfiguration : IEntityTypeConfiguration<OrderLineItem
     public void Configure(EntityTypeBuilder<OrderLineItem> b)
     {
         b.ToTable("OrderLineItems");
+        b.Property(x => x.GcSenderName).HasMaxLength(75);
+        b.Property(x => x.GcSenderEmail).HasMaxLength(75);
+        b.Property(x => x.GcRecipientName).HasMaxLength(75);
+        b.Property(x => x.GcRecipientEmail).HasMaxLength(75);
+        b.Property(x => x.GcMessage).HasMaxLength(1000);
+        b.Property(x => x.EbayLineItemId).HasMaxLength(50);
         b.HasKey(x => x.Id);
         b.Property(x => x.ProductName).HasMaxLength(400).IsRequired();
         b.Property(x => x.Sku).HasMaxLength(100);

@@ -21,6 +21,12 @@ public class CartDto
     /// <summary>Sum of every line's <see cref="CartItemDto.LineTotal"/>.</summary>
     public decimal Subtotal { get; set; }
 
+    /// <summary>The applied gift certificate (re-validated on every read), or null.</summary>
+    public GiftCertificates.CartGiftCertificateDto? GiftCertificate { get; set; }
+
+    /// <summary>Subtotal minus the gift certificate (tax and shipping are added at checkout).</summary>
+    public decimal AmountDue { get; set; }
+
     /// <summary>Human-readable notices for unavailable, unpublished or out-of-stock lines (AC-CHK-001.5).</summary>
     public List<string> Warnings { get; set; } = new();
 
@@ -58,6 +64,12 @@ public class CartItemDto
     /// <summary>Whether the line permits ordering beyond available stock (no hard cap on quantity).</summary>
     public bool AllowBackorder { get; set; }
 
+    /// <summary>The product's "Min qty allowed" (null = no minimum). Applies to the product's total across the cart.</summary>
+    public int? MinOrderQuantity { get; set; }
+
+    /// <summary>The product's "Max qty allowed" (null = no maximum). Applies to the product's total across the cart.</summary>
+    public int? MaxOrderQuantity { get; set; }
+
     /// <summary>False when the line's product/variant is missing, unpublished or out of stock (AC-CHK-001.5).</summary>
     public bool Available { get; set; }
 
@@ -66,6 +78,15 @@ public class CartItemDto
     /// checks out as a request rather than a payment. A cart may not mix these with buyable items.
     /// </summary>
     public bool IsInquiryOnly { get; set; }
+
+    /// <summary>A gift certificate product line (never merged, never taxed).</summary>
+    public bool IsGiftCertificate { get; set; }
+    public bool IsOnlineGiftCertificate { get; set; }
+    public string? GcSenderName { get; set; }
+    public string? GcSenderEmail { get; set; }
+    public string? GcRecipientName { get; set; }
+    public string? GcRecipientEmail { get; set; }
+    public string? GcMessage { get; set; }
 
     /// <summary>The values the buyer typed into the product's CustomInput attributes; empty when it has none.</summary>
     public List<CustomAttributeSelection> CustomAttributes { get; set; } = new();

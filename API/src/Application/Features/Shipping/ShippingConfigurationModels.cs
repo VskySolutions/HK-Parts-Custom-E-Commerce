@@ -70,6 +70,7 @@ public class ShippingCarrierSettingDto
         ShippingCarrierType.DHLExpress => "DHL Express",
         ShippingCarrierType.USPS => "USPS",
         ShippingCarrierType.UPS => "UPS",
+        ShippingCarrierType.Freightview => "Freightview (LTL freight)",
         _ => carrier.ToString(),
     };
 }
@@ -120,6 +121,7 @@ public static class ShippingConfigurationBuilder
             [ShippingCarrierType.DHLExpress] = await db.DhlExpressCredentials.AsNoTracking().AnyAsync(c => c.Active, ct),
             [ShippingCarrierType.USPS] = await db.UspsCredentials.AsNoTracking().AnyAsync(c => c.Active, ct),
             [ShippingCarrierType.UPS] = await db.UpsCredentials.AsNoTracking().AnyAsync(c => c.Active, ct),
+            [ShippingCarrierType.Freightview] = await db.FreightviewCredentials.AsNoTracking().AnyAsync(c => c.Active, ct),
         };
 
         foreach (var carrier in dto.Carriers)

@@ -95,6 +95,7 @@ const sections = [
     header: null,
     items: [
       { label: 'Dashboard', icon: 'o_dashboard', to: '/dashboard', permissions: null },
+      { label: 'Gift Certificates', icon: 'o_redeem', to: '/gift-certificates', permissions: [Permissions.GiftCertificatesManage] },
     ]
   },
   {
@@ -119,6 +120,9 @@ const sections = [
       { label: 'Barcode Scanner', icon: 'o_qr_code_scanner', to: '/inventory-scanner', permissions: [Permissions.CatalogRead] },
       { label: 'Attributes', icon: 'o_tune', to: '/catalog/attributes', permissions: [Permissions.CatalogRead] },
       { label: 'Custom fields', icon: 'o_text_fields', to: '/catalog/custom-fields', permissions: [Permissions.CatalogRead] },
+      { label: 'Price Rules', icon: 'o_sell', to: '/catalog/price-rules', permissions: [Permissions.CatalogRead] },
+      { label: 'eBay Listings', icon: 'o_storefront', to: '/catalog/ebay-listings', permissions: [Permissions.EbayRead] },
+      { label: 'eBay Settings', icon: 'o_settings_input_component', to: '/settings/ebay', permissions: [Permissions.EbayRead] },
       { label: 'Promotions', icon: 'o_local_offer', to: '/promotions', permissions: [Permissions.CatalogRead] },
       { label: 'Reviews', icon: 'o_reviews', to: '/catalog/reviews', permissions: [Permissions.CatalogRead] },
       { label: 'Loyalty Points', icon: 'o_loyalty', to: '/loyalty', permissions: [Permissions.CatalogRead] }

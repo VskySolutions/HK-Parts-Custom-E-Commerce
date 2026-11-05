@@ -23,3 +23,13 @@ public enum CouponUsageType
     Limited = 1,
     Unlimited = 2
 }
+
+/// <summary>How a <see cref="Entities.PriceRule"/> lowers the price.</summary>
+public enum PriceRuleDiscountType
+{
+    /// <summary>A percentage of the base price (0 &lt; amount ≤ 100).</summary>
+    Percent = 1,
+
+    /// <summary>A fixed currency amount off the base price, clamped at 0.</summary>
+    FixedAmount = 2
+}

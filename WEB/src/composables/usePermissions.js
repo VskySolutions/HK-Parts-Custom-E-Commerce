@@ -46,7 +46,10 @@ export const Permissions = Object.freeze({
   LogsRead: 'Logs.Read',
   AuditTrailRead: 'AuditTrail.Read',
   InquiriesRead: 'Inquiries.Read',
-  InquiriesWrite: 'Inquiries.Write'
+  InquiriesWrite: 'Inquiries.Write',
+  EbayRead: 'Ebay.Read',
+  EbayWrite: 'Ebay.Write',
+  GiftCertificatesManage: 'GiftCertificates.Manage'
 })
 
 export function usePermissions () {

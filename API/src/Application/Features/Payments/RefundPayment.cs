@@ -34,11 +34,16 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
     private readonly IPaymentGatewayRouter _router;
     private readonly IDateTimeProvider _clock;
 
-    public RefundPaymentCommandHandler(IApplicationDbContext db, IPaymentGatewayRouter router, IDateTimeProvider clock)
+    private readonly GiftCertificates.IGiftCertificateService? _giftCertificates;
+
+    public RefundPaymentCommandHandler(
+        IApplicationDbContext db, IPaymentGatewayRouter router, IDateTimeProvider clock,
+        GiftCertificates.IGiftCertificateService? giftCertificates = null)
     {
         _db = db;
         _router = router;
         _clock = clock;
+        _giftCertificates = giftCertificates;
     }
 
     public async Task<PaymentDto> Handle(RefundPaymentCommand request, CancellationToken cancellationToken)
@@ -57,6 +62,15 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
             throw new ConflictException(
                 $"The refund amount must be greater than 0 and at most the remaining {remaining:0.00} {payment.CurrencyCode}.");
 
+        // A gift-certificate payment is refunded back onto the certificate (ledger "Refunded"), never via a gateway.
+        if (payment.Method == PaymentMethodType.GiftCertificate)
+        {
+            if (_giftCertificates is null)
+                throw new ConflictException("Gift certificate refunds are not available.");
+            await _giftCertificates.RestoreForRefundAsync(payment, amount, request.Reason, cancellationToken);
+            return PaymentDto.From(payment);
+        }
+
         var result = await _router.RefundAsync(payment, amount, cancellationToken);
 
         if (result.Success)
@@ -73,6 +87,13 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
             var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId, cancellationToken);
             if (order is not null)
                 order.PaymentStatus = payment.Status;
+
+            // A fully refunded purchase voids the gift certificates it bought (unused ones; partly used flags review).
+            if (order is not null && payment.Status == PaymentStatus.Refunded && _giftCertificates is not null)
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+                await _giftCertificates.VoidPurchasedAsync(order.Id, "refunded", cancellationToken);
+            }
         }
         else
         {

@@ -103,6 +103,9 @@ public class Product : AuditableEntity, ISoftDeletable
 
     /// <summary>Featured designation for the storefront (REQ-CNT-011). Default not featured.</summary>
     public bool IsFeatured { get; set; }
+
+    /// <summary>True while the product has a non-ended eBay listing (product-list badge).</summary>
+    public bool ChannelEbay { get; set; }
     /// <summary>Ordering among featured products (AC-CNT-011.2); only meaningful when <see cref="IsFeatured"/>.</summary>
     public int FeaturedDisplayOrder { get; set; }
 
@@ -118,6 +121,9 @@ public class Product : AuditableEntity, ISoftDeletable
     // Gift-card config (AC-CAT-001.5).
     public GiftCardType? GiftCardType { get; set; }
     public decimal? GiftCardAmount { get; set; }
+
+    /// <summary>Gift certificate product: emailed to the recipient (true) or a physical card (false).</summary>
+    public bool GiftCertificateOnline { get; set; } = true;
 
     public bool Deleted { get; set; }
     public DateTime? DeletedOnUtc { get; set; }

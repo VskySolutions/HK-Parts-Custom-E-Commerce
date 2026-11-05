@@ -27,6 +27,8 @@ public class EmailQueueConfiguration : IEntityTypeConfiguration<EmailQueue>
         b.HasKey(x => x.Id);
         b.Property(x => x.TemplateKey).HasMaxLength(100).IsRequired();
         b.Property(x => x.RecipientEmail).HasMaxLength(255).IsRequired();
+        b.Property(x => x.CcEmail).HasMaxLength(255);
+        b.Property(x => x.ReplyToEmail).HasMaxLength(255);
         b.Property(x => x.RecipientName).HasMaxLength(200);
         b.Property(x => x.RenderedSubject).HasMaxLength(1024).IsRequired();
 

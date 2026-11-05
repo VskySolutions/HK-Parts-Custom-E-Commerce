@@ -105,4 +105,28 @@ public class ShippingCredentialsController : ApiControllerBase
         await Mediator.Send(new DeleteUpsCredentialCommand(id));
         return NoContent();
     }
+
+    // ---- Freightview (LTL) ----
+    [HttpGet("freightview")]
+    public async Task<ActionResult<IReadOnlyList<IntegrationCredentialListItemDto>>> ListFreightview()
+        => Ok(await Mediator.Send(new ListFreightviewCredentialsQuery()));
+
+    [HttpGet("freightview/{id:guid}")]
+    public async Task<ActionResult<FreightviewCredentialDto>> GetFreightview(Guid id)
+        => Ok(await Mediator.Send(new GetFreightviewCredentialQuery(id)));
+
+    [HttpPost("freightview")]
+    public async Task<ActionResult<FreightviewCredentialDto>> CreateFreightview([FromBody] SaveFreightviewCredentialCommand command)
+        => Ok(await Mediator.Send(command with { Id = null }));
+
+    [HttpPut("freightview/{id:guid}")]
+    public async Task<ActionResult<FreightviewCredentialDto>> UpdateFreightview(Guid id, [FromBody] SaveFreightviewCredentialCommand command)
+        => Ok(await Mediator.Send(command with { Id = id }));
+
+    [HttpDelete("freightview/{id:guid}")]
+    public async Task<IActionResult> DeleteFreightview(Guid id)
+    {
+        await Mediator.Send(new DeleteFreightviewCredentialCommand(id));
+        return NoContent();
+    }
 }

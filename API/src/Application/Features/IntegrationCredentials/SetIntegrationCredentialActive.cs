@@ -35,6 +35,7 @@ public class SetIntegrationCredentialActiveCommandHandler : IRequestHandler<SetI
             "dhl"          => IntegrationCredentialSupport.SetActiveAsync(_db.DhlExpressCredentials, _db, id, active, ct),
             "usps"         => IntegrationCredentialSupport.SetActiveAsync(_db.UspsCredentials, _db, id, active, ct),
             "ups"          => IntegrationCredentialSupport.SetActiveAsync(_db.UpsCredentials, _db, id, active, ct),
+            "freightview"  => IntegrationCredentialSupport.SetActiveAsync(_db.FreightviewCredentials, _db, id, active, ct),
             "twilio"       => IntegrationCredentialSupport.SetActiveAsync(_db.TwilioCredentials, _db, id, active, ct),
             "azure-blob"   => IntegrationCredentialSupport.SetActiveAsync(_db.AzureBlobCredentials, _db, id, active, ct),
             _ => throw new NotFoundException($"Unknown integration '{request.Provider}'."),

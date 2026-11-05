@@ -67,9 +67,18 @@ export function useCart () {
     }
   }
 
-  // Load once (used by the header badge so it does not re-fetch on every mount).
+  // Load once (used by the header badge so it does not re-fetch on every mount). This is a background
+  // load fired from layout/drawer mounts without a catch, so a failure (e.g. API unreachable) is logged
+  // and leaves the cart empty instead of surfacing as an unhandled rejection; loaded stays false so the
+  // next call retries. Pages that need the error use refresh() directly.
   async function ensureLoaded () {
-    if (!loaded.value && !loading.value) await refresh()
+    if (!loaded.value && !loading.value) {
+      try {
+        await refresh()
+      } catch (err) {
+        console.warn('[HKParts] Cart load failed:', err?.message || err)
+      }
+    }
     return cart.value
   }
 
@@ -100,6 +109,17 @@ export function useCart () {
     return refresh()
   }
 
+  async function applyGiftCertificate (code) {
+    const result = await cartApi.applyGiftCertificate(sessionId.value, code)
+    await refresh()
+    return result
+  }
+
+  async function removeGiftCertificate () {
+    await cartApi.removeGiftCertificate(sessionId.value)
+    return refresh()
+  }
+
   async function removeCoupon () {
     if (!cartId.value) await refresh()
     await cartApi.removeCoupon(cartId.value)
@@ -119,6 +139,8 @@ export function useCart () {
     loading,
     loaded,
     refresh,
+    applyGiftCertificate,
+    removeGiftCertificate,
     ensureLoaded,
     addItem,
     updateItem,

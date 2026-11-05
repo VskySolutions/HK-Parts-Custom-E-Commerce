@@ -12,11 +12,37 @@ public class ShippingMethod : AuditableEntity, ISoftDeletable
     public string Name { get; set; } = string.Empty;
     public ShippingMethodType MethodType { get; set; }
 
-    /// <summary>Cost for <see cref="ShippingMethodType.FlatRate"/>.</summary>
+    /// <summary>
+    /// Cost for <see cref="ShippingMethodType.FlatRate"/>. For <see cref="ShippingMethodType.SizeBased"/> it
+    /// is the price of an item whose shipping size is blank or not in the tier list (legacy $9.50).
+    /// </summary>
     public decimal? FlatRate { get; set; }
+
+    /// <summary>
+    /// <see cref="ShippingMethodType.FlatRate"/> only: false charges <see cref="FlatRate"/> once per order,
+    /// true charges it per shippable item (gift certificates excluded).
+    /// </summary>
+    public bool FlatRatePerItem { get; set; }
+
+    /// <summary>
+    /// <see cref="ShippingMethodType.SizeBased"/> only: flat charge for the FFL items of a cart (legacy
+    /// $40.00), added to the size-tier price of the other items. Null prices FFL items by size like the rest.
+    /// </summary>
+    public decimal? FflFlatRate { get; set; }
+
+    /// <summary>
+    /// <see cref="ShippingMethodType.SizeBased"/> only: price the non-FFL items of a non-US shipment with the
+    /// cheapest USPS international service instead of the size tiers. When USPS quotes nothing the method is
+    /// withheld rather than offered free.
+    /// </summary>
+    public bool InternationalViaUsps { get; set; }
     /// <summary>Order-subtotal threshold that unlocks free shipping.</summary>
     public decimal? FreeShippingThreshold { get; set; }
-    /// <summary>JSON tier array for weight/price-based methods, e.g. [{"min":0,"max":5,"rate":9.99}].</summary>
+    /// <summary>
+    /// JSON tier array. Weight/price-based: [{"upTo":5,"rate":9.99}] (the admin UI's shape) or
+    /// [{"min":0,"max":5,"rate":9.99}]. Size-based: [{"size":"Small","rate":9.50}], keyed by the product's
+    /// "Shipping Package Size" option value.
+    /// </summary>
     public string? TiersJson { get; set; }
 
     /// <summary>

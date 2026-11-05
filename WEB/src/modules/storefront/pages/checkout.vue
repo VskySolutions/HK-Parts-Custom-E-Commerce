@@ -529,8 +529,23 @@
           </q-card-section>
         </q-card>
 
+        <!-- Pay with Gift Certificate: the certificate covers the whole order, so no payment method is needed. -->
+        <q-card v-if="canCollectDetails && !isInquiry && payWithGiftCertificate" flat bordered class="q-mb-lg">
+          <q-card-section class="row items-center no-wrap q-gutter-md">
+            <q-icon name="o_redeem" size="40px" color="positive" />
+            <div>
+              <div class="text-subtitle1 text-weight-bold">Pay with Gift Certificate</div>
+              <div class="text-body2">
+                Your gift certificate <b style="font-family: monospace">{{ quote.giftCertificateCode }}</b> covers the full
+                {{ format(giftCertificateApplied) }}. Nothing else to pay. Confirm below to place your order.
+              </div>
+              <div class="text-caption text-grey-7">Remaining certificate balance after this order: {{ format((quote.giftCertificateBalance || 0) - giftCertificateApplied) }}</div>
+            </div>
+          </q-card-section>
+        </q-card>
+
         <!-- Payment method (AC-PAY-001.4/5) — absent for an inquiry; no money changes hands. -->
-        <q-card v-if="canCollectDetails && !isInquiry" flat bordered class="q-mb-lg">
+        <q-card v-if="canCollectDetails && !isInquiry && !payWithGiftCertificate" flat bordered class="q-mb-lg">
           <q-card-section>
             <div class="text-subtitle1 text-weight-bold q-mb-sm">Payment method</div>
 
@@ -791,7 +806,7 @@
                 class="row items-center justify-between q-mb-xs text-green-8"
               >
                 <span>
-                  {{ quote.groupDiscountName || 'Customer group discount' }}
+                  {{ quote.groupDiscountName || 'Savings' }}
                   <SummaryHint text="A member discount for your customer group, applied by lowering item unit prices. It's already reflected in the totals below." />
                 </span>
                 <span>-{{ format(quote.groupDiscountTotal) }}</span>
@@ -902,12 +917,24 @@
                 </div>
               </template>
 
+              <!-- Gift certificate: same formula as the cart and the order — min(balance, total) -->
+              <div v-if="giftCertificateApplied > 0" class="row items-center justify-between text-positive">
+                <span>Gift Certificate ({{ quote.giftCertificateCode }})</span>
+                <span>−{{ format(giftCertificateApplied) }}</span>
+              </div>
+              <ApplyGiftCertificate
+                class="q-mt-sm"
+                collapsible
+                :applied="quote.giftCertificateCode ? { code: quote.giftCertificateCode, currentBalance: quote.giftCertificateBalance, applyAmount: giftCertificateApplied } : null"
+                @changed="runQuote"
+              />
+
               <q-separator class="q-my-sm" />
 
               <div class="row items-center justify-between text-subtitle1 text-weight-bold">
                 <span>
                   Total
-                  <SummaryHint text="The final amount you pay: item subtotal, minus discounts, plus shipping, tax and any payment fee, minus reward points." />
+                  <SummaryHint text="The final amount you pay: item subtotal, minus discounts, plus shipping, tax and any payment fee, minus reward points and gift certificate." />
                 </span>
                 <span>{{ format(grandTotal) }}</span>
               </div>
@@ -969,7 +996,7 @@
               color="primary"
               class="full-width q-mt-md"
               no-caps
-              :label="placeError ? 'Retry payment' : 'Place order'"
+              :label="placeError ? 'Retry payment' : (payWithGiftCertificate ? 'Confirm and pay with gift certificate' : 'Place order')"
               icon-right="o_lock"
               :loading="placing"
               :disable="!canPlace"
@@ -1021,6 +1048,7 @@ import AppAddressForm from 'components/common/AppAddressForm.vue'
 import AppTextField from 'components/common/AppTextField.vue'
 import AppPhoneInput from 'components/common/AppPhoneInput.vue'
 import SummaryHint from 'modules/storefront/components/SummaryHint.vue'
+import ApplyGiftCertificate from 'modules/storefront/components/ApplyGiftCertificate.vue'
 import { isPossiblePhoneNumber } from 'libphonenumber-js'
 import { emptyAddress } from 'composables/useAddress'
 import { checkoutApi } from 'modules/storefront/api'
@@ -1584,6 +1612,7 @@ async function runQuote () {
     await maybeSaveNewAddress()
   } catch (err) {
     quote.value = null
+    if (handleGiftCertificateError(err)) return
     quoteError.value = getApiErrorMessage(err)
   } finally {
     quoting.value = false
@@ -1644,6 +1673,23 @@ const paymentMethods = computed(() =>
 )
 const paymentMethod = ref(null)
 
+// ---- Gift certificate --------------------------------------------------------
+// The quote carries the cart certificate re-validated server-side: min(balance, total) is applied, and when
+// it covers everything the payment step becomes "Pay with Gift Certificate".
+const giftCertificateApplied = computed(() => quote.value?.giftCertificateApplied || 0)
+const payWithGiftCertificate = computed(() => !!quote.value?.payWithGiftCertificate)
+const GC_NO_LONGER_VALID = 'The gift certificate you have submitted is no longer valid'
+
+// A certificate that became invalid (deactivated, spent elsewhere, expired) is detached server-side; send the
+// shopper back to the cart with the message, as the cart re-prices without it.
+function handleGiftCertificateError (err) {
+  const title = err?.response?.data?.title
+  if (err?.response?.status !== 422 || !title || !/gift certificate/i.test(title)) return false
+  notify.error(title === GC_NO_LONGER_VALID ? GC_NO_LONGER_VALID : title)
+  router.push({ name: 'shop-cart' })
+  return true
+}
+
 // Transaction fee for the selected gateway: a percent of the order total, added to what the buyer pays.
 // The server re-resolves and re-applies this authoritatively at placement; this mirrors it for the preview.
 const selectedPaymentFeePercent = computed(() => {
@@ -1652,7 +1698,8 @@ const selectedPaymentFeePercent = computed(() => {
 })
 const paymentFee = computed(() => {
   if (!quote.value) return 0
-  return Math.round(quote.value.total * selectedPaymentFeePercent.value) / 100
+  // The fee applies only to what the gateway collects, i.e. after the gift certificate.
+  return Math.round(Math.max(0, quote.value.total - giftCertificateApplied.value) * selectedPaymentFeePercent.value) / 100
 })
 // ---- Reward points (WO-27) --------------------------------------------------
 // Signed-in buyers with a positive balance can redeem points for a discount. The balance comes from
@@ -1673,7 +1720,7 @@ const canApplyPoints = computed(() => {
 
 const grandTotal = computed(() => {
   if (!quote.value) return 0
-  const total = quote.value.total + paymentFee.value - pointsDiscount.value
+  const total = quote.value.total + paymentFee.value - pointsDiscount.value - giftCertificateApplied.value
   return total > 0 ? total : 0
 })
 // Keep the selection valid as availability changes — default to the first offered method.
@@ -1804,8 +1851,9 @@ const canPlace = computed(
     isRoutable.value &&
     guestOrderingAllowed.value &&
     items.value.length > 0 &&
-    !!selectedShippingMethodId.value &&
-    !!paymentMethod.value &&
+    // An all-online-gift-certificate cart ships nothing, so it has no shipping options to pick from.
+    (!!selectedShippingMethodId.value || !(quote.value.shippingOptions || []).length) &&
+    (payWithGiftCertificate.value || !!paymentMethod.value) &&
     !squareNotConfigured.value &&
     !authNetNotConfigured.value &&
     !placing.value
@@ -1831,6 +1879,31 @@ async function placeOrder () {
     // Square: tokenize the entered card into a single-use nonce (source id) before placing — the server
     // charges this token. A tokenization error (empty/invalid card) stops placement with a clear message;
     // the finally block resets `placing` on the early return.
+    // Pay with Gift Certificate: the certificate covers everything; no gateway, no card tokenization.
+    if (payWithGiftCertificate.value) {
+      const result = await checkoutApi.payWithGiftCertificate({
+        cartId: null,
+        sessionId: sessionId.value,
+        shipTo: buildShipTo(),
+        selectedShippingMethodId: selectedShippingMethodId.value,
+        paymentToken: null,
+        couponCode: null,
+        recaptchaToken: await getRecaptchaToken('guestCheckout'),
+        pickupInStore: isPickup.value,
+        pickupStoreId: isPickup.value ? pickupStoreId.value : null
+      })
+      if (result && result.success) {
+        orderResult.value = result
+        clearContact()
+        await refresh().catch(() => {})
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } else {
+        placeError.value = (result && result.error) || 'The order could not be placed. Please try again.'
+        notify.error(placeError.value)
+      }
+      return
+    }
+
     let paymentToken = null
     if (paymentMethod.value === 'Square') {
       try {
@@ -1892,11 +1965,16 @@ async function placeOrder () {
       // The cart is now checked out; refreshing yields a fresh empty cart (badge resets).
       await refresh().catch(() => {})
       window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else if (result && result.error === GC_NO_LONGER_VALID) {
+      // The certificate was spent elsewhere while paying: the card was reversed; start again from the cart.
+      notify.error(GC_NO_LONGER_VALID)
+      router.push({ name: 'shop-cart' })
     } else {
       placeError.value = (result && result.error) || 'Payment could not be processed. Please try again.'
       notify.error(placeError.value)
     }
   } catch (err) {
+    if (handleGiftCertificateError(err)) return
     placeError.value = getApiErrorMessage(err)
     notify.error(placeError.value)
   } finally {

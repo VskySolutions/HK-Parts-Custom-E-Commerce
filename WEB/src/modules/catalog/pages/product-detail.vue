@@ -346,6 +346,9 @@
               <div class="row q-col-gutter-sm">
                 <div class="col-12 col-md-6"><AppSelect v-model="form.giftCardType" label="Gift card type" :options="giftCardTypeOptions" :disable="!canWrite" /></div>
                 <div class="col-12 col-md-6"><AppTextField v-model="form.giftCardAmount" label="Gift card amount" type="number" step="0.01" placeholder="0.00" :disable="!canWrite" /></div>
+                <div class="col-12 col-md-6">
+                  <AppSelect v-model="form.giftCertificateOnline" label="Online Certificate?" :options="[{ label: 'Yes (emailed to the recipient)', value: true }, { label: 'No (physical card mailed by staff)', value: false }]" emit-value map-options :disable="!canWrite" />
+                </div>
               </div>
             </template>
 
@@ -950,7 +953,7 @@ const EMPTY = {
   isPublished: false, displayOrder: 0, isFeatured: false, featuredDisplayOrder: 0,
   isInquiryOnly: false, inquiryButtonLabel: '',
   downloadExpiryDays: null, downloadLimit: null,
-  giftCardType: 'Fixed', giftCardAmount: null,
+  giftCardType: 'Fixed', giftCardAmount: null, giftCertificateOnline: true,
   gtin: '', taxCode: '', isPurchasable: true, isFflRequired: false,
   cost: null, msrp: null, salePrice: null, saleStartDateUtc: '', saleEndDateUtc: '',
   minOrderQuantity: null, maxOrderQuantity: null, stockStatusOverride: '', backorderMessage: '',
@@ -1281,6 +1284,7 @@ function buildPayload () {
   if (form.productType === 'GiftCard') {
     payload.giftCardType = form.giftCardType
     payload.giftCardAmount = toNumberOrNull(form.giftCardAmount)
+    payload.giftCertificateOnline = form.giftCertificateOnline !== false
   }
   return payload
 }

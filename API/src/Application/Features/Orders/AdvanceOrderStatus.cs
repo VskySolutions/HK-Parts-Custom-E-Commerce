@@ -26,6 +26,7 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
     private readonly IDateTimeProvider _clock;
     private readonly IPaymentGatewayRouter _payments;
     private readonly IInventoryService _inventory;
+    private readonly GiftCertificates.IGiftCertificateService? _giftCertificates;
 
     public AdvanceOrderStatusCommandHandler(
         IApplicationDbContext db,
@@ -33,7 +34,8 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         ICurrentUserService current,
         IDateTimeProvider clock,
         IPaymentGatewayRouter payments,
-        IInventoryService inventory)
+        IInventoryService inventory,
+        GiftCertificates.IGiftCertificateService? giftCertificates = null)
     {
         _db = db;
         _templates = templates;
@@ -41,6 +43,7 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         _clock = clock;
         _payments = payments;
         _inventory = inventory;
+        _giftCertificates = giftCertificates;
     }
 
     public async Task<OrderDto> Handle(AdvanceOrderStatusCommand request, CancellationToken cancellationToken)
@@ -98,6 +101,11 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         if (target == OrderStatus.Cancelled &&
             order.PaymentStatus is PaymentStatus.Authorized or PaymentStatus.Captured or PaymentStatus.AwaitingPayment)
             await _inventory.RestoreForOrderAsync(order, ct: cancellationToken);
+
+        // Gift certificates: give back what this order redeemed, and void the ones it purchased (unused only;
+        // a partly spent one flags the order for manual review).
+        if (target == OrderStatus.Cancelled && _giftCertificates is not null)
+            await _giftCertificates.HandleOrderCancelledAsync(order.Id, cancellationToken);
 
         // Auto-capture an authorize-only payment when the order ships (AC-PAY-002.3). No-op for orders
         // paid up front, COD/bank-transfer, or already captured — the router only captures an open

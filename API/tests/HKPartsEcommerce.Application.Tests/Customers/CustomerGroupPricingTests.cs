@@ -3,6 +3,7 @@ using HKPartsEcommerce.Application.Tests.Common;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
 using HKPartsEcommerce.Infrastructure.Customers;
+using HKPartsEcommerce.Infrastructure.Pricing;
 using Xunit;
 
 namespace HKPartsEcommerce.Application.Tests.Customers;
@@ -41,7 +42,11 @@ public class CustomerGroupPricingTests : CatalogTestBase
         db.SaveChanges();
     }
 
-    private CustomerGroupService NewService() => new(NewContext(), new FakeCurrentUser());
+    private CustomerGroupService NewService()
+    {
+        var db = NewContext();
+        return new(db, new FakeCurrentUser(), new PriceResolver(db, new FixedClock(DateTime.UtcNow)));
+    }
 
     [Fact]
     public async Task No_group_returns_base_price()

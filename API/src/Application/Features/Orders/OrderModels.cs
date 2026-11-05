@@ -8,6 +8,15 @@ public class OrderDto
 {
     public Guid Id { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
+    /// <summary>Set when the order was imported from eBay ("eBay Order Number").</summary>
+    public string? EbayOrderId { get; set; }
+    public string? EbayBuyerMessage { get; set; }
+    /// <summary>The gift certificate that paid part (or all) of this order.</summary>
+    public Guid? GiftCertificateId { get; set; }
+    public string? GiftCertificateCode { get; set; }
+    public decimal GiftCertificateAppliedAmount { get; set; }
+    /// <summary>Certificates this order purchased (admin view: staff mail physical cards).</summary>
+    public List<GiftCertificates.IssuedGiftCertificateDto> IssuedGiftCertificates { get; set; } = new();
     public string Status { get; set; } = string.Empty;
     public Guid? CustomerId { get; set; }
     public string? ContactName { get; set; }
@@ -83,6 +92,11 @@ public class OrderDto
     {
         Id = o.Id,
         OrderNumber = o.OrderNumber,
+        EbayOrderId = o.EbayOrderId,
+        EbayBuyerMessage = o.EbayBuyerMessage,
+        GiftCertificateId = o.GiftCertificateId,
+        GiftCertificateCode = o.GiftCertificateCode,
+        GiftCertificateAppliedAmount = o.GiftCertificateAppliedAmount,
         Status = o.Status.ToString(),
         CustomerId = o.CustomerId,
         ContactName = o.ContactName,
@@ -183,6 +197,7 @@ public class OrderSummaryDto
 {
     public Guid Id { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
+    public string? EbayOrderId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? ContactName { get; set; }
     public DateTime PlacedOnUtc { get; set; }
@@ -195,6 +210,7 @@ public class OrderSummaryDto
     {
         Id = o.Id,
         OrderNumber = o.OrderNumber,
+        EbayOrderId = o.EbayOrderId,
         Status = o.Status.ToString(),
         ContactName = o.ContactName,
         PlacedOnUtc = o.PlacedOnUtc,

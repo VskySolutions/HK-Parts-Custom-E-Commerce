@@ -115,9 +115,17 @@ public class ShippingRateService : IShippingRateService
             if (method.ZoneRates.Count > 0 && matchedZoneRate is null)
                 continue;
 
+            if (method.MethodType == ShippingMethodType.SizeBased)
+            {
+                var sized = await EvaluateSizeBasedAsync(method, request, ct);
+                if (sized is not null)
+                    results.Add(sized);
+                continue;
+            }
+
             var rate = method.MethodType switch
             {
-                ShippingMethodType.FlatRate => matchedZoneRate?.Rate ?? method.FlatRate,
+                ShippingMethodType.FlatRate => FlatRateFor(method, matchedZoneRate?.Rate ?? method.FlatRate, request),
                 ShippingMethodType.FreeShipping =>
                     request.OrderSubtotal >= (method.FreeShippingThreshold ?? 0m) ? 0m : (decimal?)null,
                 ShippingMethodType.WeightBased => PickTierRate(method.TiersJson, request.WeightKg),
@@ -138,6 +146,125 @@ public class ShippingRateService : IShippingRateService
 
         return results;
     }
+
+    /// <summary>
+    /// Flat rate per order, or — when <see cref="ShippingMethod.FlatRatePerItem"/> — per shippable unit, gift
+    /// certificates excluded. Per-item needs the cart lines; without them the method is not offered rather
+    /// than guessed at.
+    /// </summary>
+    private static decimal? FlatRateFor(ShippingMethod method, decimal? rate, CarrierRateRequest request)
+    {
+        if (rate is null || !method.FlatRatePerItem)
+            return rate;
+        if (request.Lines is null)
+            return null;
+
+        var units = request.Lines.Where(l => !l.IsGiftCertificate).Sum(l => l.Quantity);
+        return units == 0 ? null : rate.Value * units;
+    }
+
+    /// <summary>
+    /// The legacy "Custom" method. Domestic: the highest size-tier price among the cart's non-FFL items (an
+    /// item with no size, or a size not in the list, costs <see cref="ShippingMethod.FlatRate"/>), plus
+    /// <see cref="ShippingMethod.FflFlatRate"/> once when the cart holds FFL items. International (destination
+    /// country differs from the origin): the non-FFL part is the cheapest USPS international service when
+    /// <see cref="ShippingMethod.InternationalViaUsps"/> is on, and the method is withheld when USPS quotes
+    /// nothing — never offered free. FFL items cannot leave the country, so a non-US cart holding them gets
+    /// no option from this method.
+    /// </summary>
+    private async Task<ShippingRateOption?> EvaluateSizeBasedAsync(
+        ShippingMethod method, CarrierRateRequest request, CancellationToken ct)
+    {
+        if (request.Lines is null || request.Lines.Count == 0)
+            return null;
+
+        var tiers = ParseSizeTiers(method.TiersJson);
+        var defaultRate = method.FlatRate ?? 0m;
+
+        // Split by flag, not by Except: lines are value-equal records, and Except would also de-duplicate them.
+        var splitFfl = method.FflFlatRate.HasValue;
+        var fflLines = request.Lines.Where(l => splitFfl && l.IsFfl).ToList();
+        var otherLines = request.Lines.Where(l => !(splitFfl && l.IsFfl)).ToList();
+
+        var international = IsInternational(request.Origin, request.Destination);
+        if (international && request.Lines.Any(l => l.IsFfl))
+            return null;
+
+        var name = method.Name;
+        decimal otherRate = 0m;
+        if (otherLines.Count > 0)
+        {
+            if (international && method.InternationalViaUsps)
+            {
+                var usps = await CheapestUspsAsync(request, otherLines, ct);
+                if (usps is null)
+                {
+                    _logger.LogWarning(
+                        "Shipping method {Method}: USPS returned no international rate for {Country}; the method is withheld.",
+                        method.Name, request.Destination.CountryCode);
+                    return null;
+                }
+                otherRate = usps.Rate;
+                name = $"International Shipping ({usps.Name})";
+            }
+            else
+            {
+                otherRate = otherLines.Max(l =>
+                    l.ShippingSize is { } size && tiers.TryGetValue(size.Trim(), out var tierRate) ? tierRate : defaultRate);
+            }
+        }
+
+        var fflRate = fflLines.Count > 0 ? method.FflFlatRate!.Value : 0m;
+
+        return new ShippingRateOption(
+            MethodId: method.Id.ToString(),
+            Name: name,
+            Carrier: "Custom",
+            EstimatedDeliveryDays: method.TransitDays,
+            Rate: otherRate + fflRate);
+    }
+
+    /// <summary>Rates just the given lines with USPS (international) and returns the cheapest service.</summary>
+    private async Task<ShippingRateOption?> CheapestUspsAsync(
+        CarrierRateRequest request, IReadOnlyList<ShippingRateLine> lines, CancellationToken ct)
+    {
+        const decimal KgPerPound = 0.45359237m;
+        var weightLb = lines.Sum(l => (l.WeightLb ?? 0m) * l.Quantity);
+        var weightKg = weightLb > 0m ? weightLb * KgPerPound : request.WeightKg;
+        var subtotal = lines.Sum(l => l.LineTotal);
+
+        var uspsRequest = request with { WeightKg = weightKg, OrderSubtotal = subtotal, Lines = lines };
+        var rates = await SafeGetRatesAsync(ShippingCarrierType.USPS, uspsRequest, ct);
+        return rates.Where(r => r.Rate > 0m).OrderBy(r => r.Rate).FirstOrDefault();
+    }
+
+    private static bool IsInternational(CarrierAddress origin, CarrierAddress destination)
+    {
+        static string Norm(string? c) => string.IsNullOrWhiteSpace(c) ? "US"
+            : c.Trim().ToUpperInvariant() is "USA" ? "US" : c.Trim().ToUpperInvariant();
+        return Norm(origin.CountryCode) != Norm(destination.CountryCode);
+    }
+
+    /// <summary>Parses [{"size":"Small","rate":9.50}] into a case-insensitive size → rate map.</summary>
+    private static Dictionary<string, decimal> ParseSizeTiers(string? json)
+    {
+        var map = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(json))
+            return map;
+        try
+        {
+            var tiers = JsonSerializer.Deserialize<List<SizeTier>>(json, TierJsonOptions) ?? new();
+            foreach (var t in tiers.Where(t => !string.IsNullOrWhiteSpace(t.Size)))
+                map[t.Size!.Trim()] = t.Rate;
+        }
+        catch (JsonException)
+        {
+            // A malformed tier list prices every item at the default rate rather than failing the quote.
+        }
+        return map;
+    }
+
+    private sealed record SizeTier(string? Size, decimal Rate);
 
     /// <summary>
     /// Rates one carrier inside its own DI scope. Every client opens by resolving its credentials through
@@ -225,9 +352,21 @@ public class ShippingRateService : IShippingRateService
         if (tiers is null)
             return null;
 
+        // The admin UI saves "up to" brackets ([{"upTo":5,"rate":..}]); each then starts just above the
+        // previous one. Explicit {"min","max"} rows are honoured as written.
+        if (tiers.Any(t => t.UpTo.HasValue))
+        {
+            foreach (var tier in tiers.Where(t => t.UpTo.HasValue).OrderBy(t => t.UpTo))
+            {
+                if (value <= tier.UpTo!.Value)
+                    return tier.Rate;
+            }
+            return null;
+        }
+
         foreach (var tier in tiers.OrderBy(t => t.Min))
         {
-            if (value >= tier.Min && value <= tier.Max)
+            if (value >= (tier.Min ?? 0m) && value <= (tier.Max ?? decimal.MaxValue))
                 return tier.Rate;
         }
 
@@ -235,5 +374,5 @@ public class ShippingRateService : IShippingRateService
     }
 
     /// <summary>A single weight/price tier row parsed from <see cref="ShippingMethod.TiersJson"/>.</summary>
-    private sealed record ShippingTier(decimal Min, decimal Max, decimal Rate);
+    private sealed record ShippingTier(decimal? Min, decimal? Max, decimal? UpTo, decimal Rate);
 }

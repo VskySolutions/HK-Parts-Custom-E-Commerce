@@ -28,6 +28,19 @@ public class CheckoutController : ApiControllerBase
         [FromBody] PlaceCheckoutRequest request, CancellationToken cancellationToken)
         => Ok(await Mediator.Send(new PlaceCheckoutCommand(request), cancellationToken));
 
+    /// <summary>
+    /// Confirm the "Pay with Gift Certificate" page: places the order paid entirely by the cart's gift
+    /// certificate. 409 when the certificate does not cover the full total; 422 when it is no longer valid.
+    /// </summary>
+    [HttpPost("pay-with-gift-certificate")]
+    public async Task<ActionResult<CheckoutResult>> PayWithGiftCertificate(
+        [FromBody] PlaceCheckoutRequest request, CancellationToken cancellationToken)
+        => Ok(await Mediator.Send(new PlaceCheckoutCommand(request with
+        {
+            PayWithGiftCertificate = true,
+            PaymentMethod = Domain.Enums.PaymentMethodType.GiftCertificate,
+        }), cancellationToken));
+
     /// <summary>Submit an inquiry (quote request) — no payment is taken (REQ-INQ-001).</summary>
     [HttpPost("inquiry")]
     public async Task<ActionResult<InquiryResult>> Inquiry(

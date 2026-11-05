@@ -21,6 +21,9 @@ public class Cart : AuditableEntity, ISoftDeletable
     public int PointsApplied { get; set; }
     public decimal PointsDiscountAmount { get; set; }
 
+    /// <summary>The gift certificate applied to this cart (one per cart); re-validated at every step.</summary>
+    public Guid? GiftCertificateId { get; set; }
+
     public string CurrencyCode { get; set; } = "USD";
     public bool IsCheckedOut { get; set; }
 
@@ -51,4 +54,11 @@ public class CartItem : AuditableEntity
     /// Read and written through <c>CustomAttributes</c> in Application.Common.Models.
     /// </summary>
     public string? CustomAttributesJson { get; set; }
+
+    // Gift certificate purchase details (online certificates only).
+    public string? GcSenderName { get; set; }
+    public string? GcSenderEmail { get; set; }
+    public string? GcRecipientName { get; set; }
+    public string? GcRecipientEmail { get; set; }
+    public string? GcMessage { get; set; }
 }

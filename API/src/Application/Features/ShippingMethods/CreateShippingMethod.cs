@@ -18,7 +18,10 @@ public record CreateShippingMethodCommand(
     int? TransitDays = null,
     bool IsEnabled = true,
     int DisplayOrder = 0,
-    List<ShippingMethodZoneRateInput>? ZoneRates = null) : IRequest<ShippingMethodDto>;
+    List<ShippingMethodZoneRateInput>? ZoneRates = null,
+    bool FlatRatePerItem = false,
+    decimal? FflFlatRate = null,
+    bool InternationalViaUsps = false) : IRequest<ShippingMethodDto>;
 
 public class CreateShippingMethodCommandValidator : AbstractValidator<CreateShippingMethodCommand>
 {
@@ -29,6 +32,8 @@ public class CreateShippingMethodCommandValidator : AbstractValidator<CreateShip
         RuleFor(x => x.FlatRate).GreaterThanOrEqualTo(0).When(x => x.FlatRate.HasValue);
         RuleFor(x => x.FreeShippingThreshold).GreaterThanOrEqualTo(0).When(x => x.FreeShippingThreshold.HasValue);
         RuleFor(x => x.TransitDays).InclusiveBetween(0, 365).When(x => x.TransitDays.HasValue);
+        RuleFor(x => x.FflFlatRate).GreaterThanOrEqualTo(0).When(x => x.FflFlatRate.HasValue);
+        RuleFor(x => x.TiersJson).Must(ShippingMethodRules.BeValidTierJson).WithMessage("Rate tiers are not valid JSON.");
         RuleForEach(x => x.ZoneRates).ChildRules(r =>
         {
             r.RuleFor(z => z.ShippingZoneId).NotEmpty();
@@ -69,6 +74,9 @@ public class CreateShippingMethodCommandHandler : IRequestHandler<CreateShipping
             FlatRate = request.FlatRate,
             FreeShippingThreshold = request.FreeShippingThreshold,
             TiersJson = request.TiersJson,
+            FlatRatePerItem = request.MethodType == ShippingMethodType.FlatRate && request.FlatRatePerItem,
+            FflFlatRate = request.MethodType == ShippingMethodType.SizeBased ? request.FflFlatRate : null,
+            InternationalViaUsps = request.MethodType == ShippingMethodType.SizeBased && request.InternationalViaUsps,
             TransitDays = request.TransitDays,
             IsEnabled = request.IsEnabled,
             DisplayOrder = request.DisplayOrder,

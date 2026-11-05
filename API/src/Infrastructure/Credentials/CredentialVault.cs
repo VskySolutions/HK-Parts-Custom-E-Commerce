@@ -54,6 +54,12 @@ public class CredentialVault : ICredentialVault
             "dhl"          => Resolve(await ActiveAsync(_db.DhlExpressCredentials, cancellationToken), c => Json(new { baseUrl = c.BaseUrl, apiKey = c.ApiKey, apiSecret = c.ApiSecret, accountNumber = c.AccountNumber })),
             "usps"         => Resolve(await ActiveAsync(_db.UspsCredentials, cancellationToken), c => Json(new { baseUrl = c.BaseUrl, consumerKey = c.ConsumerKey, consumerSecret = c.ConsumerSecret })),
             "ups"          => Resolve(await ActiveAsync(_db.UpsCredentials, cancellationToken), c => Json(new { baseUrl = c.BaseUrl, clientId = c.ClientId, clientSecret = c.ClientSecret, merchantId = c.MerchantId })),
+            "freightview"  => Resolve(await ActiveAsync(_db.FreightviewCredentials, cancellationToken), c => Json(new
+            {
+                baseUrl = c.BaseUrl, apiKey = c.ApiKey, originType = c.OriginType,
+                contactName = c.ContactName, contactPhone = c.ContactPhone, contactEmail = c.ContactEmail,
+                pickupInstructions = c.PickupInstructions, dockOpenTime = c.DockOpenTime, dockCloseTime = c.DockCloseTime,
+            })),
             _              => null,
         };
     }

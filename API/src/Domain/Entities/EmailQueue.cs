@@ -25,4 +25,11 @@ public class EmailQueue : BaseEntity
     public DateTime? NextAttemptOnUtc { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTime CreatedOnUtc { get; set; }
+
+    /// <summary>Optional CC (e.g. the gift-certificate sender).</summary>
+    public string? CcEmail { get; set; }
+    /// <summary>Optional Reply-To. The From address is always the configured SMTP account, never a user.</summary>
+    public string? ReplyToEmail { get; set; }
+    /// <summary>The entity the email is about (e.g. a gift certificate), for post-send bookkeeping.</summary>
+    public Guid? RelatedEntityId { get; set; }
 }

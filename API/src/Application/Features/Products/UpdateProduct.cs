@@ -35,6 +35,8 @@ public record UpdateProductCommand(
     int? DownloadLimit = null,
     GiftCardType? GiftCardType = null,
     decimal? GiftCardAmount = null,
+    /// <summary>Gift certificate product: emailed (true) or a physical card (false); null keeps the current value.</summary>
+    bool? GiftCertificateOnline = null,
     string? Gtin = null,
     decimal? Cost = null,
     decimal? Msrp = null,
@@ -137,6 +139,8 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
         entity.DownloadLimit = request.DownloadLimit;
         entity.GiftCardType = request.GiftCardType;
         entity.GiftCardAmount = request.GiftCardAmount;
+        if (request.GiftCertificateOnline is bool online)
+            entity.GiftCertificateOnline = online;
         entity.Gtin = request.Gtin;
         entity.Cost = request.Cost;
         entity.Msrp = request.Msrp;

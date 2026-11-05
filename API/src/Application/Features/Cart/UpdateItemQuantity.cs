@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Domain.Entities;
@@ -53,6 +54,16 @@ public class UpdateItemQuantityCommandHandler : IRequestHandler<UpdateItemQuanti
         }
         else
         {
+            // Min/Max qty allowed: checked against the product's total across the cart with the new quantity.
+            // A product that has since been deleted has no limits left to enforce (the cart flags it instead).
+            var product = await _db.Products.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == item.ProductId, cancellationToken);
+            if (product is not null)
+            {
+                var otherLines = cart.Items.Where(i => i.ProductId == item.ProductId && i.Id != item.Id).Sum(i => i.Quantity);
+                OrderQuantityLimits.Ensure(product, otherLines + request.Quantity);
+            }
+
             item.Quantity = request.Quantity;
         }
 

@@ -176,6 +176,27 @@ public class UpsCredential : IntegrationCredentialBase
     [Encrypted] public string? ClientSecret { get; set; }
 }
 
+/// <summary>
+/// Freightview LTL freight-quote API key + the pickup/dock details sent with every quote
+/// (table <c>Credentials_Freightview</c>).
+/// </summary>
+public class FreightviewCredential : IntegrationCredentialBase
+{
+    /// <summary>API host + version path, e.g. https://www.freightview.com/api/v1.0. Required.</summary>
+    public string? BaseUrl { get; set; }
+    [Encrypted] public string? ApiKey { get; set; }
+
+    /// <summary>Origin location type, e.g. "business dock" or "business no dock".</summary>
+    public string? OriginType { get; set; }
+    public string? ContactName { get; set; }
+    public string? ContactPhone { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? PickupInstructions { get; set; }
+    /// <summary>Dock hours as Freightview expects them, e.g. "8:00 AM" / "5:00 PM".</summary>
+    public string? DockOpenTime { get; set; }
+    public string? DockCloseTime { get; set; }
+}
+
 // ---- Communication ---------------------------------------------------------
 
 /// <summary>Twilio account credentials (table <c>Credentials_Twilio</c>).</summary>

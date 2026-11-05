@@ -56,6 +56,12 @@ public static class DefaultEmailTemplates
             "Your quote for {{inquiryNumber}}",
             "Here is your quote",
             "<p>Hi {{customerName}},</p><p>Thank you for your enquiry <strong>{{inquiryNumber}}</strong>. Our quote is <strong>{{quoteAmount}}</strong>.</p><p>{{quoteNote}}</p><p>Reply to this email to accept or ask any questions.</p>"),
+        // ---- Gift certificates ----
+        new(HKPartsEcommerce.Infrastructure.Email.GiftCertificateEmailTemplate.Key, "Gift Certificate", NotificationCategory.Transactional,
+            HKPartsEcommerce.Infrastructure.Email.GiftCertificateEmailTemplate.Subject,
+            HKPartsEcommerce.Infrastructure.Email.GiftCertificateEmailTemplate.Heading,
+            HKPartsEcommerce.Infrastructure.Email.GiftCertificateEmailTemplate.Body,
+            Critical: true),
         new("order.confirmation", "Order Confirmation", NotificationCategory.Transactional,
             "Your {{brandName}} order {{orderNumber}} is confirmed",
             "Thanks for your order!",

@@ -79,7 +79,7 @@
                       flat
                       icon="o_remove"
                       size="sm"
-                      :disable="rowBusy[item.id] || item.quantity <= 1"
+                      :disable="rowBusy[item.id] || item.quantity <= 1 || !withinQtyLimits(items, item, item.quantity - 1)"
                       aria-label="Decrease quantity"
                       @click="changeQty(item, item.quantity - 1)"
                     />
@@ -97,6 +97,7 @@
                     <q-spinner v-if="rowBusy[item.id]" size="18px" color="primary" class="q-ml-sm" />
                   </div>
                   <q-item-label v-if="atMaxStock(item)" caption class="text-orange-8 q-mt-xs">Max available stock</q-item-label>
+                  <q-item-label v-else-if="qtyLimitNote(items, item)" caption class="text-orange-8 q-mt-xs">{{ qtyLimitNote(items, item) }}</q-item-label>
                 </q-item-section>
 
                 <!-- Line total + remove -->
@@ -174,6 +175,20 @@
                 <span class="text-grey-8">Subtotal</span>
                 <span class="text-weight-medium">{{ format(subtotal) }}</span>
               </div>
+
+              <!-- Gift certificate (one per cart; re-validated on every cart read) -->
+              <template v-if="!isInquiryCart">
+                <div v-if="giftCertificate" class="row items-center justify-between q-mb-xs">
+                  <span class="text-grey-8">Gift Certificate</span>
+                  <span class="text-positive text-weight-medium">−{{ format(giftCertificate.applyAmount) }}</span>
+                </div>
+                <div v-if="giftCertificate" class="row items-center justify-between q-mb-xs">
+                  <span class="text-weight-medium">Amount due</span>
+                  <span class="text-weight-bold">{{ format(amountDue) }}</span>
+                </div>
+                <ApplyGiftCertificate :applied="giftCertificate" collapsible class="q-mb-sm" />
+              </template>
+
               <div class="text-caption text-grey-6 q-mb-md">
                 <template v-if="isInquiryCart">
                   Indicative total — no payment is taken when you submit your request.
@@ -210,6 +225,8 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useCart } from 'modules/storefront/composables/useCart'
+import ApplyGiftCertificate from 'modules/storefront/components/ApplyGiftCertificate.vue'
+import { withinQtyLimits, qtyLimitNote } from 'modules/storefront/composables/orderQtyLimits'
 import { useCommerceMode } from 'modules/storefront/composables/useCommerceMode'
 import { useCurrency } from 'modules/storefront/composables/useCurrency'
 import { useNotify } from 'composables/useNotify'
@@ -229,6 +246,8 @@ const {
   removeCoupon
 } = useCart()
 const { format, load: loadCurrencies } = useCurrency()
+const giftCertificate = computed(() => cart.value?.giftCertificate || null)
+const amountDue = computed(() => cart.value?.amountDue ?? subtotal.value)
 // Quote-only cart (REQ-INQ-001): the CTA leads to the inquiry form rather than payment, using the
 // same request label as the product pages and cart drawer.
 const { isInquiryOnly, inquiryButtonLabel } = useCommerceMode()
@@ -252,6 +271,7 @@ function isQuoteLine (item) {
 
 // Respect available stock (unless the line is a quote, allows backorder, or stock is unknown).
 function canIncrease (item) {
+  if (!withinQtyLimits(items.value, item, item.quantity + 1)) return false
   if (isQuoteLine(item)) return true
   if (item.allowBackorder) return true
   if (item.stockQuantity == null) return true
@@ -287,6 +307,7 @@ function restockDate (item) {
 async function changeQty (item, quantity) {
   if (quantity < 1 || rowBusy[item.id]) return
   if (!isQuoteLine(item) && !item.allowBackorder && item.stockQuantity != null && quantity > item.stockQuantity) return
+  if (!withinQtyLimits(items.value, item, quantity)) return
   rowBusy[item.id] = true
   try {
     await updateItem(item.id, quantity)

@@ -20,18 +20,20 @@ public class StorefrontCatalogController : ApiControllerBase
         => Ok(await Mediator.Send(new GetStorefrontCategoriesQuery()));
 
     /// <summary>Category page for an enabled category (by id or slug): paged published products plus filterable spec attributes.</summary>
-    [HttpGet("category/{idOrSlug}")]
+    // Catch-all: migrated (PHP) slugs contain "/" ("hk-parts/ump-parts"); sent either raw or as %2F, which
+    // ASP.NET Core leaves encoded in route values — hence the explicit decode.
+    [HttpGet("category/{**idOrSlug}")]
     public async Task<ActionResult<CategoryPageDto>> GetCategory(
         string idOrSlug,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? sort = null)
-        => Ok(await Mediator.Send(new GetCategoryPageQuery(idOrSlug, page, pageSize, sort)));
+        => Ok(await Mediator.Send(new GetCategoryPageQuery(DecodeSlug(idOrSlug), page, pageSize, sort)));
 
     /// <summary>Full published product detail (by id or slug): variants, media, specs and relationship sections.</summary>
-    [HttpGet("product/{idOrSlug}")]
+    [HttpGet("product/{**idOrSlug}")]
     public async Task<ActionResult<StorefrontProductDetailDto>> GetProduct(string idOrSlug)
-        => Ok(await Mediator.Send(new GetProductDetailQuery(idOrSlug)));
+        => Ok(await Mediator.Send(new GetProductDetailQuery(DecodeSlug(idOrSlug))));
 
     /// <summary>Resolves a client-maintained list of recently-viewed product ids to summaries (published only, order preserved).</summary>
     [HttpPost("recently-viewed")]
@@ -60,4 +62,8 @@ public class StorefrontCatalogController : ApiControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] string? sort = null)
         => Ok(await Mediator.Send(new BrowseByManufacturerQuery(idOrSlug, page, pageSize, sort)));
+
+    /// <summary>Route values keep %2F (and other escapes) encoded; slugs are matched decoded and trimmed of slashes.</summary>
+    private static string DecodeSlug(string? value) =>
+        Uri.UnescapeDataString(value ?? string.Empty).Trim().Trim('/');
 }

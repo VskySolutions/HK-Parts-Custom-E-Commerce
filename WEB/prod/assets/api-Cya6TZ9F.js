@@ -1,0 +1,1 @@
+import{a as e,m as t}from"./index-CmNq2MtK.js";var n={getMode(){return e.get(`/api/admin/commerce/mode`).then(t)},updateMode(n){return e.put(`/api/admin/commerce/mode`,n).then(t)}};export{n as t};

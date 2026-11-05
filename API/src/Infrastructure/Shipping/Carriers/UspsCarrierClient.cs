@@ -53,9 +53,11 @@ public class UspsCarrierClient : ICarrierClient
         if (string.IsNullOrWhiteSpace(credential.ConsumerKey) || string.IsNullOrWhiteSpace(credential.ConsumerSecret))
             return Array.Empty<ShippingRateOption>();
 
-        // USPS domestic rating is US-origin/US-destination only; skip non-US shipments cleanly.
-        if (!IsUnitedStates(request.Origin) || !IsUnitedStates(request.Destination))
+        // USPS only ships from the US. A US destination is rated domestically; anything else goes to the
+        // International Prices API.
+        if (!IsUnitedStates(request.Origin))
             return Array.Empty<ShippingRateOption>();
+        var international = !IsUnitedStates(request.Destination);
 
         // The endpoint is configuration, not a constant: the test environment and live are different hosts,
         // and only the credential knows which account it belongs to. No fallback — guessing sends test keys
@@ -73,6 +75,9 @@ public class UspsCarrierClient : ICarrierClient
             var token = await GetAccessTokenAsync(client, baseUrl, credential, ct);
             if (string.IsNullOrWhiteSpace(token))
                 return Array.Empty<ShippingRateOption>();
+
+            if (international)
+                return await GetInternationalRatesAsync(client, baseUrl, token!, request, ct);
 
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}{RatePath}");
             httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -95,6 +100,71 @@ public class UspsCarrierClient : ICarrierClient
             _logger.LogWarning(ex, "Shipping carrier {Carrier} rate call threw.", CarrierName);
             return Array.Empty<ShippingRateOption>();
         }
+    }
+
+    private const string InternationalRatePath = "/international-prices/v3/base-rates/search";
+
+    /// <summary>The international mail classes quoted; each is a separate base-rates search.</summary>
+    private static readonly string[] InternationalMailClasses =
+    {
+        "FIRST-CLASS_PACKAGE_INTERNATIONAL_SERVICE",
+        "PRIORITY_MAIL_INTERNATIONAL",
+        "PRIORITY_MAIL_EXPRESS_INTERNATIONAL",
+    };
+
+    // The legacy site rated every international parcel as a 15x15x15" rectangular box.
+    private const decimal InternationalBoxInches = 15m;
+
+    /// <summary>
+    /// Rates an international shipment against each mail class in <see cref="InternationalMailClasses"/>.
+    /// A class USPS declines for the destination or weight (4xx) is skipped, not fatal — the rest still quote.
+    /// </summary>
+    private async Task<IReadOnlyList<ShippingRateOption>> GetInternationalRatesAsync(
+        HttpClient client, string baseUrl, string token, CarrierRateRequest request, CancellationToken ct)
+    {
+        var options = new List<ShippingRateOption>();
+        foreach (var mailClass in InternationalMailClasses)
+        {
+            var body = new
+            {
+                originZIPCode = FiveDigitZip(request.Origin.PostalCode),
+                foreignPostalCode = request.Destination.PostalCode?.Trim() ?? string.Empty,
+                destinationCountryCode = request.Destination.CountryCode!.Trim().ToUpperInvariant(),
+                weight = Math.Max(0.01m, Math.Round(request.WeightKg * PoundsPerKilogram, 2)),
+                length = InternationalBoxInches,
+                width = InternationalBoxInches,
+                height = InternationalBoxInches,
+                mailClass,
+                processingCategory = "MACHINABLE",
+                rateIndicator = "SP",
+                destinationEntryFacilityType = "NONE",
+                priceType = "RETAIL",
+                mailingDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            };
+
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}{InternationalRatePath}");
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+            using var response = await client.SendAsync(httpRequest, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                await CarrierHttpDiagnostics.LogFailedResponseAsync(_logger, CarrierName, $"international rate ({mailClass})", response, ct);
+                continue;
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            foreach (var option in MapResponse(document.RootElement))
+            {
+                // The response may omit mailClass; name the option after the class that was asked for.
+                options.Add(option.MethodId == "USPS"
+                    ? option with { MethodId = mailClass, Name = $"USPS {mailClass.Replace('_', ' ')}" }
+                    : option);
+            }
+        }
+
+        return options;
     }
 
     private async Task<string?> GetAccessTokenAsync(HttpClient client, string baseUrl, UspsCredential credential, CancellationToken ct)

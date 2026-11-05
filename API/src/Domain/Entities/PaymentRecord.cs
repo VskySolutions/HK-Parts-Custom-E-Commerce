@@ -35,6 +35,9 @@ public class PaymentRecord : AuditableEntity
     public string? GatewayReference { get; set; }
     public string? ErrorMessage { get; set; }
 
+    /// <summary>The payment that settles the order (false for a partial gift-certificate payment alongside a card).</summary>
+    public bool IsMaster { get; set; } = true;
+
     public DateTime? AuthorizedOnUtc { get; set; }
     public DateTime? CapturedOnUtc { get; set; }
     public DateTime? RefundedOnUtc { get; set; }

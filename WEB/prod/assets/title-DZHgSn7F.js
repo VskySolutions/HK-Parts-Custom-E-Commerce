@@ -1,0 +1,1 @@
+import{t as e}from"./vendor-vue-Drgo5rKa.js";var t=`HK Parts E-Commerce`,n=({router:n})=>{let r=e(t);n.afterEach(e=>{let n=e.meta&&e.meta.title;if(!n){for(let t=e.matched.length-1;t>=0;t--)if(e.matched[t].meta&&e.matched[t].meta.title){n=e.matched[t].meta.title;break}}r.value=n?`${n} · ${t}`:t})};export{n as default};

@@ -1,0 +1,1 @@
+var e=({app:e})=>{e.config.errorHandler=(e,t,n)=>{console.error(`[HKParts] Vue error:`,n,e)},e.config.warnHandler=(e,t,n)=>{},typeof window<`u`&&window.addEventListener(`unhandledrejection`,e=>{console.error(`[HKParts] Unhandled promise rejection:`,e.reason)})};export{e as default};

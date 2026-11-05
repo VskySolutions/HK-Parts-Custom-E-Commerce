@@ -28,7 +28,9 @@ builder.Services.AddApiServices(builder.Configuration);
 // CORS for the browser SPA (WEB/). Allowed origins come from configuration
 // (Cors:AllowedOrigins); falls back to the local Quasar dev server ports.
 const string SpaCorsPolicy = "SpaCors";
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:9000", "https://ecommerce.vskyapplications.com"];
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? ["http://localhost:9000", "https://ecommerce.vskyapplications.com", "https://hkparts.vskyapplications.com"];
+// Browser Origin headers never carry a trailing slash, so strip any from configured values or they never match.
+allowedOrigins = allowedOrigins.Select(o => o.Trim().TrimEnd('/')).Where(o => o.Length > 0).ToArray();
 builder.Services.AddCors(options =>
     options.AddPolicy(SpaCorsPolicy, policy =>
         policy.WithOrigins(allowedOrigins)

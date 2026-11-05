@@ -16,7 +16,7 @@
               <q-icon name="o_mail" size="16px" /> {{ branding.supportEmail }}
             </a>
             <span v-if="!branding.supportPhone && !branding.supportEmail" class="sf-topbar__item">
-              Welcome to {{ branding.brandName }}
+              Welcome to HKParts Pro
             </span>
           </div>
 

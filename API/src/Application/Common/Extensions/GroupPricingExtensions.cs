@@ -15,8 +15,9 @@ namespace HKPartsEcommerce.Application.Common.Extensions;
 public static class GroupPricingExtensions
 {
     /// <summary>
-    /// Replaces each item's price with its group price. A no-op when <paramref name="groupId"/> is null
-    /// (guest / no group), so the anonymous path costs nothing.
+    /// Replaces each item's price with its resolved price: group price, active sale price and price rules
+    /// (see <see cref="IPriceResolver"/>). Runs for guests too (<paramref name="groupId"/> null = retail),
+    /// because sale prices and retail price rules apply to them.
     /// </summary>
     /// <param name="read">Returns the item's price question, or null to leave the item alone (e.g. no price).</param>
     /// <param name="write">Applies the resolved price back onto the item.</param>
@@ -28,7 +29,7 @@ public static class GroupPricingExtensions
         Action<T, decimal> write,
         CancellationToken cancellationToken = default)
     {
-        if (groupId is null || items.Count == 0)
+        if (items.Count == 0)
             return;
 
         var requests = new List<GroupPriceRequest>(items.Count);

@@ -25,6 +25,12 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDto>
             .FirstOrDefaultAsync(o => o.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException(nameof(Order), request.Id);
 
-        return OrderDto.From(order);
+        var dto = OrderDto.From(order);
+        dto.IssuedGiftCertificates = await _db.GiftCertificates.IgnoreQueryFilters().AsNoTracking()
+            .Where(g => g.SourceOrderId == order.Id)
+            .OrderBy(g => g.CreatedOnUtc)
+            .Select(g => GiftCertificates.IssuedGiftCertificateDto.From(g))
+            .ToListAsync(cancellationToken);
+        return dto;
     }
 }
