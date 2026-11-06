@@ -60,9 +60,35 @@
           <!-- ============ GENERAL ============ -->
           <q-tab-panel name="general" class="q-gutter-y-sm">
             <AppTextField v-model="form.name" label="Name" required :v="v$.name" placeholder="e.g. Standard Shipping" :disable="!canWrite" />
-            <AppSelect v-model="form.methodType" label="Type" :options="shippingMethodTypeOptions" :disable="!canWrite" />
+            <AppSelect v-model="form.methodType" label="Type" :options="shippingMethodTypeOptions" :disable="!canWrite" @update:model-value="onTypeChanged" />
 
-            <AppTextField v-if="form.methodType === 'FlatRate'" v-model="form.flatRate" label="Flat rate" type="number" step="0.01" placeholder="e.g. 5.00" :disable="!canWrite" />
+            <template v-if="form.methodType === 'FlatRate'">
+              <AppTextField v-model="form.flatRate" label="Flat rate" type="number" step="0.01" placeholder="e.g. 5.00" :disable="!canWrite" />
+              <q-toggle v-model="form.flatRatePerItem" label="Charge per item (rate × item quantity, gift certificates excluded)" color="primary" :disable="!canWrite" />
+            </template>
+
+            <!-- Size-based: legacy "Custom" method -->
+            <template v-if="form.methodType === 'SizeBased'">
+              <div class="text-caption text-grey-7 q-mb-sm">
+                Charges the highest tier among the cart's items, read from each product's
+                <b>Shipping Package Size</b> specification.
+              </div>
+              <div class="row items-center justify-between q-mt-sm q-mb-xs">
+                <AppFieldLabel label="Size tiers" />
+                <q-btn v-if="canWrite" flat dense no-caps color="primary" icon="o_add" label="Add tier" @click="addSizeTier" />
+              </div>
+              <div v-for="(t, i) in sizeTiers" :key="i" class="row items-center q-col-gutter-sm q-mb-xs no-wrap">
+                <div class="col"><q-select v-model="t.size" dense outlined :options="SIZE_OPTIONS" label="Shipping size" use-input new-value-mode="add-unique" hide-dropdown-icon :disable="!canWrite" @update:model-value="syncSizeTiers" /></div>
+                <div class="col"><q-input v-model.number="t.rate" dense outlined type="number" step="0.01" label="Rate" :disable="!canWrite" @update:model-value="syncSizeTiers" /></div>
+                <div class="col-auto"><q-btn v-if="canWrite" flat dense round size="sm" icon="o_delete" color="negative" @click="removeSizeTier(i)" /></div>
+              </div>
+              <div class="row q-col-gutter-sm q-mt-xs">
+                <div class="col-12 col-md-6"><AppTextField v-model="form.flatRate" label="Rate when size is blank / other" type="number" step="0.01" placeholder="e.g. 9.50" :disable="!canWrite" /></div>
+                <div class="col-12 col-md-6"><AppTextField v-model="form.fflFlatRate" label="FFL items flat rate" type="number" step="0.01" placeholder="e.g. 40.00 (blank = price FFL items by size)" :disable="!canWrite" /></div>
+              </div>
+              <q-toggle v-model="form.internationalViaUsps" label="Outside the US, charge the cheapest USPS international rate (method hidden when USPS can't quote)" color="primary" :disable="!canWrite" />
+            </template>
+
             <AppTextField v-if="form.methodType === 'FreeShipping'" v-model="form.freeShippingThreshold" label="Free over" type="number" step="0.01" placeholder="Order total for free shipping" :disable="!canWrite" />
 
             <!-- Weight/price rate tiers -->
@@ -154,6 +180,36 @@ function syncTiers () {
 function addTier () { tiers.value.push({ upTo: null, rate: null }) }
 function removeTier (i) { tiers.value.splice(i, 1); syncTiers() }
 
+// Size tiers (SizeBased) — [{ size, rate }] keyed by the "Shipping Package Size" option value.
+const SIZE_OPTIONS = ['Free', 'Small', 'Medium', 'Large', 'Extra Large']
+const LEGACY_SIZE_TIERS = [
+  { size: 'Free', rate: 0 }, { size: 'Small', rate: 9.5 }, { size: 'Medium', rate: 16.5 },
+  { size: 'Large', rate: 22.5 }, { size: 'Extra Large', rate: 28 }
+]
+const sizeTiers = ref([])
+function parseSizeTiers (json) {
+  try { const a = json ? JSON.parse(json) : []; return Array.isArray(a) ? a.filter((t) => t.size != null).map((t) => ({ size: t.size, rate: t.rate ?? null })) : [] } catch (e) { return [] }
+}
+function syncSizeTiers () {
+  const clean = sizeTiers.value.filter((t) => t.size && t.rate != null && t.rate !== '').map((t) => ({ size: String(t.size).trim(), rate: Number(t.rate) }))
+  form.tiersJson = clean.length ? JSON.stringify(clean) : null
+}
+function addSizeTier () { sizeTiers.value.push({ size: null, rate: null }) }
+function removeSizeTier (i) { sizeTiers.value.splice(i, 1); syncSizeTiers() }
+
+// Switching type re-serializes the matching grid so a weight tier list never reaches a size-based method
+// (or vice versa). A fresh size-based method starts from the legacy site's tiers.
+function onTypeChanged (type) {
+  if (type === 'SizeBased') {
+    if (!sizeTiers.value.length) sizeTiers.value = LEGACY_SIZE_TIERS.map((t) => ({ ...t }))
+    syncSizeTiers()
+  } else if (type === 'WeightBased' || type === 'PriceBased') {
+    syncTiers()
+  } else {
+    form.tiersJson = null
+  }
+}
+
 // Per-zone rates: form.zoneRates = [{ shippingZoneId, name, rate }], merged from all zones + existing.
 const allZones = ref([])
 async function loadZones () {
@@ -174,7 +230,10 @@ function buildPayload (f) {
   return {
     name: (f.name || '').trim(),
     methodType: f.methodType,
-    flatRate: f.methodType === 'FlatRate' ? num(f.flatRate) : null,
+    flatRate: f.methodType === 'FlatRate' || f.methodType === 'SizeBased' ? num(f.flatRate) : null,
+    flatRatePerItem: f.methodType === 'FlatRate' && !!f.flatRatePerItem,
+    fflFlatRate: f.methodType === 'SizeBased' ? num(f.fflFlatRate) : null,
+    internationalViaUsps: f.methodType === 'SizeBased' && !!f.internationalViaUsps,
     freeShippingThreshold: f.methodType === 'FreeShipping' ? num(f.freeShippingThreshold) : null,
     tiersJson: f.tiersJson || null,
     transitDays: num(f.transitDays),
@@ -194,20 +253,21 @@ const {
   buildPayload,
   empty: {
     name: '', methodType: 'FlatRate', flatRate: null, freeShippingThreshold: null,
-    tiersJson: null, transitDays: null, isEnabled: true, displayOrder: 0, zoneRates: []
+    tiersJson: null, transitDays: null, isEnabled: true, displayOrder: 0, zoneRates: [],
+    flatRatePerItem: false, fflFlatRate: null, internationalViaUsps: false
   },
   rules: { name: { required, maxLength: maxLength(200) } },
   afterLoad: async (e) => {
-    tiers.value = parseTiers(e.tiersJson)
+    if (e.methodType === 'SizeBased') { sizeTiers.value = parseSizeTiers(e.tiersJson); tiers.value = [] } else { tiers.value = parseTiers(e.tiersJson); sizeTiers.value = [] }
     await loadZones()
     syncZones(e.zoneRates || [])
   },
   resetExtra: () => {
     tiers.value = []
+    sizeTiers.value = []
     loadZones().then(() => syncZones([]))
   }
-})
-</script>
+})</script>
 
 <style scoped lang="scss">
 .app-detail-tabs {

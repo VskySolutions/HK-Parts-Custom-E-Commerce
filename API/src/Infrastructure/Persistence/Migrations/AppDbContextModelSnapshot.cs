@@ -1012,6 +1012,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("GiftCertificateId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsCheckedOut")
                         .HasColumnType("bit");
 
@@ -1057,6 +1060,26 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("CustomAttributesJson")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GcMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("GcRecipientEmail")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<string>("GcRecipientName")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<string>("GcSenderEmail")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<string>("GcSenderName")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
 
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uniqueidentifier");
@@ -1810,6 +1833,327 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("Discounts", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayAccount", b =>
+                {
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccessToken")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("AccessTokenExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CategoryTreeId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTime?>("ConnectedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ConnectedEbayUser")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DefaultCategoryId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("DefaultFulfillmentPolicyId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("DefaultPaymentPolicyId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("DefaultReturnPolicyId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<byte>("Environment")
+                        .HasColumnType("tinyint");
+
+                    b.Property<bool>("FitmentEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("LoggingEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MarketplaceId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("EBAY_US");
+
+                    b.Property<string>("MerchantLocationKey")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
+
+                    b.Property<DateTime?>("OrdersLastSyncedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RefreshToken")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("RefreshTokenExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("SyncPriceFromStore")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("StoreId");
+
+                    b.ToTable("EbayAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayApiLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HttpMethod")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("RequestBody")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ResponseBody")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ResponseStatus")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoreId", "CreatedOnUtc");
+
+                    b.ToTable("EbayApiLogs", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayCategory", b =>
+                {
+                    b.Property<string>("CategoryId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("IsLeaf")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ParentCategoryId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TreeVersion")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("CategoryId");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("ParentCategoryId");
+
+                    b.ToTable("EbayCategories", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayListing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CategoryId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ConditionId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EbayListingIdExternal")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("EndedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FulfillmentPolicyId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LastSyncedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OfferId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("PaymentPolicyId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantitySold")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("ReturnPolicyId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("tinyint");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Subtitle")
+                        .HasMaxLength(55)
+                        .HasColumnType("nvarchar(55)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EbayListingIdExternal");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_EbayListings_Product_NotEnded")
+                        .HasFilter("[Status] <> 2");
+
+                    b.HasIndex("Sku");
+
+                    b.HasIndex("StoreId", "Status");
+
+                    b.ToTable("EbayListings", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayListingAspect", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("EbayListingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EbayListingId");
+
+                    b.ToTable("EbayListingAspects", (string)null);
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EmailQueue", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1820,6 +2164,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Category")
                         .HasColumnType("int");
+
+                    b.Property<string>("CcEmail")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("datetime2");
@@ -1845,6 +2193,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<Guid?>("RelatedEntityId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("RenderedBody")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1853,6 +2204,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(1024)
                         .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("ReplyToEmail")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -1984,6 +2339,236 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Credentials_FedEx", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.FreightviewCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ApiKey")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BaseUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("ContactName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DockCloseTime")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("DockOpenTime")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("IsProduction")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OriginType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PickupInstructions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("TransactionFeePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Credentials_Freightview", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GiftCertificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("CurrentBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EmailSentAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("OriginalBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("RecipientEmail")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<string>("RecipientName")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SenderEmail")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<string>("SenderName")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<byte>("Source")
+                        .HasColumnType("tinyint");
+
+                    b.Property<Guid?>("SourceOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SourceOrderItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("SourceUnitIndex")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("tinyint");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedOnUtc");
+
+                    b.HasIndex("SourceOrderId");
+
+                    b.HasIndex("SourceOrderItemId", "SourceUnitIndex")
+                        .IsUnique()
+                        .HasFilter("[SourceOrderItemId] IS NOT NULL");
+
+                    b.HasIndex("StoreId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("GiftCertificates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_GiftCertificates_CurrentBalance", "[CurrentBalance] >= 0");
+
+                            t.HasCheckConstraint("CK_GiftCertificates_OriginalBalance", "[OriginalBalance] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GiftCertificateTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte>("Action")
+                        .HasColumnType("tinyint");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("GiftCertificateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("GiftCertificateId", "CreatedOnUtc");
+
+                    b.ToTable("GiftCertificateTransactions", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GroupedProductMember", b =>
@@ -2408,8 +2993,28 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("EbayBuyerMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EbayOrderId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("ExcludedStoreIdsJson")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("GiftCertificateAppliedAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<string>("GiftCertificateCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("GiftCertificateId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int?>("InquiryStatus")
                         .HasColumnType("int");
@@ -2528,6 +3133,12 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("EbayOrderId")
+                        .IsUnique()
+                        .HasFilter("[EbayOrderId] IS NOT NULL");
+
+                    b.HasIndex("GiftCertificateId");
+
                     b.HasIndex("IsInquiry");
 
                     b.HasIndex("OrderNumber")
@@ -2553,6 +3164,30 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("DiscountAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("EbayLineItemId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("GcMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("GcRecipientEmail")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<string>("GcRecipientName")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<string>("GcSenderEmail")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
+
+                    b.Property<string>("GcSenderName")
+                        .HasMaxLength(75)
+                        .HasColumnType("nvarchar(75)");
 
                     b.Property<decimal>("LineTotal")
                         .HasPrecision(18, 2)
@@ -2731,6 +3366,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("IsMaster")
+                        .HasColumnType("bit");
+
                     b.Property<int>("Method")
                         .HasColumnType("int");
 
@@ -2853,6 +3491,169 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("PointsTransactions", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte>("DiscountType")
+                        .HasColumnType("tinyint");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastAppliedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Priority")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("StopFurtherRules")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid?>("StoreId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("StoreId");
+
+                    b.ToTable("PriceRules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PriceRules_DateRange", "[StartDate] IS NULL OR [EndDate] IS NULL OR [EndDate] >= [StartDate]");
+
+                            t.HasCheckConstraint("CK_PriceRules_DiscountAmount", "[DiscountAmount] > 0");
+
+                            t.HasCheckConstraint("CK_PriceRules_PercentMax", "[DiscountType] <> 1 OR [DiscountAmount] <= 100");
+                        });
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRuleCategory", b =>
+                {
+                    b.Property<Guid>("PriceRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("PriceRuleId", "CategoryId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.ToTable("PriceRuleCategories", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRuleCustomerGroup", b =>
+                {
+                    b.Property<Guid>("PriceRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("PriceRuleId", "CustomerGroupId");
+
+                    b.ToTable("PriceRuleCustomerGroups", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRuleProductPrice", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("BasePrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("CustomerGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PriceRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ProductVariantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("RulePrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("StopFurtherRules")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("StoreId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "CustomerGroupId", "StoreId")
+                        .HasDatabaseName("IX_PriceRuleProductPrices_Lookup");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ProductId", "CustomerGroupId", "StoreId"), new[] { "ProductVariantId", "PriceRuleId", "RulePrice", "StartDate", "EndDate", "Priority", "StopFurtherRules" });
+
+                    b.HasIndex("PriceRuleId", "ProductId", "ProductVariantId", "CustomerGroupId")
+                        .IsUnique();
+
+                    b.ToTable("PriceRuleProductPrices", (string)null);
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Product", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2864,6 +3665,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<string>("BackorderMessage")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("ChannelEbay")
+                        .HasColumnType("bit");
 
                     b.Property<decimal?>("Cost")
                         .HasPrecision(18, 2)
@@ -2909,6 +3713,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<int?>("GiftCardType")
                         .HasColumnType("int");
+
+                    b.Property<bool>("GiftCertificateOnline")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Gtin")
                         .HasMaxLength(50)
@@ -4211,6 +5018,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeliveredOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("EbayFulfillmentId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("LabelAssetKey")
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
@@ -4389,13 +5200,23 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<int>("DisplayOrder")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("FflFlatRate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal?>("FlatRate")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("FlatRatePerItem")
+                        .HasColumnType("bit");
+
                     b.Property<decimal?>("FreeShippingThreshold")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("InternationalViaUsps")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");
@@ -5841,6 +6662,42 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("Credentials_USPS", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.VehicleFitment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Engine")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Make")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Trim")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "Year");
+
+                    b.ToTable("VehicleFitments", (string)null);
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.WebhookDelivery", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6319,6 +7176,66 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("Store");
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayAccount", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayListing", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayListingAspect", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.EbayListing", "EbayListing")
+                        .WithMany("Aspects")
+                        .HasForeignKey("EbayListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EbayListing");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GiftCertificate", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Order", "SourceOrder")
+                        .WithMany()
+                        .HasForeignKey("SourceOrderId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Store", null)
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("SourceOrder");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GiftCertificateTransaction", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.GiftCertificate", "GiftCertificate")
+                        .WithMany("Transactions")
+                        .HasForeignKey("GiftCertificateId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("GiftCertificate");
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GroupedProductMember", b =>
                 {
                     b.HasOne("HKPartsEcommerce.Domain.Entities.Product", "GroupedProduct")
@@ -6465,6 +7382,57 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRule", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Store", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Store");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRuleCategory", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.PriceRule", "PriceRule")
+                        .WithMany("Categories")
+                        .HasForeignKey("PriceRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("PriceRule");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRuleCustomerGroup", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.PriceRule", "PriceRule")
+                        .WithMany("CustomerGroups")
+                        .HasForeignKey("PriceRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PriceRule");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRuleProductPrice", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.PriceRule", "PriceRule")
+                        .WithMany()
+                        .HasForeignKey("PriceRuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PriceRule");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Product", b =>
@@ -6999,6 +7967,17 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.VehicleFitment", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.WebhookDelivery", b =>
                 {
                     b.HasOne("HKPartsEcommerce.Domain.Entities.WebhookSubscription", "Subscription")
@@ -7087,6 +8066,16 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("CouponCodes");
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.EbayListing", b =>
+                {
+                    b.Navigation("Aspects");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GiftCertificate", b =>
+                {
+                    b.Navigation("Transactions");
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Manufacturer", b =>
                 {
                     b.Navigation("Products");
@@ -7099,6 +8088,13 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("Payments");
 
                     b.Navigation("StatusHistory");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRule", b =>
+                {
+                    b.Navigation("Categories");
+
+                    b.Navigation("CustomerGroups");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Product", b =>

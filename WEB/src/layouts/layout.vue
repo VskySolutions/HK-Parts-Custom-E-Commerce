@@ -1,7 +1,7 @@
 <template>
   <q-layout view="lHh Lpr lFf">
     <q-header>
-      <q-toolbar class="bg-7a">
+      <q-toolbar>
         <q-btn
           flat
           dense
@@ -43,7 +43,7 @@
       :width="292"
       :breakpoint="900"
     >
-      <div class="column full-height no-wrap bg-22 text-white">
+      <div class="column full-height no-wrap">
         <AsideHeader />
         <q-scroll-area class="col">
           <AppMenu />

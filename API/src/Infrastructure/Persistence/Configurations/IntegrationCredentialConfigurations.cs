@@ -123,6 +123,21 @@ public sealed class UspsCredentialConfig : IntegrationCredentialConfig<UspsCrede
         => b.Property(x => x.ConsumerKey).HasMaxLength(300);
 }
 
+public sealed class FreightviewCredentialConfig : IntegrationCredentialConfig<FreightviewCredential>
+{
+    protected override string TableName => "Credentials_Freightview";
+    protected override void ConfigureFields(EntityTypeBuilder<FreightviewCredential> b)
+    {
+        b.Property(x => x.OriginType).HasMaxLength(50);
+        b.Property(x => x.ContactName).HasMaxLength(200);
+        b.Property(x => x.ContactPhone).HasMaxLength(50);
+        b.Property(x => x.ContactEmail).HasMaxLength(256);
+        b.Property(x => x.PickupInstructions).HasMaxLength(1000);
+        b.Property(x => x.DockOpenTime).HasMaxLength(20);
+        b.Property(x => x.DockCloseTime).HasMaxLength(20);
+    }
+}
+
 public sealed class UpsCredentialConfig : IntegrationCredentialConfig<UpsCredential>
 {
     protected override string TableName => "Credentials_UPS";

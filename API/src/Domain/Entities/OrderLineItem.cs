@@ -37,6 +37,9 @@ public class OrderLineItem : BaseEntity
     /// <summary>Units of this line already dispatched across shipments; drives partial-fulfilment state (WO-46).</summary>
     public int QuantityShipped { get; set; }
 
+    /// <summary>The eBay line item id on an imported eBay order (needed to report fulfillment back).</summary>
+    public string? EbayLineItemId { get; set; }
+
     /// <summary>
     /// The values the buyer typed into the product's CustomInput attributes, carried over from the cart
     /// line as a JSON array of { attributeId, name, value } (null when there were none). Like the rest of
@@ -44,4 +47,11 @@ public class OrderLineItem : BaseEntity
     /// never changes what the order says was ordered.
     /// </summary>
     public string? CustomAttributesJson { get; set; }
+
+    // Gift certificate purchase details (online certificates only).
+    public string? GcSenderName { get; set; }
+    public string? GcSenderEmail { get; set; }
+    public string? GcRecipientName { get; set; }
+    public string? GcRecipientEmail { get; set; }
+    public string? GcMessage { get; set; }
 }

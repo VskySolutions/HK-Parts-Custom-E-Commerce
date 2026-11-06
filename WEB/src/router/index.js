@@ -34,6 +34,9 @@ import inventoryScannerRoutes from 'modules/inventory-scanner/routes'
 import ordersRoutes from 'modules/orders/routes'
 import inquiriesRoutes from 'modules/inquiries/routes'
 import pricingRoutes from 'modules/pricing/routes'
+import priceRuleRoutes from 'modules/price-rules/routes'
+import ebayRoutes from 'modules/ebay/routes'
+import giftCertificateRoutes from 'modules/gift-certificates/routes'
 import shippingRoutes from 'modules/shipping/routes'
 import reportsRoutes from 'modules/reports/routes'
 import taxRoutes from 'modules/tax/routes'
@@ -74,6 +77,9 @@ const moduleChildren = [
   ...ordersRoutes,
   ...inquiriesRoutes,
   ...pricingRoutes,
+  ...priceRuleRoutes,
+  ...ebayRoutes,
+  ...giftCertificateRoutes,
   ...shippingRoutes,
   ...reportsRoutes,
   ...taxRoutes,

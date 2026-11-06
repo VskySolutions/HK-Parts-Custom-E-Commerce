@@ -125,7 +125,7 @@ internal static class CartResolver
 
         // One batch resolve for the whole cart; empty (and free) for guests and non-group members.
         var groupId = await groups.GetCurrentGroupIdAsync(ct);
-        var memberPrices = groupId is null || items.Count == 0
+        var memberPrices = items.Count == 0
             ? new Dictionary<GroupPriceKey, decimal>()
             : await groups.ResolvePricesAsync(
                 items.Select(i => new GroupPriceRequest(i.ProductId, i.ProductVariantId, i.UnitPrice)).ToList(),
@@ -148,12 +148,40 @@ internal static class CartResolver
                 ? mp
                 : item.UnitPrice;
 
-            itemDtos.Add(CartItemDto.From(
+            var dto = CartItemDto.From(
                 item, name, sku, available, PrimaryImage(product, item.ProductVariantId), stock, allowBackorder,
-                unitPrice, isInquiryLine));
+                unitPrice, isInquiryLine);
+            dto.MinOrderQuantity = product?.MinOrderQuantity;
+            dto.MaxOrderQuantity = product?.MaxOrderQuantity;
+            if (product?.ProductType == ProductType.GiftCard)
+            {
+                dto.IsGiftCertificate = true;
+                dto.IsOnlineGiftCertificate = product.GiftCertificateOnline;
+                dto.GcSenderName = item.GcSenderName;
+                dto.GcSenderEmail = item.GcSenderEmail;
+                dto.GcRecipientName = item.GcRecipientName;
+                dto.GcRecipientEmail = item.GcRecipientEmail;
+                dto.GcMessage = item.GcMessage;
+            }
+            itemDtos.Add(dto);
         }
 
-        return CartDto.From(cart, itemDtos, warnings);
+        // Min/Max qty allowed (per product, across all its lines). A cart can hold a violating quantity only
+        // if it predates the limit or the admin changed it since; checkout blocks it, so say so up front.
+        foreach (var group in items.GroupBy(i => i.ProductId))
+        {
+            if (products.TryGetValue(group.Key, out var product)
+                && OrderQuantityLimits.Violation(product, group.Sum(i => i.Quantity)) is string message)
+                warnings.Add(message);
+        }
+
+        var cartDto = CartDto.From(cart, itemDtos, warnings);
+        // Re-validate the applied gift certificate on every cart read (detached + warned when no longer valid).
+        var (giftCertificate, gcWarning) = await GiftCertificates.GiftCertificateCartSupport.RefreshAsync(db, cart, cartDto.Subtotal, ct);
+        cartDto.GiftCertificate = giftCertificate;
+        cartDto.AmountDue = cartDto.Subtotal - (giftCertificate?.ApplyAmount ?? 0m);
+        if (gcWarning is not null) cartDto.Warnings.Add(gcWarning);
+        return cartDto;
     }
 
     /// <summary>

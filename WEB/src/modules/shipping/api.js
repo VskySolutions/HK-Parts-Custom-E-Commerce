@@ -39,7 +39,8 @@ export const shippingMethodTypeOptions = [
   { label: 'Flat rate', value: 'FlatRate' },
   { label: 'Weight-based', value: 'WeightBased' },
   { label: 'Price-based', value: 'PriceBased' },
-  { label: 'Free shipping', value: 'FreeShipping' }
+  { label: 'Free shipping', value: 'FreeShipping' },
+  { label: 'Size-based (Shipping Package Size)', value: 'SizeBased' }
 ]
 
 /* Per-carrier presentation: icon plus, for live carriers, the integrations-hub section holding its
@@ -49,7 +50,8 @@ export const shippingCarrierMeta = {
   FedEx: { icon: 'o_local_shipping', section: 'fedex', hint: 'Live rates from the FedEx Rate API' },
   DHLExpress: { icon: 'o_local_shipping', section: 'dhl', hint: 'Live rates from the MyDHL API' },
   USPS: { icon: 'o_local_shipping', section: 'usps', hint: 'Live rates from the USPS REST API' },
-  UPS: { icon: 'o_local_shipping', section: 'ups', hint: 'Live rates from the UPS Rating API' }
+  UPS: { icon: 'o_local_shipping', section: 'ups', hint: 'Live rates from the UPS Rating API' },
+  Freightview: { icon: 'o_rv_hookup', section: 'freightview', hint: 'LTL freight quotes from Freightview (needs product weight, freight class and dimensions)' }
 }
 
 /* Why custom methods can't quote right now, or '' when they can. They only reach checkout through the

@@ -12,8 +12,10 @@ module.exports = {
   // mixed-content block and no certificate to trust. Overridable via the API_BASE_URL env var.
   // NOTE: the Authorize.Net Accept.js and Square Web Payments SDKs require an https:// page and will not
   // run under this setup; point both back at https to exercise those card flows.
-  API_BASE_URL: 'http://localhost:5144',
+  // API_BASE_URL: 'hkpartsapi.vskyapplications.com',
+  API_BASE_URL: "http://localhost:5144",
+  WEB_BASE_URL: "http://localhost:9000",
   BUILD_PUBLIC_PATH: '/',
   PUBLISH_FOLDER: "D:\\Vaibhav\\Publish\\HK Part Ecommerce\\vsky-web",
-  IGNORE_PUBLIC_FOLDER: true
+  IGNORE_PUBLIC_FOLDER: false
 }

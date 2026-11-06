@@ -48,7 +48,8 @@ public class InquiryCartRulesTests : CatalogTestBase
             IReadOnlyCollection<GroupPriceRequest> items, Guid? groupId,
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyDictionary<GroupPriceKey, decimal>>(
-                items.ToDictionary(i => new GroupPriceKey(i.ProductId, i.VariantId), i => i.BasePrice));
+                items.DistinctBy(i => new GroupPriceKey(i.ProductId, i.VariantId))
+                    .ToDictionary(i => new GroupPriceKey(i.ProductId, i.VariantId), i => i.BasePrice));
     }
 
     private const string Session = "test-session";

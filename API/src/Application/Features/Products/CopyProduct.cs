@@ -79,6 +79,7 @@ public class CopyProductCommandHandler : IRequestHandler<CopyProductCommand, Pro
             DownloadLimit = src.DownloadLimit,
             GiftCardType = src.GiftCardType,
             GiftCardAmount = src.GiftCardAmount,
+            GiftCertificateOnline = src.GiftCertificateOnline,
         };
 
         foreach (var c in src.ProductCategories)

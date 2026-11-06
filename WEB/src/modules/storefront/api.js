@@ -86,11 +86,12 @@ export const cartApi = {
   },
   // Add a product/variant (increments the line if it already exists — same product, variant AND
   // custom-input values; a different engraving becomes its own line).
-  addItem (sessionId, { productId, productVariantId = null, quantity = 1, customAttributes = [] }) {
+  addItem (sessionId, { productId, productVariantId = null, quantity = 1, customAttributes = [], ...giftCertificate }) {
     return anonApi
       .post(
         CART + '/items',
-        { productId, productVariantId, quantity, customAttributes },
+        // giftCertificate = gcSenderName / gcSenderEmail / gcRecipientName / gcRecipientEmail / gcMessage (online certificates)
+        { productId, productVariantId, quantity, customAttributes, ...giftCertificate },
         { params: { sessionId }, paramsSerializer: qsSerializer }
       )
       .then(unwrap)
@@ -106,6 +107,16 @@ export const cartApi = {
     return anonApi
       .delete(CART + '/items/' + encodeURIComponent(itemId), { params: { sessionId }, paramsSerializer: qsSerializer })
       .then(unwrap)
+  },
+  // Gift certificate: apply a code (422 "Invalid Gift Certificate", 429 when rate-limited), remove it, read totals.
+  applyGiftCertificate (sessionId, code) {
+    return anonApi.post(CART + '/gift-certificate', { code }, { params: { sessionId }, paramsSerializer: qsSerializer }).then(unwrap)
+  },
+  removeGiftCertificate (sessionId) {
+    return anonApi.delete(CART + '/gift-certificate', { params: { sessionId }, paramsSerializer: qsSerializer }).then(unwrap)
+  },
+  totals (sessionId) {
+    return anonApi.get(CART + '/totals', { params: { sessionId }, paramsSerializer: qsSerializer }).then(unwrap)
   },
   // Empty the cart.
   clear (sessionId) {
@@ -161,6 +172,10 @@ export const checkoutApi = {
   // gateway (Stripe Checkout) the result carries a redirectUrl to send the buyer to.
   place (payload) {
     return customerApi.post(CHECKOUT + '/place', payload).then(unwrap)
+  },
+  // "Pay with Gift Certificate": places the order paid entirely by the cart's certificate (same payload as place).
+  payWithGiftCertificate (payload) {
+    return customerApi.post(CHECKOUT + '/pay-with-gift-certificate', { ...payload, paymentMethod: 'GiftCertificate', payWithGiftCertificate: true }).then(unwrap)
   },
   // Confirm a redirect payment on return: verifies the gateway session and finalizes on success.
   confirm (orderId) {

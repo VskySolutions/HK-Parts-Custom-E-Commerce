@@ -117,6 +117,10 @@ public class EmailDispatchWorker : IScheduledTask
                     : null;
                 await SendAsync(email, account, vault, unsubscribeUrl, cancellationToken);
                 email.Status = EmailStatus.Sent;
+                // Gift certificate email: stamp EmailSentAt only once it really went out.
+                if (email.TemplateKey == GiftCertificateEmailTemplate.Key && email.RelatedEntityId is Guid giftCertificateId)
+                    await db.GiftCertificates.IgnoreQueryFilters().Where(g => g.Id == giftCertificateId)
+                        .ExecuteUpdateAsync(s => s.SetProperty(g => g.EmailSentAtUtc, now), cancellationToken);
                 email.NextAttemptOnUtc = null;
                 email.ErrorMessage = null;
             }
@@ -145,6 +149,10 @@ public class EmailDispatchWorker : IScheduledTask
         message.To.Add(string.IsNullOrWhiteSpace(email.RecipientName)
             ? MailboxAddress.Parse(email.RecipientEmail)
             : new MailboxAddress(email.RecipientName, email.RecipientEmail));
+        if (!string.IsNullOrWhiteSpace(email.CcEmail) && MailboxAddress.TryParse(email.CcEmail, out var cc))
+            message.Cc.Add(cc);
+        if (!string.IsNullOrWhiteSpace(email.ReplyToEmail) && MailboxAddress.TryParse(email.ReplyToEmail, out var replyTo))
+            message.ReplyTo.Add(replyTo);
         message.Subject = email.RenderedSubject;
         // HTML templates go out as an HTML body (with a plain-text alternative); legacy plain emails stay text.
         if (email.IsHtml)

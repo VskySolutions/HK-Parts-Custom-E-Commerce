@@ -9,6 +9,7 @@ public class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
     public void Configure(EntityTypeBuilder<Shipment> b)
     {
         b.ToTable("Shipments");
+        b.Property(x => x.EbayFulfillmentId).HasMaxLength(50);
         b.HasKey(x => x.Id);
         b.Property(x => x.ShipmentNumber).HasMaxLength(64).IsRequired();
         b.Property(x => x.Carrier).HasMaxLength(128);

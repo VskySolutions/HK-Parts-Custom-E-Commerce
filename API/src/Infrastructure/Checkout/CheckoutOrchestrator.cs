@@ -6,6 +6,7 @@ using HKPartsEcommerce.Application.Common.Exceptions;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.Checkout;
+using HKPartsEcommerce.Application.Features.GiftCertificates;
 using HKPartsEcommerce.Application.Features.OrderRouting;
 using HKPartsEcommerce.Domain.Common;
 using HKPartsEcommerce.Domain.Entities;
@@ -38,6 +39,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     private readonly IInventoryService _inventory;
     private readonly IRewardPointsService _points;
     private readonly ICommerceModeService _commerce;
+    private readonly IGiftCertificateService? _giftCertificates;
+    private readonly ISettingsService? _settings;
 
     public CheckoutOrchestrator(
         IApplicationDbContext db,
@@ -55,7 +58,10 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         ICustomerGroupService customerGroups,
         IInventoryService inventory,
         IRewardPointsService points,
-        ICommerceModeService commerce)
+        ICommerceModeService commerce,
+        // Optional so existing composition (tests) keeps working; DI always supplies them.
+        IGiftCertificateService? giftCertificates = null,
+        ISettingsService? settings = null)
     {
         _db = db;
         _routing = routing;
@@ -73,6 +79,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         _inventory = inventory;
         _points = points;
         _commerce = commerce;
+        _giftCertificates = giftCertificates;
+        _settings = settings;
     }
 
     public async Task<CheckoutQuote> QuoteAsync(CheckoutQuoteRequest req, CancellationToken ct)
@@ -104,9 +112,25 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // renders the request form instead of the payment step.
         // Only a routed order has a fulfilling store, and so a concrete set of payment methods to offer.
         if (priced.Store is not null && !priced.IsInquiry)
-            quote.AvailablePaymentMethods = (await AvailablePaymentMethodsAsync(priced.Store, ct))
+            quote.AvailablePaymentMethods = (await FilterForGiftCertificatePurchaseAsync(
+                    await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct))
                 .Select(m => new PaymentMethodOption { Method = m.Method.ToString(), IsProduction = m.IsProduction, FeePercent = m.FeePercent })
                 .ToList();
+
+        // Gift certificate: same formula as the cart and the placed order — min(balance, grand total).
+        quote.AmountDue = priced.Total;
+        if (!priced.IsInquiry)
+        {
+            var (certificate, apply) = await ResolveGiftCertificateAsync(priced.Cart, priced.Lines, priced.Total, ct);
+            if (certificate is not null)
+            {
+                quote.GiftCertificateCode = certificate.Code;
+                quote.GiftCertificateBalance = certificate.CurrentBalance;
+                quote.GiftCertificateApplied = apply;
+                quote.AmountDue = priced.Total - apply;
+                quote.PayWithGiftCertificate = apply > 0m && quote.AmountDue == 0m;
+            }
+        }
 
         // The active tax provider (for the storefront's "calculated via …" indicator); defaults to FlatRate
         // when no configuration row exists, mirroring TaxCalculationService.
@@ -158,20 +182,31 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         var pointsDiscount = pointsRedeemed > 0 ? Math.Min(priced.Cart.PointsDiscountAmount, priced.Total) : 0m;
         var netTotal = priced.Total - pointsDiscount;
 
+        // Gift certificate (re-validated now): it pays min(balance, total) first; the gateway collects the rest.
+        var (giftCertificate, giftCertificateApplied) = await ResolveGiftCertificateAsync(priced.Cart, priced.Lines, netTotal, ct);
+        var remaining = netTotal - giftCertificateApplied;
+        if (req.PayWithGiftCertificate && (giftCertificate is null || remaining > 0m))
+            throw new ConflictException("The gift certificate does not cover this order. Please choose a payment method for the remaining amount.");
+        if (giftCertificate is not null && remaining == 0m)
+            return await PlaceWithGiftCertificateAsync(req, priced, giftCertificate, giftCertificateApplied, pointsRedeemed, pointsDiscount, ct);
+
         // Enforce the store's payment-method availability (e.g. COD switched off, or a deactivated gateway)
-        // server-side — the storefront only ever offers these, but never trust the client.
+        // server-side — the storefront only ever offers these, but never trust the client. A cart that buys
+        // gift certificates is further limited to the methods allowed for that.
         var availableMethods = priced.Store is null
             ? (IReadOnlyList<PaymentMethodAvailability>)Array.Empty<PaymentMethodAvailability>()
-            : await AvailablePaymentMethodsAsync(priced.Store, ct);
+            : await FilterForGiftCertificatePurchaseAsync(await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct);
         if (priced.Store is not null && !availableMethods.Any(m => m.Method == req.PaymentMethod))
             throw new ConflictException("The selected payment method is not available for this order.");
 
-        // Payment transaction fee: the chosen gateway's configured fee (% of the order total) is added as an
+        // Payment transaction fee: the chosen gateway's configured fee (% of what it collects) is added as an
         // additional charge the buyer pays (WO-fee). Resolved authoritatively here from the active credential —
-        // never from the client — and 0 when the method has no fee. Applied to the pre-fee grand total.
+        // never from the client — and 0 when the method has no fee. Applied to the amount the gateway charges,
+        // i.e. after the gift certificate's share.
         var feePercent = availableMethods.FirstOrDefault(m => m.Method == req.PaymentMethod)?.FeePercent ?? 0m;
-        var paymentFee = decimal.Round(netTotal * feePercent / 100m, 2, MidpointRounding.AwayFromZero);
+        var paymentFee = decimal.Round(remaining * feePercent / 100m, 2, MidpointRounding.AwayFromZero);
         var grandTotal = netTotal + paymentFee;
+        var gatewayAmount = remaining + paymentFee;
 
         // Resolve the customer only when the caller is an authenticated customer; guests place a null-customer order.
         Guid? customerId = null;
@@ -230,24 +265,14 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             ShippingMethodName = priced.SelectedShipping?.Name,
             ShippingCarrier = priced.SelectedShipping?.Carrier,
             ShippingWasRecommended = priced.SelectedShipping?.IsRecommended ?? false,
+            // Recorded now; the certificate is only debited once the remaining payment succeeds.
+            GiftCertificateId = giftCertificate?.Id,
+            GiftCertificateCode = giftCertificate?.Code,
+            GiftCertificateAppliedAmount = giftCertificateApplied,
         };
 
         foreach (var line in priced.Lines)
-        {
-            order.Lines.Add(new OrderLineItem
-            {
-                ProductId = line.ProductId,
-                ProductVariantId = line.ProductVariantId,
-                ProductName = line.ProductName,
-                Sku = line.Sku,
-                Quantity = line.Quantity,
-                UnitPrice = line.UnitPrice,
-                OriginalUnitPrice = line.OriginalUnitPrice,
-                DiscountAmount = line.DiscountAmount,
-                LineTotal = line.LineTotal,
-                CustomAttributesJson = line.CustomAttributesJson,
-            });
-        }
+            order.Lines.Add(ToOrderLine(line));
 
         order.StatusHistory.Add(new OrderStatusHistory
         {
@@ -272,14 +297,16 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             Method = req.PaymentMethod,
             GatewayName = req.PaymentMethod.ToString(),
             PaymentInstrument = instrument,
-            Amount = grandTotal,
+            // With a gift certificate the gateway collects only the remainder (+ its fee); it stays the master payment.
+            Amount = gatewayAmount,
             CurrencyCode = order.CurrencyCode,
             Status = PaymentStatus.Pending,
+            IsMaster = true,
         };
         _db.PaymentRecords.Add(payment);
 
         var payResult = await _payments.AuthorizeAsync(
-            new PaymentRequest(order.Id, req.PaymentMethod, grandTotal, order.CurrencyCode, req.PaymentToken,
+            new PaymentRequest(order.Id, req.PaymentMethod, gatewayAmount, order.CurrencyCode, req.PaymentToken,
                 OrderNumber: order.OrderNumber, Metadata: InstrumentMetadata(instrument)),
             ct);
 
@@ -322,7 +349,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             await _db.SaveChangesAsync(ct);
             var pending = OrderResult(order, success: false, error: null, redirectUrl: null);
             pending.ClientPayment = BuildClientPayment(
-                payResult, order, grandTotal,
+                payResult, order, gatewayAmount,
                 req.ShipTo.FirstName, req.ShipTo.LastName, req.ShipTo.Email, req.ShipTo.PhoneNumber);
             return pending;
         }
@@ -344,12 +371,195 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             };
         }
 
-        // 8c. Payment succeeded (synchronous gateway): consume the cart and finalize the order.
+        // 8c. Payment succeeded (synchronous gateway): debit the gift certificate (if any), consume the cart and
+        // finalize the order. If the certificate lost a race since it was validated, the charge is reversed.
+        if (await RedeemGiftCertificateOrReverseAsync(order, payment, ct) is CheckoutResult reversed)
+            return reversed;
+
         priced.Cart.IsCheckedOut = true;
         await _db.SaveChangesAsync(ct);
         await FinalizePlacedOrderAsync(order, ct);
 
         return OrderResult(order, success: true, error: null, redirectUrl: null, transactionId: payment.TransactionId);
+    }
+
+    private static OrderLineItem ToOrderLine(LineWork line) => new()
+    {
+        ProductId = line.ProductId,
+        ProductVariantId = line.ProductVariantId,
+        ProductName = line.ProductName,
+        Sku = line.Sku,
+        Quantity = line.Quantity,
+        UnitPrice = line.UnitPrice,
+        OriginalUnitPrice = line.OriginalUnitPrice,
+        DiscountAmount = line.DiscountAmount,
+        LineTotal = line.LineTotal,
+        CustomAttributesJson = line.CustomAttributesJson,
+        // Gift certificate purchase details travel to the order line; issuing copies them onto each certificate.
+        GcSenderName = line.Source?.GcSenderName,
+        GcSenderEmail = line.Source?.GcSenderEmail,
+        GcRecipientName = line.Source?.GcRecipientName,
+        GcRecipientEmail = line.Source?.GcRecipientEmail,
+        GcMessage = line.Source?.GcMessage,
+    };
+
+    /// <summary>
+    /// After the gateway took the remaining amount: debit the order's gift certificate atomically. Null on
+    /// success (or when there is no certificate). If the certificate can no longer cover its share — another
+    /// order spent it meanwhile — the gateway payment is reversed (refunded/voided), the order cancelled and a
+    /// "no longer valid" failure returned, so the buyer never pays without the certificate share being covered.
+    /// </summary>
+    private async Task<CheckoutResult?> RedeemGiftCertificateOrReverseAsync(Order order, PaymentRecord gatewayPayment, CancellationToken ct)
+    {
+        if (order.GiftCertificateId is null || order.GiftCertificateAppliedAmount <= 0m || _giftCertificates is null)
+            return null;
+
+        try
+        {
+            await _giftCertificates.RedeemForOrderAsync(order, coversFullAmount: false, ct);
+            return null;
+        }
+        catch (GiftCertificateUnavailableException)
+        {
+            if (gatewayPayment.Status is PaymentStatus.Captured or PaymentStatus.Authorized)
+            {
+                var reversal = await _payments.RefundAsync(gatewayPayment, gatewayPayment.Amount, ct);
+                gatewayPayment.Status = reversal.Success ? PaymentStatus.Refunded : gatewayPayment.Status;
+                gatewayPayment.RefundedAmount = reversal.Success ? gatewayPayment.Amount : gatewayPayment.RefundedAmount;
+                gatewayPayment.ErrorMessage = reversal.Success ? "Reversed: gift certificate no longer valid." : reversal.ErrorMessage;
+            }
+
+            var from = order.Status;
+            order.Status = OrderStatus.Cancelled;
+            order.PaymentStatus = gatewayPayment.Status;
+            order.StatusHistory.Add(new OrderStatusHistory
+            {
+                FromStatus = from,
+                ToStatus = OrderStatus.Cancelled,
+                ChangedOnUtc = _clock.UtcNow,
+                Note = "Cancelled: the gift certificate was no longer valid when the order was placed; the payment was reversed.",
+            });
+
+            var cart = order.SourceCartId is Guid cartId
+                ? await _db.Carts.FirstOrDefaultAsync(c => c.Id == cartId, ct)
+                : await _db.Carts.FirstOrDefaultAsync(c => c.GiftCertificateId == order.GiftCertificateId && !c.IsCheckedOut, ct);
+            if (cart is not null) cart.GiftCertificateId = null;
+            await _db.SaveChangesAsync(ct);
+
+            var failed = OrderResult(order, success: false, error: GiftCertificateRules.NoLongerValidMessage, redirectUrl: null);
+            return failed;
+        }
+    }
+
+    /// <summary>
+    /// The certificate covers the whole order ("Pay with Gift Certificate"): the order, its gift-certificate
+    /// payment, the atomic balance debit and the ledger entry are written in one DB transaction. If the debit
+    /// fails (spent or deactivated meanwhile) everything rolls back and the buyer gets "no longer valid".
+    /// </summary>
+    private async Task<CheckoutResult> PlaceWithGiftCertificateAsync(
+        PlaceCheckoutRequest req, PricedCheckout priced, GiftCertificate certificate, decimal applied,
+        int pointsRedeemed, decimal pointsDiscount, CancellationToken ct)
+    {
+        var now = _clock.UtcNow;
+        Guid? customerId = null;
+        if (_current.UserId is Guid userId)
+            customerId = await _db.Customers.AsNoTracking().Where(c => c.UserId == userId).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);
+
+        var order = new Order
+        {
+            OrderNumber = $"ORD-{now:yyyyMMddHHmmssfff}",
+            Status = OrderStatus.Processing,
+            PaymentStatus = PaymentStatus.Captured,
+            CustomerId = customerId,
+            ShippingAddress = new Address
+            {
+                FirstName = req.ShipTo.FirstName,
+                LastName = req.ShipTo.LastName,
+                Email = req.ShipTo.Email,
+                PhoneNumber = req.ShipTo.PhoneNumber,
+                Latitude = req.ShipTo.Latitude,
+                Longitude = req.ShipTo.Longitude,
+                CountryCode = req.ShipTo.CountryCode ?? string.Empty,
+                StateProvince = req.ShipTo.Region,
+                PostalCode = req.ShipTo.PostalCode ?? string.Empty,
+                AddressLine1 = req.ShipTo.Line1 ?? string.Empty,
+                AddressLine2 = req.ShipTo.Line2,
+                Landmark = req.ShipTo.Landmark,
+                City = req.ShipTo.City ?? string.Empty,
+            },
+            AssignedStoreId = priced.Routing.AssignedStoreId,
+            IsPickup = priced.IsPickup,
+            PlacedOnUtc = now,
+            RoutedOnUtc = now,
+            CurrencyCode = priced.Cart.CurrencyCode,
+            Subtotal = priced.Subtotal,
+            DiscountTotal = priced.DiscountTotal + pointsDiscount,
+            ShippingTotal = priced.ShippingTotal,
+            TaxTotal = priced.TaxTotal,
+            TotalAmount = applied,
+            PointsRedeemed = pointsRedeemed,
+            PointsDiscountAmount = pointsDiscount,
+            TaxBreakdownJson = JsonSerializer.Serialize(priced.Tax),
+            TaxFlaggedForReview = priced.Tax.FallbackApplied,
+            TaxProviderCalculationRef = priced.Tax.ProviderReference,
+            AppliedCouponCode = priced.CouponValid ? priced.CouponCode : null,
+            ShippingMethodId = priced.SelectedShipping?.MethodId,
+            ShippingMethodName = priced.SelectedShipping?.Name,
+            ShippingCarrier = priced.SelectedShipping?.Carrier,
+            ShippingWasRecommended = priced.SelectedShipping?.IsRecommended ?? false,
+            GiftCertificateId = certificate.Id,
+            GiftCertificateCode = certificate.Code,
+            GiftCertificateAppliedAmount = applied,
+        };
+        foreach (var line in priced.Lines)
+            order.Lines.Add(ToOrderLine(line));
+        order.StatusHistory.Add(new OrderStatusHistory
+        {
+            FromStatus = OrderStatus.Pending,
+            ToStatus = OrderStatus.Processing,
+            ChangedById = _current.UserId,
+            ChangedOnUtc = now,
+            Note = "Order created via checkout and paid in full with a gift certificate.",
+        });
+
+        var ownsTransaction = _db.Database.CurrentTransaction is null;
+        var tx = ownsTransaction ? await _db.Database.BeginTransactionAsync(ct) : null;
+        try
+        {
+            _db.Orders.Add(order);
+            priced.Cart.IsCheckedOut = true;
+            await _db.SaveChangesAsync(ct);
+            await _giftCertificates!.RedeemForOrderAsync(order, coversFullAmount: true, ct);
+            if (tx is not null) await tx.CommitAsync(ct);
+        }
+        catch (GiftCertificateUnavailableException)
+        {
+            if (tx is not null) await tx.RollbackAsync(ct);
+            if (_db is DbContext context)
+            {
+                context.Entry(order).State = EntityState.Detached;
+                foreach (var l in order.Lines) context.Entry(l).State = EntityState.Detached;
+                foreach (var h in order.StatusHistory) context.Entry(h).State = EntityState.Detached;
+                if (order.ShippingAddress is not null) context.Entry(order.ShippingAddress).State = EntityState.Detached;
+            }
+
+            var cart = await _db.Carts.FirstOrDefaultAsync(c => c.Id == priced.Cart.Id, ct);
+            if (cart is not null)
+            {
+                cart.IsCheckedOut = false;
+                cart.GiftCertificateId = null;
+                await _db.SaveChangesAsync(ct);
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (tx is not null) await tx.DisposeAsync();
+        }
+
+        await FinalizePlacedOrderAsync(order, ct);
+        return OrderResult(order, success: true, error: null, redirectUrl: null, transactionId: certificate.Code);
     }
 
     public async Task<InquiryResult> SubmitInquiryAsync(SubmitInquiryRequest req, CancellationToken ct)
@@ -495,7 +705,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 transactionId: await CapturedTransactionIdAsync(orderId, ct));
 
         var payment = await _db.PaymentRecords
-            .Where(p => p.OrderId == orderId)
+            .Where(p => p.OrderId == orderId && p.Method != PaymentMethodType.GiftCertificate)
             .OrderByDescending(p => p.CreatedOnUtc)
             .FirstOrDefaultAsync(ct);
         if (payment is null)
@@ -534,7 +744,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 transactionId: await CapturedTransactionIdAsync(orderId, ct));
 
         var payment = await _db.PaymentRecords
-            .Where(p => p.OrderId == orderId)
+            .Where(p => p.OrderId == orderId && p.Method != PaymentMethodType.GiftCertificate)
             .OrderByDescending(p => p.CreatedOnUtc)
             .FirstOrDefaultAsync(ct);
         if (payment is null)
@@ -579,6 +789,10 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 cart.IsCheckedOut = true;
         }
         await _db.SaveChangesAsync(ct);
+
+        // Redirect / widget gateways: the gift certificate share is debited only now, once the remainder is paid.
+        if (await RedeemGiftCertificateOrReverseAsync(order, payment, ct) is CheckoutResult reversed)
+            return reversed;
 
         await FinalizePlacedOrderAsync(order, ct);
 
@@ -634,14 +848,14 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 transactionId: await CapturedTransactionIdAsync(orderId, ct));
 
         var payment = await _db.PaymentRecords
-            .Where(p => p.OrderId == orderId)
+            .Where(p => p.OrderId == orderId && p.Method != PaymentMethodType.GiftCertificate)
             .OrderByDescending(p => p.CreatedOnUtc)
             .FirstOrDefaultAsync(ct);
         var method = payment?.Method ?? PaymentMethodType.Stripe;
 
         // Re-open a payment session for the same pending order (carry the original instrument forward).
         var payResult = await _payments.AuthorizeAsync(
-            new PaymentRequest(order.Id, method, order.TotalAmount, order.CurrencyCode, null,
+            new PaymentRequest(order.Id, method, ChargeableAmount(order), order.CurrencyCode, null,
                 OrderNumber: order.OrderNumber, Metadata: InstrumentMetadata(payment?.PaymentInstrument)), ct);
 
         if (payResult.RedirectUrl is not null)
@@ -670,7 +884,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             var addr = order.ShippingAddress;
             var pending = OrderResult(order, success: false, error: null, redirectUrl: null);
             pending.ClientPayment = BuildClientPayment(
-                payResult, order, order.TotalAmount, addr?.FirstName, addr?.LastName, addr?.Email, addr?.PhoneNumber);
+                payResult, order, ChargeableAmount(order), addr?.FirstName, addr?.LastName, addr?.Email, addr?.PhoneNumber);
             return pending;
         }
 
@@ -709,6 +923,11 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // Runs exactly once per order: inline for synchronous gateways, on the buyer's return for redirect
         // gateways (after the already-captured guard), so stock is never decremented twice.
         await _inventory.DecrementForOrderAsync(order, ct);
+
+        // Gift certificates bought on this order are issued once it is paid (an unpaid invoice / COD order
+        // issues later, when its payment is captured). Idempotent per purchased unit.
+        if (_giftCertificates is not null && order.PaymentStatus == PaymentStatus.Captured)
+            await _giftCertificates.IssueForOrderAsync(order.Id, ct);
 
         if (!string.IsNullOrWhiteSpace(order.AppliedCouponCode))
             await _coupons.RedeemAsync(order.AppliedCouponCode!, ct);
@@ -915,6 +1134,11 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         if (items.Count == 0)
             throw new ConflictException("The cart is empty. Add items before checking out.");
 
+        // Min/Max qty allowed: the cart endpoints already refuse a violating quantity, but a cart filled before
+        // the admin set (or tightened) a limit can still hold one — never place an order that breaks it.
+        if (forPlacement)
+            await EnsureOrderQuantityLimitsAsync(items, ct);
+
         // Apply Customer Group pricing to the lines (member unit prices), keeping the pre-discount base
         // subtotal so the group saving can be itemized in the summary (WO-22) rather than silently folded
         // into the unit prices — where it is otherwise invisible to the buyer.
@@ -989,12 +1213,29 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
 
         // 4. Shipping: origin = assigned store, destination = ship-to. No per-product weight exists in the
         // catalog, so weight is a best-effort proxy (total units, min 1 kg).
-        var weightKg = Math.Max(1m, lines.Sum(l => (decimal)l.Quantity));
+        // Online gift certificates are emailed, so they weigh nothing and a cart of only those ships nothing.
+        var shippableLines = lines.Where(l => !l.IsOnlineGiftCertificate).ToList();
+        if (shippableLines.Count == 0)
+        {
+            var noShipDiscounts = await EvaluateDiscountsAsync(cart, lines, subtotal, requestCouponCode, ct);
+            var noShipTotal = subtotal - noShipDiscounts.Result.TotalDiscount; // never taxed, nothing shipped
+            return new PricedCheckout(
+                cart, lines, subtotal, routing, store,
+                Array.Empty<ShippingRateOption>(), SelectedShipping: null, ShippingTotal: 0m,
+                noShipDiscounts.Result.Applied, noShipDiscounts.Result.TotalDiscount,
+                new TaxBreakdown(0m, new(), false), 0m, noShipTotal, guestOrderingAllowed,
+                noShipDiscounts.CouponCode, noShipDiscounts.CouponValid,
+                BaseSubtotal: baseSubtotal, GroupDiscountTotal: groupDiscountTotal, GroupDiscountName: groupName);
+        }
+
+        var weightKg = Math.Max(1m, shippableLines.Sum(l => (decimal)l.Quantity));
+        var rateLines = await BuildShippingRateLinesAsync(shippableLines, ct);
         var shippingOptions = await _shipping.GetRatesAsync(
             new CarrierRateRequest(
                 new CarrierAddress(store.CountryCode, store.StateProvince, store.PostalCode, store.Latitude, store.Longitude, store.City),
                 new CarrierAddress(shipTo.CountryCode, shipTo.Region, shipTo.PostalCode, shipTo.Latitude, shipTo.Longitude, shipTo.City),
-                weightKg, Length: null, Width: null, Height: null, OrderSubtotal: subtotal),
+                weightKg, Length: null, Width: null, Height: null, OrderSubtotal: subtotal,
+                Lines: rateLines),
             ct);
 
         // Flag the recommended option (Automatic) or clear the flag (Manual). The recommendation is the
@@ -1324,6 +1565,24 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             ?? throw new NotFoundException("No active cart exists for the supplied session id.");
     }
 
+    /// <summary>Throws a 409 naming the first product whose total cart quantity breaks its Min/Max qty allowed.</summary>
+    private async Task EnsureOrderQuantityLimitsAsync(List<CartItem> items, CancellationToken ct)
+    {
+        var productIds = items.Select(i => i.ProductId).Distinct().ToList();
+        var limited = await _db.Products
+            .AsNoTracking()
+            .Where(p => productIds.Contains(p.Id)
+                        && (p.MinOrderQuantity > 1 || p.MaxOrderQuantity > 0))
+            .ToListAsync(ct);
+
+        foreach (var product in limited)
+        {
+            var total = items.Where(i => i.ProductId == product.Id).Sum(i => i.Quantity);
+            if (Application.Features.Cart.OrderQuantityLimits.Violation(product, total) is string message)
+                throw new ConflictException(message + " Please update the quantity in your cart.");
+        }
+    }
+
     /// <summary>
     /// Projects the cart lines into working rows enriched from the live catalog: product name/SKU (for the
     /// order snapshot), the product's category ids (for category-scoped discounts) and its tax-category
@@ -1387,7 +1646,10 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 item.ProductId, item.ProductVariantId, item.Quantity, item.UnitPrice,
                 name, sku, taxCode, categoryIds, product?.IsInquiryOnly ?? false,
                 OriginalUnitPrice: item.UnitPrice,
-                CustomAttributesJson: item.CustomAttributesJson));
+                CustomAttributesJson: item.CustomAttributesJson,
+                IsGiftCertificate: product?.ProductType == ProductType.GiftCard,
+                IsOnlineGiftCertificate: product?.ProductType == ProductType.GiftCard && product.GiftCertificateOnline,
+                Source: item));
         }
 
         return lines;
@@ -1402,7 +1664,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     /// </summary>
     private async Task<List<LineWork>> ApplyGroupPricingAsync(List<LineWork> lines, Guid? groupId, CancellationToken ct)
     {
-        if (lines.Count == 0 || groupId is null)
+        if (lines.Count == 0)
             return lines;
 
         // Resolved in one batch: a per-line call would issue two queries per cart line.
@@ -1432,10 +1694,77 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     /// discount engine's per-line allocation, index-aligned to <paramref name="lines"/>) so the provider
     /// taxes the discounted line value. A line with no allocated discount carries zero.
     /// </summary>
+    /// <remarks>Gift certificate lines are never taxable, so they are left out of the tax request entirely.</remarks>
     private static List<TaxLineInput> BuildTaxLines(IReadOnlyList<LineWork> lines, IReadOnlyList<decimal> lineDiscounts) =>
-        lines.Select((l, i) => new TaxLineInput(
-            l.ProductId, l.TaxCategoryCode, l.UnitPrice, l.Quantity,
-            i < lineDiscounts.Count ? lineDiscounts[i] : 0m)).ToList();
+        lines.Select((l, i) => (Line: l, Discount: i < lineDiscounts.Count ? lineDiscounts[i] : 0m))
+            .Where(x => !x.Line.IsGiftCertificate)
+            .Select(x => new TaxLineInput(x.Line.ProductId, x.Line.TaxCategoryCode, x.Line.UnitPrice, x.Line.Quantity, x.Discount))
+            .ToList();
+
+    /// <summary>Coupon validation + discount evaluation (step 5 of the shared build), for paths that skip shipping.</summary>
+    private async Task<(DiscountEvaluationResult Result, string? CouponCode, bool CouponValid)> EvaluateDiscountsAsync(
+        Cart cart, List<LineWork> lines, decimal subtotal, string? requestCouponCode, CancellationToken ct)
+    {
+        var couponCode = FirstNonEmpty(requestCouponCode, cart.AppliedCouponCode);
+        var couponValid = false;
+        var unlocked = new List<Guid>();
+        if (couponCode is not null)
+        {
+            var validation = await _coupons.ValidateAsync(couponCode, ct);
+            couponValid = validation.IsValid;
+            if (validation.IsValid && validation.DiscountId is Guid id)
+                unlocked.Add(id);
+        }
+
+        var result = await _discounts.EvaluateAsync(
+            lines.Select(l => new DiscountCartLine(l.ProductId, l.CategoryIds, l.LineTotal, l.Quantity)).ToList(),
+            subtotal, unlocked, ct);
+        return (result, couponCode, couponValid);
+    }
+
+    /// <summary>
+    /// The cart's gift certificate for this total, re-validated (spec: at every step). Returns (null, 0) when
+    /// none is applied. A certificate that is no longer redeemable — or one applied to a cart that buys
+    /// certificates when that is not allowed — is detached from the cart and reported as "no longer valid".
+    /// </summary>
+    private async Task<(GiftCertificate? Certificate, decimal ApplyAmount)> ResolveGiftCertificateAsync(
+        Cart cart, IReadOnlyList<LineWork> lines, decimal grandTotal, CancellationToken ct)
+    {
+        if (cart.GiftCertificateId is not Guid gcId || _giftCertificates is null)
+            return (null, 0m);
+
+        var gc = await _db.GiftCertificates.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(g => g.Id == gcId, ct);
+        var blockedByGcPurchase = lines.Any(l => l.IsGiftCertificate)
+            && (_settings is null || !await GiftCertificateSettings.AllowRedeemOnGcPurchaseAsync(_settings, ct));
+
+        if (gc is null || !GiftCertificateRules.IsRedeemable(gc, _clock.UtcNow) || blockedByGcPurchase)
+        {
+            var tracked = await _db.Carts.FirstOrDefaultAsync(c => c.Id == cart.Id, ct);
+            if (tracked is not null)
+            {
+                tracked.GiftCertificateId = null;
+                await _db.SaveChangesAsync(ct);
+            }
+            cart.GiftCertificateId = null;
+            throw new GiftCertificateUnavailableException(
+                blockedByGcPurchase ? GiftCertificateRules.GcForGcMessage : GiftCertificateRules.NoLongerValidMessage);
+        }
+
+        return (gc, GiftCertificateRules.ApplyAmount(gc.CurrentBalance, grandTotal));
+    }
+
+    /// <summary>When the cart buys gift certificates, only methods allowed for that (AllowGiftCertificatePurchase) remain.</summary>
+    private async Task<IReadOnlyList<PaymentMethodAvailability>> FilterForGiftCertificatePurchaseAsync(
+        IReadOnlyList<PaymentMethodAvailability> methods, IReadOnlyList<LineWork> lines, CancellationToken ct)
+    {
+        if (!lines.Any(l => l.IsGiftCertificate) || _settings is null)
+            return methods;
+        var allowed = await GiftCertificateSettings.PurchasePaymentMethodsAsync(_settings, ct);
+        return methods.Where(m => allowed.Contains(m.Method)).ToList();
+    }
+
+    /// <summary>What the gateway still has to collect: the order total less the gift certificate's share.</summary>
+    private static decimal ChargeableAmount(Order order) => Math.Max(0m, order.TotalAmount - order.GiftCertificateAppliedAmount);
 
     private static string? FirstNonEmpty(params string?[] values)
     {
@@ -1443,6 +1772,59 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             if (!string.IsNullOrWhiteSpace(value))
                 return value.Trim();
         return null;
+    }
+
+    /// <summary>
+    /// Enriches the shippable lines with the catalog's shipping data (FFL flag, "Shipping Package Size",
+    /// weight / dimensions / freight fields) for the size-based, per-item and LTL rate methods. A variant's
+    /// own weight wins over its product's.
+    /// </summary>
+    private async Task<IReadOnlyList<ShippingRateLine>> BuildShippingRateLinesAsync(
+        IReadOnlyList<LineWork> lines, CancellationToken ct)
+    {
+        var productIds = lines.Select(l => l.ProductId).Distinct().ToList();
+        var products = await _db.Products
+            .AsNoTracking()
+            .Where(p => productIds.Contains(p.Id))
+            .Select(p => new
+            {
+                p.Id, p.IsFflRequired, p.Weight, p.Length, p.Width, p.Height,
+                p.FreightClass, p.PackageType, p.PackagePieces, p.IsHazardous,
+            })
+            .ToDictionaryAsync(p => p.Id, ct);
+
+        var sizes = (await _db.ProductSpecificationValues
+                .AsNoTracking()
+                .Where(v => productIds.Contains(v.ProductId)
+                            && v.SpecificationAttributeOption!.SpecificationAttribute!.Name == ShippingCatalog.ShippingPackageSizeAttribute)
+                .Select(v => new { v.ProductId, v.SpecificationAttributeOption!.Value })
+                .ToListAsync(ct))
+            .GroupBy(v => v.ProductId)
+            .ToDictionary(g => g.Key, g => g.First().Value);
+
+        var variantIds = lines.Where(l => l.ProductVariantId.HasValue).Select(l => l.ProductVariantId!.Value).Distinct().ToList();
+        var variantWeights = variantIds.Count == 0
+            ? new Dictionary<Guid, decimal?>()
+            : await _db.ProductVariants
+                .AsNoTracking()
+                .Where(v => variantIds.Contains(v.Id))
+                .ToDictionaryAsync(v => v.Id, v => v.Weight, ct);
+
+        return lines.Select(l =>
+        {
+            products.TryGetValue(l.ProductId, out var p);
+            decimal? weight = p?.Weight;
+            if (l.ProductVariantId is Guid vid && variantWeights.TryGetValue(vid, out var vw) && vw is > 0m)
+                weight = vw;
+            return new ShippingRateLine(
+                l.ProductId, l.Quantity, l.LineTotal,
+                IsFfl: p?.IsFflRequired ?? false,
+                IsGiftCertificate: l.IsGiftCertificate,
+                ShippingSize: sizes.GetValueOrDefault(l.ProductId),
+                WeightLb: weight, LengthIn: p?.Length, WidthIn: p?.Width, HeightIn: p?.Height,
+                FreightClass: p?.FreightClass, PackageType: p?.PackageType,
+                PackagePieces: p?.PackagePieces ?? 1, IsHazardous: p?.IsHazardous ?? false);
+        }).ToList();
     }
 
     /// <summary>A cart line enriched with the catalog data the checkout sequence needs.</summary>
@@ -1458,7 +1840,11 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         bool IsInquiryOnly,
         decimal OriginalUnitPrice,
         // The buyer's typed CustomInput values, carried verbatim from the cart line onto the order line.
-        string? CustomAttributesJson = null)
+        string? CustomAttributesJson = null,
+        // Gift certificate product line: never taxed; an online one needs no shipping.
+        bool IsGiftCertificate = false,
+        bool IsOnlineGiftCertificate = false,
+        CartItem? Source = null)
     {
         public decimal LineTotal => UnitPrice * Quantity;
 

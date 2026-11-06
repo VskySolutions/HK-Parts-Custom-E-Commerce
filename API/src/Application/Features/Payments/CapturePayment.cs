@@ -32,11 +32,16 @@ public class CapturePaymentCommandHandler : IRequestHandler<CapturePaymentComman
     private readonly IPaymentGatewayRouter _router;
     private readonly IDateTimeProvider _clock;
 
-    public CapturePaymentCommandHandler(IApplicationDbContext db, IPaymentGatewayRouter router, IDateTimeProvider clock)
+    private readonly GiftCertificates.IGiftCertificateService? _giftCertificates;
+
+    public CapturePaymentCommandHandler(
+        IApplicationDbContext db, IPaymentGatewayRouter router, IDateTimeProvider clock,
+        GiftCertificates.IGiftCertificateService? giftCertificates = null)
     {
         _db = db;
         _router = router;
         _clock = clock;
+        _giftCertificates = giftCertificates;
     }
 
     public async Task<PaymentDto> Handle(CapturePaymentCommand request, CancellationToken cancellationToken)
@@ -76,6 +81,10 @@ public class CapturePaymentCommandHandler : IRequestHandler<CapturePaymentComman
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // Marked paid (invoice / PO / COD captured): issue the gift certificates the order bought (idempotent).
+        if (result.Success && _giftCertificates is not null)
+            await _giftCertificates.IssueForOrderAsync(payment.OrderId, cancellationToken);
         return PaymentDto.From(payment);
     }
 }

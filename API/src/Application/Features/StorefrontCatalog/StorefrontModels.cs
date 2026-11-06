@@ -166,6 +166,12 @@ public class StorefrontProductDetailDto
     public DateTime? EstimatedRestockDate { get; set; }
     public Guid? ManufacturerId { get; set; }
 
+    /// <summary>"Min qty allowed" per order (null = no minimum); the quantity picker starts here.</summary>
+    public int? MinOrderQuantity { get; set; }
+
+    /// <summary>"Max qty allowed" per order (null = no maximum); the quantity picker stops here.</summary>
+    public int? MaxOrderQuantity { get; set; }
+
     /// <summary>Quote-only product (REQ-INQ-001): the buyer requests a quote instead of paying.</summary>
     public bool IsInquiryOnly { get; set; }
 
@@ -175,6 +181,8 @@ public class StorefrontProductDetailDto
     // Type-specific display config.
     public GiftCardType? GiftCardType { get; set; }
     public decimal? GiftCardAmount { get; set; }
+    /// <summary>Gift certificate product: the product page collects sender / recipient details when online.</summary>
+    public bool GiftCertificateOnline { get; set; } = true;
     public int? DownloadExpiryDays { get; set; }
     public int? DownloadLimit { get; set; }
 
@@ -215,10 +223,13 @@ public class StorefrontProductDetailDto
         AllowBackorder = p.AllowBackorder,
         EstimatedRestockDate = p.EstimatedRestockDate,
         ManufacturerId = p.ManufacturerId,
+        MinOrderQuantity = p.MinOrderQuantity,
+        MaxOrderQuantity = p.MaxOrderQuantity,
         IsInquiryOnly = p.IsInquiryOnly,
         InquiryButtonLabel = p.InquiryButtonLabel,
         GiftCardType = p.GiftCardType,
         GiftCardAmount = p.GiftCardAmount,
+        GiftCertificateOnline = p.GiftCertificateOnline,
         DownloadExpiryDays = p.DownloadExpiryDays,
         DownloadLimit = p.DownloadLimit,
         Variants = p.Variants

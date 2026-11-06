@@ -96,6 +96,10 @@
   margin: 0 auto;
   padding-left: 16px;
   padding-right: 16px;
+  @media(max-width: 500px){
+    padding-left: 8px;
+    padding-right: 8px;
+  }
 }
 
 // ---- Collapsible chrome (top bar + main header) ----
@@ -204,8 +208,12 @@
 .sf-megamenu {
   --sf-mm-height: 50px;
   background: #fff;
+  // background: var(--sf-accent);
   border-bottom: 1px solid var(--sf-border);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  @media(max-width: 1023px){
+    background: var(--sf-accent);
+  }
 
   .sf-megamenu__bar { flex: 1; min-width: 0; overflow: hidden; }
   .sf-megamenu__item { display: inline-flex; }
@@ -534,6 +542,9 @@
   .sf-mobile-nav__list { font-size: 13.5px; }
   .sf-mobile-nav__parent { font-weight: 600; color: var(--sf-heading); }
   .sf-mobile-nav__all { color: var(--sf-accent); font-weight: 600; }
+  .sf-mobile-nav__category{
+    color: var(--sf-accent); font-weight: 400;
+  }
   .sf-mobile-nav__count {
     font-size: 11px;
     font-weight: 600;

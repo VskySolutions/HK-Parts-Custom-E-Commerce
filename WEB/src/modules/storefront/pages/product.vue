@@ -82,12 +82,22 @@
               @update:custom-values="customValues = $event"
             />
 
+            <!-- Online gift certificate: who it is from / for (emailed on purchase) -->
+            <GiftCertificateDetailsForm v-if="isOnlineGiftCertificate" ref="gcDetailsRef" />
+
             <!-- Quantity + actions -->
             <div class="row items-center q-gutter-md q-mb-sm">
               <div class="sf-qty row items-center no-wrap">
-                <q-btn flat dense icon="o_remove" :disable="quantity <= 1" @click="quantity = Math.max(1, quantity - 1)" />
-                <input v-model.number="quantity" type="number" min="1" class="sf-qty__input">
-                <q-btn flat dense icon="o_add" @click="quantity = quantity + 1" />
+                <q-btn flat dense icon="o_remove" :disable="quantity <= minQty" @click="quantity = clampQty(quantity - 1)" />
+                <input
+                  v-model.number="quantity"
+                  type="number"
+                  :min="minQty"
+                  :max="maxQty || undefined"
+                  class="sf-qty__input"
+                  @change="quantity = clampQty(quantity)"
+                >
+                <q-btn flat dense icon="o_add" :disable="maxQty != null && quantity >= maxQty" @click="quantity = clampQty(quantity + 1)" />
               </div>
               <button
                 class="sf-btn sf-btn--primary col"
@@ -99,6 +109,7 @@
                 {{ needsSelection ? 'Select options' : 'Add to Cart' }}
               </button>
             </div>
+            <div v-if="qtyLimitNote" class="text-caption text-grey-7 q-mb-sm">{{ qtyLimitNote }}</div>
 
             <!-- Inquiry mode (REQ-INQ-001): the second CTA adds the selection and lands straight on the
                  quote form; Standard mode keeps Buy Now. Neither forces the buyer through the cart. -->
@@ -245,6 +256,7 @@ import { useStorefrontSeo } from 'composables/useStorefrontSeo'
 import { formatDate } from 'src/utils/datetime'
 import ProductGalleryView from 'modules/catalog/components/ProductGalleryView.vue'
 import VariantSelector from 'modules/storefront/components/VariantSelector.vue'
+import GiftCertificateDetailsForm from 'modules/storefront/components/GiftCertificateDetailsForm.vue'
 import ProductCarousel from 'modules/storefront/components/ProductCarousel.vue'
 import RecentlyViewed from 'modules/storefront/components/RecentlyViewed.vue'
 import StarRating from 'modules/storefront/components/StarRating.vue'
@@ -267,6 +279,8 @@ const variantId = ref(null)
 // cart item — they are snapshotted onto the cart line and carried through to the order.
 const customValues = ref({})
 const optionsRef = ref(null)
+const gcDetailsRef = ref(null)
+const isOnlineGiftCertificate = computed(() => product.value?.productType === 'GiftCard' && product.value?.giftCertificateOnline !== false)
 const quantity = ref(1)
 const addingToCart = ref(false)
 const buyingNow = ref(false)
@@ -332,6 +346,26 @@ const hasOptions = computed(() => hasVariants.value || (product.value?.attribute
 const stock = computed(() =>
   selectedVariant.value ? selectedVariant.value.stockQuantity : (product.value?.stockQuantity ?? 0)
 )
+
+// "Min qty allowed" / "Max qty allowed" from the product's Inventory tab. The API enforces them on the
+// product's total in the cart; the picker just keeps the buyer inside the range up front.
+const minQty = computed(() => Math.max(1, Number(product.value?.minOrderQuantity) || 1))
+const maxQty = computed(() => {
+  const max = Number(product.value?.maxOrderQuantity)
+  return max > 0 ? Math.max(max, minQty.value) : null
+})
+function clampQty (value) {
+  let qty = Math.floor(Number(value)) || minQty.value
+  if (qty < minQty.value) qty = minQty.value
+  if (maxQty.value != null && qty > maxQty.value) qty = maxQty.value
+  return qty
+}
+const qtyLimitNote = computed(() => {
+  const parts = []
+  if (minQty.value > 1) parts.push(`Minimum order: ${minQty.value}`)
+  if (maxQty.value != null) parts.push(`Maximum order: ${maxQty.value}`)
+  return parts.join(' · ')
+})
 
 // For variant products, availability/stock only make sense once a variant is chosen.
 const needsSelection = computed(() => hasVariants.value && !selectedVariant.value)
@@ -427,6 +461,7 @@ async function load () {
   reviewSummary.value = null
   try {
     product.value = await fetchProduct(route.params.idOrSlug)
+    quantity.value = minQty.value
     if (product.value?.id && product.value.isPublished !== false) {
       record(product.value.id)
       loadSchema(product.value.id)
@@ -453,19 +488,31 @@ function cartPayload () {
   return {
     productId: product.value.id,
     productVariantId: variantId.value || null,
-    quantity: Math.max(1, quantity.value || 1),
+    quantity: clampQty(quantity.value),
     customAttributes: Object.entries(customValues.value)
       .filter(([, value]) => String(value ?? '').trim())
-      .map(([attributeId, value]) => ({ attributeId, value: String(value).trim() }))
+      .map(([attributeId, value]) => ({ attributeId, value: String(value).trim() })),
+    // Online gift certificate: sender / recipient details (validated again by the server).
+    ...(isOnlineGiftCertificate.value && gcDetailsRef.value ? gcDetailsRef.value.payload() : {})
   }
+}
+
+async function giftCertificateDetailsValid () {
+  if (!isOnlineGiftCertificate.value) return true
+  if (gcDetailsRef.value && await gcDetailsRef.value.validate()) return true
+  notify.warning('Fill in the gift certificate details first')
+  return false
 }
 
 async function onAddToCart () {
   if (!product.value || addingToCart.value) return
   if (!optionsValid()) return
+  if (!(await giftCertificateDetailsValid())) return
   addingToCart.value = true
   try {
     await addItem(cartPayload())
+    // Each certificate is its own cart line: clear the recipient so the next one starts fresh.
+    if (isOnlineGiftCertificate.value) gcDetailsRef.value?.resetRecipient()
     notify.success('Added to cart')
   } catch (err) {
     notify.error(getApiErrorMessage(err))
@@ -479,6 +526,7 @@ async function onAddToCart () {
 async function onBuyNow () {
   if (!product.value || buyingNow.value || addingToCart.value) return
   if (!optionsValid()) return
+  if (!(await giftCertificateDetailsValid())) return
   buyingNow.value = true
   try {
     await addItem(cartPayload())

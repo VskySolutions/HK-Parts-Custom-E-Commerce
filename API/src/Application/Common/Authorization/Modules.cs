@@ -40,6 +40,10 @@ public static class Modules
     public const string AuditTrail = "AuditTrail";
     // Inquiries (REQ-INQ-001)
     public const string Inquiries = "Inquiries";
+    // eBay channel (settings, listings, order import)
+    public const string Ebay = "Ebay";
+    // Gift certificates (old role level 1600)
+    public const string GiftCertificates = "GiftCertificates";
 
     public static readonly IReadOnlyList<ModuleInfo> All = new List<ModuleInfo>
     {
@@ -72,6 +76,8 @@ public static class Modules
         new(Logs, "Application Logs"),
         new(AuditTrail, "Audit Trail"),
         new(Inquiries, "Inquiries"),
+        new(Ebay, "eBay Channel"),
+        new(GiftCertificates, "Gift Certificates"),
     };
 
     private static readonly HashSet<string> Keys = new(All.Select(m => m.Key), StringComparer.Ordinal);

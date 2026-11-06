@@ -1,0 +1,1 @@
+function e(e,t,n){let r=t+n;if(r<0||r>=e.length)return e;let i=e.slice(),[a]=i.splice(t,1);return i.splice(r,0,a),i}export{e as t};

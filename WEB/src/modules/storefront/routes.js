@@ -38,13 +38,14 @@ export default [
       // Legacy storefront root — bookmarks and old links land on the real one.
       { path: 'shop', redirect: { name: 'shop-home' } },
       {
-        path: 'shop/category/:idOrSlug',
+        // (.*): migrated slugs contain '/' (hk-parts/ump-parts), so the param may span segments.
+        path: 'shop/category/:idOrSlug(.*)',
         name: 'shop-category',
         meta: { title: 'Category' },
         component: () => import('modules/storefront/pages/category.vue')
       },
       {
-        path: 'shop/product/:idOrSlug',
+        path: 'shop/product/:idOrSlug(.*)',
         name: 'shop-product',
         meta: { title: 'Product' },
         component: () => import('modules/storefront/pages/product.vue')

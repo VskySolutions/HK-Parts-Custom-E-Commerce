@@ -1,0 +1,1 @@
+import"./vendor-5QrNWB-2.js";import{j as e}from"./vendor-quasar-CCTtqE2g.js";var t=e(()=>{});export{t as default};

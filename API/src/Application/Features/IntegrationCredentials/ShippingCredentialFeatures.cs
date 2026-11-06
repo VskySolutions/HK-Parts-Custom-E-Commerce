@@ -357,3 +357,110 @@ public class DeleteUpsCredentialCommandHandler : IRequestHandler<DeleteUpsCreden
     public Task Handle(DeleteUpsCredentialCommand request, CancellationToken ct)
         => IntegrationCredentialSupport.DeleteAsync(_db.UpsCredentials, _db, request.Id, ct);
 }
+
+// ============================ Freightview (LTL) ============================
+
+public class FreightviewCredentialDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool Active { get; set; }
+    public bool IsProduction { get; set; }
+    public string? BaseUrl { get; set; }
+    public string? ApiKey { get; set; }
+    public string? OriginType { get; set; }
+    public string? ContactName { get; set; }
+    public string? ContactPhone { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? PickupInstructions { get; set; }
+    public string? DockOpenTime { get; set; }
+    public string? DockCloseTime { get; set; }
+    public DateTime CreatedOnUtc { get; set; }
+    public DateTime UpdatedOnUtc { get; set; }
+
+    public static FreightviewCredentialDto From(FreightviewCredential e) => new()
+    {
+        Id = e.Id, Name = e.Name, Active = e.Active, IsProduction = e.IsProduction,
+        BaseUrl = e.BaseUrl, ApiKey = e.ApiKey, OriginType = e.OriginType,
+        ContactName = e.ContactName, ContactPhone = e.ContactPhone, ContactEmail = e.ContactEmail,
+        PickupInstructions = e.PickupInstructions, DockOpenTime = e.DockOpenTime, DockCloseTime = e.DockCloseTime,
+        CreatedOnUtc = e.CreatedOnUtc, UpdatedOnUtc = e.UpdatedOnUtc,
+    };
+}
+
+public record ListFreightviewCredentialsQuery : IRequest<IReadOnlyList<IntegrationCredentialListItemDto>>;
+
+public class ListFreightviewCredentialsQueryHandler
+    : IRequestHandler<ListFreightviewCredentialsQuery, IReadOnlyList<IntegrationCredentialListItemDto>>
+{
+    private readonly IApplicationDbContext _db;
+    public ListFreightviewCredentialsQueryHandler(IApplicationDbContext db) => _db = db;
+    public Task<IReadOnlyList<IntegrationCredentialListItemDto>> Handle(ListFreightviewCredentialsQuery request, CancellationToken ct)
+        => IntegrationCredentialSupport.ListAsync(_db.FreightviewCredentials, ct, c => c.BaseUrl);
+}
+
+public record GetFreightviewCredentialQuery(Guid Id) : IRequest<FreightviewCredentialDto>;
+
+public class GetFreightviewCredentialQueryHandler : IRequestHandler<GetFreightviewCredentialQuery, FreightviewCredentialDto>
+{
+    private readonly IApplicationDbContext _db;
+    public GetFreightviewCredentialQueryHandler(IApplicationDbContext db) => _db = db;
+    public async Task<FreightviewCredentialDto> Handle(GetFreightviewCredentialQuery request, CancellationToken ct)
+        => FreightviewCredentialDto.From(await IntegrationCredentialSupport.GetAsync(_db.FreightviewCredentials, request.Id, ct));
+}
+
+public record SaveFreightviewCredentialCommand(
+    Guid? Id, string Name, bool Active, bool IsProduction,
+    string? BaseUrl, string? ApiKey, string? OriginType,
+    string? ContactName, string? ContactPhone, string? ContactEmail,
+    string? PickupInstructions, string? DockOpenTime, string? DockCloseTime) : IRequest<FreightviewCredentialDto>;
+
+public class SaveFreightviewCredentialCommandValidator : AbstractValidator<SaveFreightviewCredentialCommand>
+{
+    public SaveFreightviewCredentialCommandValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.BaseUrl).NotEmpty().MaximumLength(500)
+            .Must(IntegrationCredentialSupport.BeAnAbsoluteHttpUrl)
+            .WithMessage("Base URL must be an absolute http(s) URL, e.g. https://www.freightview.com/api/v1.0");
+        RuleFor(x => x.ApiKey).NotEmpty();
+        RuleFor(x => x.OriginType).MaximumLength(50);
+        RuleFor(x => x.ContactName).MaximumLength(200);
+        RuleFor(x => x.ContactPhone).MaximumLength(50);
+        RuleFor(x => x.ContactEmail).MaximumLength(256).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.ContactEmail));
+        RuleFor(x => x.PickupInstructions).MaximumLength(1000);
+        RuleFor(x => x.DockOpenTime).MaximumLength(20);
+        RuleFor(x => x.DockCloseTime).MaximumLength(20);
+    }
+}
+
+public class SaveFreightviewCredentialCommandHandler : IRequestHandler<SaveFreightviewCredentialCommand, FreightviewCredentialDto>
+{
+    private readonly IApplicationDbContext _db;
+    public SaveFreightviewCredentialCommandHandler(IApplicationDbContext db) => _db = db;
+    public async Task<FreightviewCredentialDto> Handle(SaveFreightviewCredentialCommand request, CancellationToken ct)
+    {
+        var e = await IntegrationCredentialSupport.UpsertAsync(_db.FreightviewCredentials, request.Id, request.Name, request.Active, request.IsProduction, ct);
+        e.BaseUrl = IntegrationCredentialSupport.Norm(request.BaseUrl);
+        e.ApiKey = IntegrationCredentialSupport.Norm(request.ApiKey);
+        e.OriginType = IntegrationCredentialSupport.Norm(request.OriginType);
+        e.ContactName = IntegrationCredentialSupport.Norm(request.ContactName);
+        e.ContactPhone = IntegrationCredentialSupport.Norm(request.ContactPhone);
+        e.ContactEmail = IntegrationCredentialSupport.Norm(request.ContactEmail);
+        e.PickupInstructions = IntegrationCredentialSupport.Norm(request.PickupInstructions);
+        e.DockOpenTime = IntegrationCredentialSupport.Norm(request.DockOpenTime);
+        e.DockCloseTime = IntegrationCredentialSupport.Norm(request.DockCloseTime);
+        await _db.SaveChangesAsync(ct);
+        return FreightviewCredentialDto.From(e);
+    }
+}
+
+public record DeleteFreightviewCredentialCommand(Guid Id) : IRequest;
+
+public class DeleteFreightviewCredentialCommandHandler : IRequestHandler<DeleteFreightviewCredentialCommand>
+{
+    private readonly IApplicationDbContext _db;
+    public DeleteFreightviewCredentialCommandHandler(IApplicationDbContext db) => _db = db;
+    public Task Handle(DeleteFreightviewCredentialCommand request, CancellationToken ct)
+        => IntegrationCredentialSupport.DeleteAsync(_db.FreightviewCredentials, _db, request.Id, ct);
+}

@@ -27,7 +27,10 @@ try {
 }
 
 const publicPath = env.IGNORE_PUBLIC_FOLDER ? '/' : (env.BUILD_PUBLIC_PATH || '/')
-const distDir = resolve(__dirname, `../publish/spa/${env.PUBLISH_FOLDER || 'dev'}`)
+
+const distDir = env.PUBLISH_FOLDER
+  ? resolve(env.PUBLISH_FOLDER)
+  : resolve('D:/Vaibhav/Publish/HK Part Ecommerce/vsky-web')
 
 function srcAlias (sub) {
   return resolve(__dirname, 'src', sub)

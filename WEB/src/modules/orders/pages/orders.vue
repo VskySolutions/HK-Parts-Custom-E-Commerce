@@ -52,6 +52,9 @@
       <template #body-cell-orderNumber="cell">
         <q-td :props="cell">
           <a class="text-primary cursor-pointer text-weight-medium" @click="openOrder(cell.row)">{{ cell.row.orderNumber }}</a>
+          <q-badge v-if="cell.row.ebayOrderId" color="indigo-7" label="eBay" class="q-ml-xs">
+            <q-tooltip>eBay Order Number: {{ cell.row.ebayOrderId }}</q-tooltip>
+          </q-badge>
         </q-td>
       </template>
       <template #body-cell-status="cell">

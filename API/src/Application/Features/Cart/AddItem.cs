@@ -26,7 +26,13 @@ public record AddItemCommand(
     Guid? ProductVariantId,
     int Quantity,
     string? SessionId = null,
-    List<CustomAttributeInput>? CustomAttributes = null) : IRequest<CartDto>;
+    List<CustomAttributeInput>? CustomAttributes = null,
+    // Online gift certificate products: who it is from / for (validated on add).
+    string? GcSenderName = null,
+    string? GcSenderEmail = null,
+    string? GcRecipientName = null,
+    string? GcRecipientEmail = null,
+    string? GcMessage = null) : IRequest<CartDto>;
 
 public class AddItemCommandValidator : AbstractValidator<AddItemCommand>
 {
@@ -35,6 +41,11 @@ public class AddItemCommandValidator : AbstractValidator<AddItemCommand>
         RuleFor(x => x.ProductId).NotEmpty();
         RuleFor(x => x.Quantity).GreaterThanOrEqualTo(1);
         RuleForEach(x => x.CustomAttributes).ChildRules(v => v.RuleFor(i => i.AttributeId).NotEmpty());
+        RuleFor(x => x.GcSenderName).MaximumLength(75);
+        RuleFor(x => x.GcSenderEmail).MaximumLength(75).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.GcSenderEmail));
+        RuleFor(x => x.GcRecipientName).MaximumLength(75);
+        RuleFor(x => x.GcRecipientEmail).MaximumLength(75).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.GcRecipientEmail));
+        RuleFor(x => x.GcMessage).MaximumLength(1000);
     }
 }
 
@@ -112,11 +123,18 @@ public class AddItemCommandHandler : IRequestHandler<AddItemCommand, CartDto>
         var customAttributesJson = await ResolveCustomAttributesAsync(product.Id, request.CustomAttributes, cancellationToken);
         var signature = Common.Models.CustomAttributes.Signature(customAttributesJson);
 
-        // Same product, same variant AND same typed-in values — otherwise it's a distinct line.
-        var existing = cart.Items.FirstOrDefault(
-            i => i.ProductId == request.ProductId
-                 && i.ProductVariantId == request.ProductVariantId
-                 && Common.Models.CustomAttributes.Signature(i.CustomAttributesJson) == signature);
+        var isGiftCertificate = product.ProductType == ProductType.GiftCard;
+        if (isGiftCertificate && product.GiftCertificateOnline)
+            EnsureOnlineGiftCertificateDetails(request);
+
+        // Same product, same variant AND same typed-in values — otherwise it's a distinct line. Gift
+        // certificate lines never merge: each add is its own certificate (own recipient, own email).
+        var existing = isGiftCertificate
+            ? null
+            : cart.Items.FirstOrDefault(
+                i => i.ProductId == request.ProductId
+                     && i.ProductVariantId == request.ProductVariantId
+                     && Common.Models.CustomAttributes.Signature(i.CustomAttributesJson) == signature);
 
         if (existing is not null)
         {
@@ -124,6 +142,7 @@ public class AddItemCommandHandler : IRequestHandler<AddItemCommand, CartDto>
         }
         else
         {
+            var online = isGiftCertificate && product.GiftCertificateOnline;
             cart.Items.Add(new CartItem
             {
                 ProductId = request.ProductId,
@@ -131,11 +150,35 @@ public class AddItemCommandHandler : IRequestHandler<AddItemCommand, CartDto>
                 Quantity = request.Quantity,
                 UnitPrice = unitPrice,
                 CustomAttributesJson = customAttributesJson,
+                GcSenderName = online ? request.GcSenderName!.Trim() : null,
+                GcSenderEmail = online ? request.GcSenderEmail!.Trim() : null,
+                GcRecipientName = online ? request.GcRecipientName!.Trim() : null,
+                GcRecipientEmail = online ? request.GcRecipientEmail!.Trim() : null,
+                GcMessage = online && !string.IsNullOrWhiteSpace(request.GcMessage) ? request.GcMessage.Trim() : null,
             });
         }
 
+        // Min/Max qty allowed: checked against the product's total across the cart, after this add.
+        OrderQuantityLimits.Ensure(product,
+            cart.Items.Where(i => i.ProductId == product.Id).Sum(i => i.Quantity));
+
         await _db.SaveChangesAsync(cancellationToken);
         return await CartResolver.BuildDtoAsync(_db, _groups, _commerce, cart, cancellationToken);
+    }
+
+    /// <summary>
+    /// An online gift certificate is emailed on issue, so who it is from and for is mandatory (the validator
+    /// already checked lengths and email format when given).
+    /// </summary>
+    private static void EnsureOnlineGiftCertificateDetails(AddItemCommand request)
+    {
+        var failures = new List<ValidationFailure>();
+        if (string.IsNullOrWhiteSpace(request.GcSenderName)) failures.Add(new(nameof(request.GcSenderName), "Sender name is required."));
+        if (string.IsNullOrWhiteSpace(request.GcSenderEmail)) failures.Add(new(nameof(request.GcSenderEmail), "Sender email is required."));
+        if (string.IsNullOrWhiteSpace(request.GcRecipientName)) failures.Add(new(nameof(request.GcRecipientName), "Recipient name is required."));
+        if (string.IsNullOrWhiteSpace(request.GcRecipientEmail)) failures.Add(new(nameof(request.GcRecipientEmail), "Recipient email is required."));
+        if (failures.Count > 0)
+            throw new ValidationException(failures);
     }
 
     /// <summary>

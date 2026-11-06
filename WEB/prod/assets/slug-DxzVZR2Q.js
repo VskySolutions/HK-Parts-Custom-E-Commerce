@@ -1,0 +1,1 @@
+function e(e){return(e||``).toString().trim().toLowerCase().replace(/['’"]/g,``).replace(/[^a-z0-9]+/g,`-`).replace(/^-+|-+$/g,``)}export{e as t};

@@ -234,6 +234,32 @@ export const INTEGRATIONS = [
       { key: 'clientSecret', label: 'Client Secret', secret: true, required: true }
     ]
   },
+  {
+    key: 'freightview', kind: 'credential', label: 'Freightview (LTL)', category: 'Shipping', icon: 'o_rv_hookup',
+    description: 'LTL freight quotes for heavy / palletised items.',
+    fields: [
+      {
+        key: 'baseUrl',
+        label: 'Base URL',
+        required: true,
+        placeholder: 'https://www.freightview.com/api/v1.0',
+        hints: ['Freightview API host including the version path.']
+      },
+      { key: 'apiKey', label: 'API Key', secret: true, required: true },
+      {
+        key: 'originType',
+        label: 'Origin Type',
+        placeholder: 'business dock',
+        hints: ['e.g. business dock, business no dock, residential.']
+      },
+      { key: 'contactName', label: 'Contact Name' },
+      { key: 'contactPhone', label: 'Contact Phone' },
+      { key: 'contactEmail', label: 'Contact Email' },
+      { key: 'pickupInstructions', label: 'Pickup Instructions' },
+      { key: 'dockOpenTime', label: 'Dock Opens', placeholder: '8:00 AM' },
+      { key: 'dockCloseTime', label: 'Dock Closes', placeholder: '5:00 PM' }
+    ]
+  },
 
   // ---- Communication ----
   {
@@ -288,6 +314,7 @@ const INTEGRATION_META = {
   dhl: { pricing: 'free', website: 'https://developer.dhl.com' },
   usps: { pricing: 'free', website: 'https://developer.usps.com' },
   ups: { pricing: 'free', website: 'https://developer.ups.com' },
+  freightview: { pricing: 'paid', website: 'https://www.freightview.com' },
   twilio: { pricing: 'paid', website: 'https://console.twilio.com' },
   'azure-blob': { pricing: 'paid', website: 'https://portal.azure.com' },
   recaptcha: { pricing: 'free', website: 'https://www.google.com/recaptcha/admin/create' }

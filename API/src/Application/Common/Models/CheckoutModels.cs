@@ -94,6 +94,17 @@ public class CheckoutQuote
     /// case, and the storefront must submit to /api/checkout/inquiry rather than /place.
     /// </summary>
     public bool IsInquiry { get; set; }
+
+    /// <summary>The applied gift certificate (null when none): its code, current balance and the amount it covers.</summary>
+    public string? GiftCertificateCode { get; set; }
+    public decimal? GiftCertificateBalance { get; set; }
+    public decimal GiftCertificateApplied { get; set; }
+
+    /// <summary>Total − gift certificate: what the payment step still has to collect (before any gateway fee).</summary>
+    public decimal AmountDue { get; set; }
+
+    /// <summary>The certificate covers everything: show "Pay with Gift Certificate" instead of payment methods.</summary>
+    public bool PayWithGiftCertificate { get; set; }
 }
 
 /// <summary>
@@ -133,7 +144,9 @@ public record PlaceCheckoutRequest(
     /// same credential — "BankAccount" for an Authorize.Net ACH/eCheck payment, else null/"Card". Ignored by
     /// every other gateway. See <see cref="Domain.Common.PaymentInstruments"/>.
     /// </summary>
-    string? PaymentInstrument = null);
+    string? PaymentInstrument = null,
+    /// <summary>Confirm the "Pay with Gift Certificate" page: only allowed when the certificate covers the full total.</summary>
+    bool PayWithGiftCertificate = false);
 
 /// <summary>
 /// The outcome of placing a checkout: the created order's id/number/status and grand total, the

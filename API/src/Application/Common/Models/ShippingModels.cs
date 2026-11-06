@@ -22,6 +22,11 @@ public record CarrierAddress(
 /// optional dimensions, and the order subtotal used to evaluate free-shipping and price-based custom
 /// methods (WO-40).
 /// </summary>
+/// <param name="Lines">
+/// The shippable cart lines with their catalog shipping data. Optional — the carrier adapters rate on the
+/// aggregate weight above, but the size-based and per-item methods and LTL freight need line detail, and
+/// are simply not offered when it is absent (e.g. the ad-hoc admin rate preview).
+/// </param>
 public record CarrierRateRequest(
     CarrierAddress Origin,
     CarrierAddress Destination,
@@ -29,7 +34,39 @@ public record CarrierRateRequest(
     decimal? Length,
     decimal? Width,
     decimal? Height,
-    decimal OrderSubtotal);
+    decimal OrderSubtotal,
+    IReadOnlyList<ShippingRateLine>? Lines = null);
+
+/// <summary>
+/// One shippable cart line as the rate engine sees it. Weight is per unit in pounds and dimensions per unit
+/// in inches (the catalog's units). <paramref name="ShippingSize"/> is the product's "Shipping Package Size"
+/// option value (Free / Small / Medium / Large / Extra Large), null when not set.
+/// </summary>
+public record ShippingRateLine(
+    Guid ProductId,
+    int Quantity,
+    decimal LineTotal,
+    bool IsFfl,
+    bool IsGiftCertificate,
+    string? ShippingSize,
+    decimal? WeightLb,
+    decimal? LengthIn,
+    decimal? WidthIn,
+    decimal? HeightIn,
+    string? FreightClass,
+    string? PackageType,
+    int PackagePieces,
+    bool IsHazardous);
+
+/// <summary>Shared shipping catalog constants.</summary>
+public static class ShippingCatalog
+{
+    /// <summary>
+    /// The specification attribute holding a product's shipping size tier — migrated from the PHP site's
+    /// "Shipping Size" field (db-scripts/2_2026-10-30_Seed_PhpProductAttributes.sql).
+    /// </summary>
+    public const string ShippingPackageSizeAttribute = "Shipping Package Size";
+}
 
 /// <summary>
 /// A single quotable shipping option — either an enabled custom method or a live-carrier product —

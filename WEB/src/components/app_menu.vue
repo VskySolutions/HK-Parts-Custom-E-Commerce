@@ -1,5 +1,5 @@
 <template>
-  <q-list padding class="app-menu q-mt-sm bg-22 text-white">
+  <q-list padding class="app-menu q-mt-sm">
     <template v-for="(section, si) in visibleSections" :key="si">
       <!-- Header-less section (Dashboard): always visible, never collapsible. The
            collapse/expand-all control is merged into the Dashboard row, on the right. -->
@@ -44,7 +44,7 @@
           dense
           dense-toggle
           :duration="180"
-          header-class="app-menu__header text-uppercase text-caption text-white"
+          header-class="app-menu__header text-uppercase text-caption text-weight-medium text-grey-6"
           expand-icon-class="app-menu__chevron"
           :content-inset-level="0"
           @update:model-value="(val) => setOpen(section.header, val)"
@@ -95,6 +95,7 @@ const sections = [
     header: null,
     items: [
       { label: 'Dashboard', icon: 'o_dashboard', to: '/dashboard', permissions: null },
+      { label: 'Gift Certificates', icon: 'o_redeem', to: '/gift-certificates', permissions: [Permissions.GiftCertificatesManage] },
     ]
   },
   {
@@ -119,6 +120,9 @@ const sections = [
       { label: 'Barcode Scanner', icon: 'o_qr_code_scanner', to: '/inventory-scanner', permissions: [Permissions.CatalogRead] },
       { label: 'Attributes', icon: 'o_tune', to: '/catalog/attributes', permissions: [Permissions.CatalogRead] },
       { label: 'Custom fields', icon: 'o_text_fields', to: '/catalog/custom-fields', permissions: [Permissions.CatalogRead] },
+      { label: 'Price Rules', icon: 'o_sell', to: '/catalog/price-rules', permissions: [Permissions.CatalogRead] },
+      { label: 'eBay Listings', icon: 'o_storefront', to: '/catalog/ebay-listings', permissions: [Permissions.EbayRead] },
+      { label: 'eBay Settings', icon: 'o_settings_input_component', to: '/settings/ebay', permissions: [Permissions.EbayRead] },
       { label: 'Promotions', icon: 'o_local_offer', to: '/promotions', permissions: [Permissions.CatalogRead] },
       { label: 'Reviews', icon: 'o_reviews', to: '/catalog/reviews', permissions: [Permissions.CatalogRead] },
       { label: 'Loyalty Points', icon: 'o_loyalty', to: '/loyalty', permissions: [Permissions.CatalogRead] }

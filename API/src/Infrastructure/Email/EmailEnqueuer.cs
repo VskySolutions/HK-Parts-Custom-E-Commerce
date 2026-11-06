@@ -43,4 +43,24 @@ public class EmailEnqueuer : IEmailEnqueuer
         });
         await _db.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task EnqueueAsync(EmailEnvelope envelope, CancellationToken cancellationToken = default)
+    {
+        _db.EmailQueue.Add(new EmailQueue
+        {
+            TemplateKey = envelope.TemplateKey,
+            RecipientEmail = envelope.RecipientEmail,
+            RecipientName = envelope.RecipientName,
+            RenderedSubject = envelope.Subject,
+            RenderedBody = envelope.Body,
+            Category = envelope.Category,
+            IsHtml = envelope.IsHtml,
+            CcEmail = string.IsNullOrWhiteSpace(envelope.CcEmail) ? null : envelope.CcEmail.Trim(),
+            ReplyToEmail = string.IsNullOrWhiteSpace(envelope.ReplyToEmail) ? null : envelope.ReplyToEmail.Trim(),
+            RelatedEntityId = envelope.RelatedEntityId,
+            Status = EmailStatus.Pending,
+            CreatedOnUtc = _clock.UtcNow,
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+    }
 }

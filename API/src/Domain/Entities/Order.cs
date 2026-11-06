@@ -99,6 +99,16 @@ public class Order : AuditableEntity, ISoftDeletable
     public bool ShippingWasRecommended { get; set; }
     public string? TrackingNumber { get; set; }
 
+    /// <summary>The eBay order id when the order was imported from eBay (unique); null for store orders.</summary>
+    public string? EbayOrderId { get; set; }
+    /// <summary>The buyer's checkout message on an imported eBay order.</summary>
+    public string? EbayBuyerMessage { get; set; }
+
+    /// <summary>The gift certificate redeemed on this order and how much of the total it paid.</summary>
+    public Guid? GiftCertificateId { get; set; }
+    public string? GiftCertificateCode { get; set; }
+    public decimal GiftCertificateAppliedAmount { get; set; }
+
     public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Pending;
 
     // ---- Inquiry (quote request) ------------------------------------------------------------

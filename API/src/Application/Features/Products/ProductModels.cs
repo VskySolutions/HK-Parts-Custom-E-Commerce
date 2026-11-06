@@ -34,6 +34,7 @@ public class ProductDto
     public int? DownloadLimit { get; set; }
     public GiftCardType? GiftCardType { get; set; }
     public decimal? GiftCardAmount { get; set; }
+    public bool GiftCertificateOnline { get; set; } = true;
     public string? Gtin { get; set; }
     public decimal? Cost { get; set; }
     public decimal? Msrp { get; set; }
@@ -98,6 +99,7 @@ public class ProductDto
         DownloadLimit = p.DownloadLimit,
         GiftCardType = p.GiftCardType,
         GiftCardAmount = p.GiftCardAmount,
+        GiftCertificateOnline = p.GiftCertificateOnline,
         Gtin = p.Gtin,
         Cost = p.Cost,
         Msrp = p.Msrp,
@@ -178,6 +180,8 @@ public class ProductListItemDto
     public string Name { get; set; } = string.Empty;
     public string? Slug { get; set; }
     public ProductType ProductType { get; set; }
+    /// <summary>Has a non-ended eBay listing (list badge).</summary>
+    public bool ChannelEbay { get; set; }
     public string? Sku { get; set; }
     public decimal? Price { get; set; }
     public int StockQuantity { get; set; }
@@ -210,6 +214,7 @@ public class ProductListItemDto
         StockQuantity = p.StockQuantity,
         IsPublished = p.IsPublished,
         IsFeatured = p.IsFeatured,
+        ChannelEbay = p.ChannelEbay,
         DisplayOrder = p.DisplayOrder,
         TaxCategoryId = p.TaxCategoryId,
         ManufacturerId = p.ManufacturerId,

@@ -15,6 +15,7 @@
     v-bind="$attrs"
     @request="onRequest"
     @update:selected="$emit('update:selected', $event)"
+    @update:pagination="pagination = $event"
   >
     <!-- Forward all parent-provided slots (body-cell-*, header, ...). -->
     <template v-for="name in forwardedSlots" #[name]="slotProps" :key="name">

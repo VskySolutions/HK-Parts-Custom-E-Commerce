@@ -6,7 +6,14 @@ public enum ShippingMethodType
     FlatRate = 0,
     WeightBased = 1,
     PriceBased = 2,
-    FreeShipping = 3
+    FreeShipping = 3,
+
+    /// <summary>
+    /// The legacy site's "Custom" method: priced by the highest "Shipping Package Size" tier among the
+    /// cart's non-FFL items, plus a flat rate when the cart holds FFL items, and — for a non-US destination —
+    /// the cheapest USPS international service in place of the size tiers.
+    /// </summary>
+    SizeBased = 4
 }
 
 /// <summary>
@@ -20,7 +27,9 @@ public enum ShippingCarrierType
     FedEx = 1,
     DHLExpress = 2,
     USPS = 3,
-    UPS = 4
+    UPS = 4,
+    /// <summary>LTL freight quotes from Freightview (one option per returned carrier/service).</summary>
+    Freightview = 5
 }
 
 /// <summary>How the shipping option a customer checks out with is chosen (REQ-SHP-006).</summary>

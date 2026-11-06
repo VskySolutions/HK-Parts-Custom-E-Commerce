@@ -47,11 +47,12 @@
 
               <!-- Quantity stepper (capped by available stock) -->
               <div class="sf-qtybox row items-center no-wrap q-mt-xs">
-                <q-btn flat dense size="sm" icon="o_remove" :disable="busy[item.id] || item.quantity <= 1" @click="setQty(item, item.quantity - 1)" />
+                <q-btn flat dense size="sm" icon="o_remove" :disable="busy[item.id] || item.quantity <= 1 || !withinQtyLimits(items, item, item.quantity - 1)" @click="setQty(item, item.quantity - 1)" />
                 <span class="sf-qtybox__val">{{ item.quantity }}</span>
                 <q-btn flat dense size="sm" icon="o_add" :disable="busy[item.id] || !canIncrease(item)" @click="setQty(item, item.quantity + 1)" />
               </div>
               <q-item-label v-if="atMaxStock(item)" caption class="text-orange-8">Max available stock</q-item-label>
+              <q-item-label v-else-if="qtyLimitNote(items, item)" caption class="text-orange-8">{{ qtyLimitNote(items, item) }}</q-item-label>
             </q-item-section>
             <q-item-section side top>
               <div class="text-weight-bold">{{ format(item.lineTotal) }}</div>
@@ -86,6 +87,7 @@
 <script setup>
 import { reactive, computed, onMounted } from 'vue'
 import { useCart } from 'modules/storefront/composables/useCart'
+import { withinQtyLimits, qtyLimitNote } from 'modules/storefront/composables/orderQtyLimits'
 import { useCurrency } from 'modules/storefront/composables/useCurrency'
 import { useCommerceMode } from 'modules/storefront/composables/useCommerceMode'
 
@@ -121,6 +123,7 @@ function isQuoteLine (item) {
 
 // Whether the + button may increase the quantity (respecting available stock unless backorder is allowed).
 function canIncrease (item) {
+  if (!withinQtyLimits(items.value, item, item.quantity + 1)) return false
   if (isQuoteLine(item)) return true
   if (item.allowBackorder) return true
   if (item.stockQuantity == null) return true
@@ -135,6 +138,7 @@ async function setQty (item, qty) {
   const next = Math.max(1, qty)
   if (next === item.quantity || busy[item.id]) return
   if (!isQuoteLine(item) && !item.allowBackorder && item.stockQuantity != null && next > item.stockQuantity) return
+  if (!withinQtyLimits(items.value, item, next)) return
   busy[item.id] = true
   try {
     await updateItem(item.id, next)

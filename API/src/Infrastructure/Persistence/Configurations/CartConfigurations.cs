@@ -31,6 +31,11 @@ public class CartItemConfiguration : IEntityTypeConfiguration<CartItem>
     public void Configure(EntityTypeBuilder<CartItem> b)
     {
         b.ToTable("CartItems");
+        b.Property(x => x.GcSenderName).HasMaxLength(75);
+        b.Property(x => x.GcSenderEmail).HasMaxLength(75);
+        b.Property(x => x.GcRecipientName).HasMaxLength(75);
+        b.Property(x => x.GcRecipientEmail).HasMaxLength(75);
+        b.Property(x => x.GcMessage).HasMaxLength(1000);
         b.HasKey(x => x.Id);
         b.Property(x => x.UnitPrice).HasPrecision(18, 2);
 

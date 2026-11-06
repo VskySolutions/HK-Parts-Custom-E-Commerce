@@ -25,7 +25,11 @@ public enum PaymentMethodType
     Square = 3,
     AuthorizeNet = 4,
     CashOnDelivery = 5,
-    BankTransfer = 6
+    BankTransfer = 6,
+    /// <summary>Paid on eBay (imported eBay order); never charged through a gateway here.</summary>
+    Ebay = 7,
+    /// <summary>Paid (fully or partly) with a store gift certificate; settled internally, never via a gateway.</summary>
+    GiftCertificate = 8
 }
 
 /// <summary>Per-gateway capture mode (REQ-PAY-002).</summary>

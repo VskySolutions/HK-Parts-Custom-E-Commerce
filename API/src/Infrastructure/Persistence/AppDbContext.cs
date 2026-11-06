@@ -67,6 +67,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<DhlExpressCredential> DhlExpressCredentials => Set<DhlExpressCredential>();
     public DbSet<UspsCredential> UspsCredentials => Set<UspsCredential>();
     public DbSet<UpsCredential> UpsCredentials => Set<UpsCredential>();
+    public DbSet<FreightviewCredential> FreightviewCredentials => Set<FreightviewCredential>();
     public DbSet<TwilioCredential> TwilioCredentials => Set<TwilioCredential>();
     public DbSet<AzureBlobCredential> AzureBlobCredentials => Set<AzureBlobCredential>();
 
@@ -111,6 +112,24 @@ public class AppDbContext : DbContext, IApplicationDbContext
     // Customer groups + group pricing (WO-22). The group is assigned via Customer.CustomerGroupId.
     public DbSet<CustomerGroup> CustomerGroups => Set<CustomerGroup>();
     public DbSet<CustomerGroupPrice> CustomerGroupPrices => Set<CustomerGroupPrice>();
+
+    // Price rules: automatic catalog discounts + their pre-calculated flat price table.
+    public DbSet<PriceRule> PriceRules => Set<PriceRule>();
+    public DbSet<PriceRuleCustomerGroup> PriceRuleCustomerGroups => Set<PriceRuleCustomerGroup>();
+    public DbSet<PriceRuleCategory> PriceRuleCategories => Set<PriceRuleCategory>();
+    public DbSet<PriceRuleProductPrice> PriceRuleProductPrices => Set<PriceRuleProductPrice>();
+
+    // eBay channel: per-store account, listings (+ item specifics), category tree, API log, vehicle fitment.
+    public DbSet<EbayAccount> EbayAccounts => Set<EbayAccount>();
+    public DbSet<EbayListing> EbayListings => Set<EbayListing>();
+    public DbSet<EbayListingAspect> EbayListingAspects => Set<EbayListingAspect>();
+    public DbSet<EbayCategory> EbayCategories => Set<EbayCategory>();
+    public DbSet<EbayApiLog> EbayApiLogs => Set<EbayApiLog>();
+    public DbSet<VehicleFitment> VehicleFitments => Set<VehicleFitment>();
+
+    // Gift certificates + their append-only balance ledger.
+    public DbSet<GiftCertificate> GiftCertificates => Set<GiftCertificate>();
+    public DbSet<GiftCertificateTransaction> GiftCertificateTransactions => Set<GiftCertificateTransaction>();
 
     // Customer tax exemption requests (WO-126)
     public DbSet<TaxExemptionRequest> TaxExemptionRequests => Set<TaxExemptionRequest>();

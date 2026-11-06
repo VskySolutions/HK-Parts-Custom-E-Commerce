@@ -77,6 +77,7 @@
       <template #body-cell-name="cell">
         <q-td :props="cell">
           <a class="text-primary cursor-pointer text-weight-medium" @click="onManage(cell.row)">{{ cell.row.name }}</a>
+          <q-badge v-if="cell.row.channelEbay" color="indigo-7" label="eBay" class="q-ml-xs"><q-tooltip>Listed on eBay</q-tooltip></q-badge>
         </q-td>
       </template>
 

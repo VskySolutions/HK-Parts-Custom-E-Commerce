@@ -13,6 +13,7 @@ using HKPartsEcommerce.Infrastructure.Persistence;
 using HKPartsEcommerce.Infrastructure.Persistence.Interceptors;
 using HKPartsEcommerce.Infrastructure.Routing;
 using HKPartsEcommerce.Infrastructure.Pricing;
+using HKPartsEcommerce.Infrastructure.Ebay;
 using HKPartsEcommerce.Infrastructure.Shipping;
 using HKPartsEcommerce.Infrastructure.Shipping.Carriers;
 using HKPartsEcommerce.Infrastructure.Payments;
@@ -43,6 +44,10 @@ public static class DependencyInjection
         // Audit-trail write integration (WO-61): scoped so it can consume ICurrentUserService /
         // IHttpContextAccessor per request; resolved from the scoped provider in the DbContext options below.
         services.AddScoped<AuditTrailInterceptor>();
+        // Queues price-rule rebuilds after catalog/group-price saves (see PriceRuleTriggerInterceptor).
+        services.AddScoped<PriceRuleTriggerInterceptor>();
+        // Queues eBay jobs after stock / price / shipment-tracking saves (see EbayTriggerInterceptor).
+        services.AddScoped<EbayTriggerInterceptor>();
 
         services.AddDbContext<AppDbContext>((sp, options) =>
         {
@@ -53,7 +58,10 @@ public static class DependencyInjection
             options.ConfigureWarnings(w =>
                 w.Ignore(CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
             // Writes an AuditTrail row per admin state change, inside the same save transaction (WO-61).
-            options.AddInterceptors(sp.GetRequiredService<AuditTrailInterceptor>());
+            options.AddInterceptors(
+                sp.GetRequiredService<AuditTrailInterceptor>(),
+                sp.GetRequiredService<PriceRuleTriggerInterceptor>(),
+                sp.GetRequiredService<EbayTriggerInterceptor>());
         });
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<AppDbContext>());
@@ -89,7 +97,7 @@ public static class DependencyInjection
         // and HttpClient does not decompress by default — so the body reached the log as binary noise and
         // a compressed success response would have failed to parse as JSON at all. The carriers are named
         // clients, so the handler is configured per name rather than globally.
-        foreach (var carrierClient in new[] { "fedex", "dhl-express", "usps", "ups" })
+        foreach (var carrierClient in new[] { "fedex", "dhl-express", "usps", "ups", "freightview" })
         {
             services.AddHttpClient(carrierClient)
                 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
@@ -135,6 +143,21 @@ public static class DependencyInjection
         // Pricing: discount evaluation + coupon validation/redemption (WO-24/25).
         services.AddScoped<IDiscountService, DiscountService>();
         services.AddScoped<ICouponService, CouponService>();
+        // Price rules: resolver (group base → sale → pre-calculated rule prices), set-based rebuild engine,
+        // and the coalescing background rebuild queue.
+        services.AddScoped<IPriceResolver, PriceResolver>();
+        services.AddScoped<IPriceRuleEngine, PriceRuleEngine>();
+        services.AddSingleton<PriceRuleRebuildQueue>();
+        services.AddSingleton<IPriceRuleRebuildQueue>(sp => sp.GetRequiredService<PriceRuleRebuildQueue>());
+        services.AddHostedService<PriceRuleRebuildService>();
+
+        // eBay channel (REST Sell APIs).
+        services.AddEbay(configuration);
+
+        // Gift certificates: balance ledger service + recipient email.
+        services.AddScoped<HKPartsEcommerce.Application.Features.GiftCertificates.IGiftCertificateService, HKPartsEcommerce.Application.Features.GiftCertificates.GiftCertificateService>();
+        services.AddScoped<HKPartsEcommerce.Application.Features.GiftCertificates.IGiftCertificateMailer, HKPartsEcommerce.Infrastructure.Email.GiftCertificateMailer>();
+        services.AddSingleton<GiftCertificateApplyRateLimiter>();
         // Loyalty reward points ledger: earn on order, redeem at checkout, claw back on refund (WO-27).
         services.AddScoped<IRewardPointsService, RewardPointsService>();
         // Recurring orders / subscriptions (WO-49).
@@ -153,6 +176,7 @@ public static class DependencyInjection
         services.AddScoped<ICarrierClient, UpsCarrierClient>();
         services.AddScoped<ICarrierClient, FedExCarrierClient>();
         services.AddScoped<ICarrierClient, UspsCarrierClient>();
+        services.AddScoped<ICarrierClient, FreightviewCarrierClient>();
         services.AddScoped<IShippingRateService, ShippingRateService>();
         services.AddScoped<IShippingOptionSelector, HKPartsEcommerce.Infrastructure.Shipping.ShippingOptionSelector>();
         services.AddScoped<IShippingLabelService, HKPartsEcommerce.Infrastructure.Shipping.ShippingLabelService>();
@@ -200,6 +224,11 @@ public static class DependencyInjection
         services.AddSingleton<IScheduledTask, HKPartsEcommerce.Infrastructure.BackgroundTasks.Workers.WebhookDispatchWorker>();
         services.AddSingleton<IScheduledTask, HKPartsEcommerce.Infrastructure.BackgroundTasks.Workers.EmailDispatchWorker>();
         services.AddSingleton<IScheduledTask, SubscriptionOrderWorker>();
+        services.AddSingleton<IScheduledTask, PriceRuleNightlyWorker>();
+        services.AddSingleton<IScheduledTask, EbayInventorySyncWorker>();
+        services.AddSingleton<IScheduledTask, EbayOrderImportWorker>();
+        services.AddSingleton<IScheduledTask, EbayCategoryRefreshWorker>();
+        services.AddSingleton<IScheduledTask, GiftCertificateReconciliationWorker>();
         // Webhooks: domain event bus that enqueues signed deliveries (WO-5).
         services.AddScoped<IDomainEventBus, HKPartsEcommerce.Infrastructure.Webhooks.DomainEventBus>();
         services.AddHostedService<TaskSchedulerService>();

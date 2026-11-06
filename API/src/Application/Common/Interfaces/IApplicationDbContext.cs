@@ -46,6 +46,7 @@ public interface IApplicationDbContext
     DbSet<DhlExpressCredential> DhlExpressCredentials { get; }
     DbSet<UspsCredential> UspsCredentials { get; }
     DbSet<UpsCredential> UpsCredentials { get; }
+    DbSet<FreightviewCredential> FreightviewCredentials { get; }
     DbSet<TwilioCredential> TwilioCredentials { get; }
     DbSet<AzureBlobCredential> AzureBlobCredentials { get; }
 
@@ -90,6 +91,24 @@ public interface IApplicationDbContext
     // Customer groups + group pricing (WO-22). The group is assigned via Customer.CustomerGroupId.
     DbSet<CustomerGroup> CustomerGroups { get; }
     DbSet<CustomerGroupPrice> CustomerGroupPrices { get; }
+
+    // Price rules: automatic catalog discounts + their pre-calculated flat price table.
+    DbSet<PriceRule> PriceRules { get; }
+    DbSet<PriceRuleCustomerGroup> PriceRuleCustomerGroups { get; }
+    DbSet<PriceRuleCategory> PriceRuleCategories { get; }
+    DbSet<PriceRuleProductPrice> PriceRuleProductPrices { get; }
+
+    // eBay channel: per-store account, listings (+ item specifics), category tree, API log, vehicle fitment.
+    DbSet<EbayAccount> EbayAccounts { get; }
+    DbSet<EbayListing> EbayListings { get; }
+    DbSet<EbayListingAspect> EbayListingAspects { get; }
+    DbSet<EbayCategory> EbayCategories { get; }
+    DbSet<EbayApiLog> EbayApiLogs { get; }
+    DbSet<VehicleFitment> VehicleFitments { get; }
+
+    // Gift certificates + their append-only balance ledger.
+    DbSet<GiftCertificate> GiftCertificates { get; }
+    DbSet<GiftCertificateTransaction> GiftCertificateTransactions { get; }
 
     // Customer tax exemption requests (WO-126)
     DbSet<TaxExemptionRequest> TaxExemptionRequests { get; }
