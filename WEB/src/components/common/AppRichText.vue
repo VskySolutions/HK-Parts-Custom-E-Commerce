@@ -57,11 +57,12 @@ const editorRef = ref(null)
 
 const toolbar = [
     ['bold', 'italic', 'underline', 'strike'],
-    [{ label: 'Format', icon: 'o_format_size', list: 'no-icons', options: ['p', 'h2', 'h3', 'h4'] }],
+    [{ label: 'Format', icon: 'o_format_size', list: 'no-icons', options: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'] }],
     ['unordered', 'ordered'],
     ['quote', 'link'],
     ['undo', 'redo'],
-    ['removeFormat']
+    ['removeFormat'],
+    ['viewsource']
   ]
 
 const definitions = {
