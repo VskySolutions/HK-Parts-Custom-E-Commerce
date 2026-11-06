@@ -54,11 +54,18 @@ public class CustomerDetailDto
     public string? WhatsAppPhoneNumber { get; set; }
     public bool WhatsAppOptIn { get; set; }
 
+    /// <summary>Custom information: "Long" free text (null when not set).</summary>
+    public string? LongText { get; set; }
+    /// <summary>Custom information: may buy restricted-capacity items (No / Yes).</summary>
+    public bool AllowRestrictedCapacityPurchases { get; set; }
+
     /// <summary>The single assigned pricing group, or null for base pricing (AC-CUS-003.2).</summary>
     public CustomerGroupBriefDto? CustomerGroup { get; set; }
     public List<AddressDto> Addresses { get; set; } = new();
 
     public int OrderCount { get; set; }
+    /// <summary>Active (not soft-deleted) documents, for the Documents tab badge.</summary>
+    public int ActiveDocumentCount { get; set; }
     /// <summary>Lifetime value: the total of orders whose payment was captured (net of fully-refunded ones).</summary>
     public decimal TotalSpent { get; set; }
     public List<CustomerOrderSummaryDto> RecentOrders { get; set; } = new();
@@ -94,6 +101,9 @@ public class GetCustomerDetailQueryHandler : IRequestHandler<GetCustomerDetailQu
             .ThenBy(m => m.AddressType)
             .ToListAsync(cancellationToken);
 
+        var activeDocumentCount = await _db.CustomerDocuments.AsNoTracking()
+            .CountAsync(d => d.CustomerId == customer.Id && !d.Deleted, cancellationToken);
+
         var orders = await _db.Orders.AsNoTracking()
             .Where(o => o.CustomerId == request.Id)
             .ExcludeUnpaidRedirect()
@@ -128,9 +138,12 @@ public class GetCustomerDetailQueryHandler : IRequestHandler<GetCustomerDetailQu
             TaxExemptionSubmittedOnUtc = latestRequest?.SubmittedOnUtc,
             WhatsAppPhoneNumber = customer.WhatsAppPhoneNumber,
             WhatsAppOptIn = customer.WhatsAppOptIn,
+            LongText = customer.LongText,
+            AllowRestrictedCapacityPurchases = customer.AllowRestrictedCapacityPurchases,
             CustomerGroup = customer.CustomerGroup is null ? null : CustomerGroupBriefDto.From(customer.CustomerGroup),
             Addresses = addresses.Select(AddressDto.From).ToList(),
             OrderCount = orders.Count,
+            ActiveDocumentCount = activeDocumentCount,
             TotalSpent = orders
                 .Where(o => o.PaymentStatus is PaymentStatus.Captured or PaymentStatus.PartiallyRefunded)
                 .Sum(o => o.TotalAmount),

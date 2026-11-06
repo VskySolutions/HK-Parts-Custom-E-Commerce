@@ -84,6 +84,8 @@ public static class DependencyInjection
         // Module-based access ([RequireModule(...)]): dynamic "module:*" policies + handler.
         services.AddSingleton<IAuthorizationPolicyProvider, ModulePolicyProvider>();
         services.AddSingleton<IAuthorizationHandler, ModuleAuthorizationHandler>();
+        // Permission-based access ([RequirePermission(...)]): dynamic "permission:*" policies + handler.
+        services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
         return services;
     }

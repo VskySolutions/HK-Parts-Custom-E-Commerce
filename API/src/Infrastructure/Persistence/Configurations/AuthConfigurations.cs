@@ -77,6 +77,9 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.Property(x => x.TaxExemptionCertificate).HasMaxLength(200);
         b.Property(x => x.VatId).HasMaxLength(64);
         b.Property(x => x.WhatsAppPhoneNumber).HasMaxLength(50);
+        // Custom information: "Long" text + "Allow Restricted Capacity Purchases" (No by default).
+        b.Property(x => x.LongText).HasMaxLength(4000);
+        b.Property(x => x.AllowRestrictedCapacityPurchases).HasDefaultValue(false);
 
         // Pricing group (AC-CUS-003.2): optional, at most one. Restrict — a lookup FK must never
         // cascade a group delete into customer rows.

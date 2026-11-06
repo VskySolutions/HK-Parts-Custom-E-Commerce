@@ -25,6 +25,9 @@ public class CustomerListItemDto
     public Guid? CustomerGroupId { get; set; }
     public string? CustomerGroupName { get; set; }
 
+    /// <summary>Custom information: may buy restricted-capacity items (No / Yes).</summary>
+    public bool AllowRestrictedCapacityPurchases { get; set; }
+
     public int OrderCount { get; set; }
     public decimal TotalSpent { get; set; }
 }
@@ -61,6 +64,7 @@ public class ListCustomersQueryHandler : IRequestHandler<ListCustomersQuery, Pag
         ["emailVerified"] = "User.EmailVerified",
         ["isActive"] = "User.IsActive",
         ["customerGroupName"] = "CustomerGroup.Name",
+        ["allowRestrictedCapacityPurchases"] = "AllowRestrictedCapacityPurchases",
     };
 
     private readonly IApplicationDbContext _db;
@@ -143,6 +147,7 @@ public class ListCustomersQueryHandler : IRequestHandler<ListCustomersQuery, Pag
             CreatedOnUtc = c.CreatedOnUtc,
             CustomerGroupId = c.CustomerGroupId,
             CustomerGroupName = c.CustomerGroup?.Name,
+            AllowRestrictedCapacityPurchases = c.AllowRestrictedCapacityPurchases,
             OrderCount = aggregates.TryGetValue(c.Id, out var a) ? a.OrderCount : 0,
             TotalSpent = aggregates.TryGetValue(c.Id, out var b) ? b.TotalSpent : 0m,
         }).ToList();

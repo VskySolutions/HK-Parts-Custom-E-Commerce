@@ -12,6 +12,9 @@ public class ModulePolicyProvider : IAuthorizationPolicyProvider
 {
     public const string Prefix = "module:";
 
+    /// <summary>Prefix for dynamic "permission:&lt;name&gt;" policies ([RequirePermission(...)]).</summary>
+    public const string PermissionPrefix = "permission:";
+
     private readonly DefaultAuthorizationPolicyProvider _fallback;
 
     public ModulePolicyProvider(IOptions<AuthorizationOptions> options)
@@ -29,6 +32,16 @@ public class ModulePolicyProvider : IAuthorizationPolicyProvider
             var policy = new AuthorizationPolicyBuilder()
                 .RequireAuthenticatedUser()
                 .AddRequirements(new ModuleRequirement(module))
+                .Build();
+            return Task.FromResult<AuthorizationPolicy?>(policy);
+        }
+
+        if (policyName.StartsWith(PermissionPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var permission = policyName[PermissionPrefix.Length..];
+            var policy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .AddRequirements(new PermissionRequirement(permission))
                 .Build();
             return Task.FromResult<AuthorizationPolicy?>(policy);
         }
