@@ -228,6 +228,8 @@ public static class DependencyInjection
         services.AddScoped<IFileStorageAdapter, LocalFilesystemAdapter>();
         services.AddScoped<IFileStorageAdapter, AzureBlobAdapter>();
         services.AddScoped<IFileStorage, FileStorageService>();
+        // Private (non-public) files, e.g. customer documents — streamed only via authorized endpoints.
+        services.AddScoped<IPrivateFileStore, PrivateFileStore>();
         // Central media library: short-lived prepared-upload store for the two-step flow (WO-122).
         services.AddSingleton<IMediaTempStore, HKPartsEcommerce.Infrastructure.Storage.MediaTempStore>();
 

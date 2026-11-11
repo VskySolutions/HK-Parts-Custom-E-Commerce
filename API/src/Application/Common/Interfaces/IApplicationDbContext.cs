@@ -85,6 +85,7 @@ public interface IApplicationDbContext
     // Customer accounts (WO-20, WO-21)
     DbSet<Address> Addresses { get; }
     DbSet<CustomerAddress> CustomerAddresses { get; }
+    DbSet<CustomerDocument> CustomerDocuments { get; }
     DbSet<UserToken> UserTokens { get; }
 
     // Customer groups + group pricing (WO-22). The group is assigned via Customer.CustomerGroupId.

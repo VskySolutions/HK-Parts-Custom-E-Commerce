@@ -1424,6 +1424,11 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("AllowRestrictedCapacityPurchases")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uniqueidentifier");
 
@@ -1454,6 +1459,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("LongText")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(50)
@@ -1547,7 +1556,7 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("CustomerAddresses", (string)null);
                 });
 
-            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerBlacklistEntry", b =>
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerDocument", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
@@ -1558,24 +1567,42 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("FirstName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit");
 
-                    b.Property<string>("LastName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<Guid?>("DeletedById")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Reason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int>("Status")
+                    b.Property<int>("DocumentType")
                         .HasColumnType("int");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("MimeType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<Guid?>("UpdatedById")
                         .HasColumnType("uniqueidentifier");
@@ -1585,55 +1612,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Email");
+                    b.HasIndex("CustomerId", "Deleted", "CreatedOnUtc");
 
-                    b.HasIndex("LastName", "FirstName");
-
-                    b.ToTable("CustomerBlacklist", (string)null);
-                });
-
-            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerBlacklistHit", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("AtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("BlacklistEntryId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("CartId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Email")
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("FirstName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("LastName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("MatchedOn")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AtUtc");
-
-                    b.HasIndex("BlacklistEntryId");
-
-                    b.ToTable("CustomerBlacklistHits", (string)null);
+                    b.ToTable("CustomerDocuments", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerGroup", b =>
@@ -7653,15 +7634,15 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("Customer");
                 });
 
-            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerBlacklistHit", b =>
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerDocument", b =>
                 {
-                    b.HasOne("HKPartsEcommerce.Domain.Entities.CustomerBlacklistEntry", "BlacklistEntry")
-                        .WithMany("Hits")
-                        .HasForeignKey("BlacklistEntryId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Customer", "Customer")
+                        .WithMany("Documents")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.Navigation("BlacklistEntry");
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerGroupPrice", b =>
@@ -8594,9 +8575,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("ProductCategories");
                 });
 
-            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerBlacklistEntry", b =>
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Customer", b =>
                 {
-                    b.Navigation("Hits");
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerGroup", b =>

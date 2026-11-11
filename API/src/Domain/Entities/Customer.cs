@@ -39,8 +39,22 @@ public class Customer : AuditableEntity, ISoftDeletable
     public bool WhatsAppOptIn { get; set; }
     public DateTime? WhatsAppOptInAtUtc { get; set; }
 
+    // ---- Custom information (admin-maintained) ----
+
+    /// <summary>"Long" free-text custom field (admin notes / long text). Null when not set.</summary>
+    public string? LongText { get; set; }
+
+    /// <summary>
+    /// Whether this customer may buy restricted-capacity items — the customer-side counterpart of the
+    /// product attribute "Restrict Non High Capacity Mags States" (options No / Yes). Defaults to No.
+    /// </summary>
+    public bool AllowRestrictedCapacityPurchases { get; set; }
+
     public bool Deleted { get; set; }
     public DateTime? DeletedOnUtc { get; set; }
 
     public User? User { get; set; }
+
+    /// <summary>Admin-uploaded documents (active and soft-deleted).</summary>
+    public ICollection<CustomerDocument> Documents { get; set; } = new List<CustomerDocument>();
 }

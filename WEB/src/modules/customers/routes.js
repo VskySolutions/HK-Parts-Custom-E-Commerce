@@ -18,5 +18,12 @@ export default [
     name: 'admin-customer-detail',
     meta: { title: 'Customer', permissions: ['Users.Read'] },
     component: () => import('modules/customers/pages/detail.vue')
+  },
+  {
+    // Add customer: same page as edit, opened without an :id (only the General tab is enabled).
+    path: 'customers/new',
+    name: 'admin-customer-create',
+    meta: { title: 'New customer', permissions: ['Users.Write'] },
+    component: () => import('modules/customers/pages/detail.vue')
   }
 ]

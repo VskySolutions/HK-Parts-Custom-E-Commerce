@@ -156,6 +156,7 @@ export function useStorefront () {
     loading.value = true
     try {
       const dto = await anonApi.get('/api/tenant/branding').then(unwrap)
+      console.log('Storefront branding loaded', dto)
       branding.value = toModel(dto)
     } catch (e) {
       branding.value = { ...DEFAULTS }

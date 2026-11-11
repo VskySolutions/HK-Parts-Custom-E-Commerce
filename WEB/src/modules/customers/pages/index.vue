@@ -9,6 +9,7 @@
         <q-btn outline color="primary" no-caps icon="o_tune" label="Advanced" class="q-ml-sm" @click="filtersOpen = true">
           <q-badge v-if="activeFilterCount" color="red" floating>{{ activeFilterCount }}</q-badge>
         </q-btn>
+        <q-btn v-if="canWrite" color="primary" unelevated no-caps icon="o_add" label="Add customer" class="q-ml-sm" @click="addCustomer" />
       </template>
     </AppListHeader>
 
@@ -35,30 +36,59 @@
       <template #body-cell-createdOnUtc="cell"><q-td :props="cell">{{ formatDate(cell.row.createdOnUtc) }}</q-td></template>
       <template #actions="{ row }">
         <q-btn flat round dense icon="o_tune" @click="view(row)"><q-tooltip>View / edit</q-tooltip></q-btn>
+        <q-btn v-if="canWrite" flat round dense icon="o_delete" color="negative" :loading="deletingId === row.id" :disable="!!deletingId" @click="onDelete(row)"><q-tooltip>Delete</q-tooltip></q-btn>
       </template>
     </AppDataTable>
   </q-page>
 </template>
 
 <script setup>
-/* Admin customer list (WO-117): search + advanced filters (single Customer Group, status,
+/* Admin customer list (WO-117) + "Add customer" button (opens the customer page in create mode): search + advanced filters (single Customer Group, status,
  * email-verified, registration-date range) with server-side paging/sort. The detail page is
  * the only editor — group assignment, activate/deactivate and read-only tax status live there. */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getApiErrorMessage } from 'services/api'
 import { useNotify } from 'composables/useNotify'
+import { usePermissions } from 'composables/usePermissions'
 import { customerAdminApi, customerGroupOptionsApi } from 'modules/customers/api'
 import { formatDateTime as formatDate } from 'src/utils/datetime'
 import { formatMoney } from 'modules/orders/api'
 import AppListHeader from 'components/common/AppListHeader.vue'
 import AppDataTable from 'components/common/AppDataTable.vue'
 import AppFieldLabel from 'components/common/AppFieldLabel.vue'
+import { deleteConfirmation } from 'dialogs/delete_confirmation'
 
 const notify = useNotify()
 const router = useRouter()
+const { has } = usePermissions()
+const canWrite = computed(() => has('Users.Write'))
+
+// Opens the customer page in create mode (only the General tab is enabled until saved).
+function addCustomer () { router.push({ name: 'admin-customer-create' }) }
 
 function view (row) { router.push({ name: 'admin-customer-detail', params: { id: row.id } }) }
+
+// Soft delete (Users.Write): record is kept server-side, hidden from this list, and the login is deactivated.
+const deletingId = ref(null)
+async function onDelete (row) {
+  if (deletingId.value) return
+  const name = `${row.firstName || ''} ${row.lastName || ''}`.trim() || 'this customer'
+  const ok = await deleteConfirmation(name, {
+    title: 'Delete customer',
+    message: `Delete "${name}" (${row.email})? Their account will be deactivated and they will no longer be able to sign in. Orders and history are kept.`
+  })
+  if (!ok) return
+  deletingId.value = row.id
+  try {
+    await customerAdminApi.remove(row.id)
+    notify.success(`Customer "${name}" deleted`)
+    // Stay on the current page/sort/filters; step back a page if this was its last row.
+    const p = pagination.value
+    const page = rows.value.length === 1 && p.page > 1 ? p.page - 1 : p.page
+    await fetch({ pagination: { ...p, page } })
+  } catch (e) { notify.error(getApiErrorMessage(e)) } finally { deletingId.value = null }
+}
 
 const columns = [
   { name: 'name', label: 'Name', field: 'firstName', align: 'left', sortable: true },
