@@ -22,7 +22,14 @@ public record UpdateShippingMethodCommand(
     List<ShippingMethodZoneRateInput>? ZoneRates = null,
     bool FlatRatePerItem = false,
     decimal? FflFlatRate = null,
-    bool InternationalViaUsps = false) : IRequest<ShippingMethodDto>;
+    bool InternationalViaUsps = false,
+    decimal? InternationalFallbackRate = null,
+    /// <summary>AD-04: added to the method's rate. Null = none.</summary>
+    decimal? HandlingFee = null,
+    /// <summary>AD-04: the method is offered only when the order subtotal is at least this. Null = no minimum.</summary>
+    decimal? MinimumOrderAmount = null,
+    /// <summary>AD-04: ISO country codes the method ships to. Null/empty = all countries.</summary>
+    List<string>? ShipToCountries = null) : IRequest<ShippingMethodDto>;
 
 public class UpdateShippingMethodCommandValidator : AbstractValidator<UpdateShippingMethodCommand>
 {
@@ -35,6 +42,10 @@ public class UpdateShippingMethodCommandValidator : AbstractValidator<UpdateShip
         RuleFor(x => x.FreeShippingThreshold).GreaterThanOrEqualTo(0).When(x => x.FreeShippingThreshold.HasValue);
         RuleFor(x => x.TransitDays).InclusiveBetween(0, 365).When(x => x.TransitDays.HasValue);
         RuleFor(x => x.FflFlatRate).GreaterThanOrEqualTo(0).When(x => x.FflFlatRate.HasValue);
+        RuleFor(x => x.InternationalFallbackRate).GreaterThanOrEqualTo(0).When(x => x.InternationalFallbackRate.HasValue);
+        RuleFor(x => x.HandlingFee).GreaterThanOrEqualTo(0).When(x => x.HandlingFee.HasValue);
+        RuleFor(x => x.MinimumOrderAmount).GreaterThanOrEqualTo(0).When(x => x.MinimumOrderAmount.HasValue);
+        RuleForEach(x => x.ShipToCountries).Length(2).WithMessage("Use two-letter country codes, e.g. US.");
         RuleFor(x => x.TiersJson).Must(ShippingMethodRules.BeValidTierJson).WithMessage("Rate tiers are not valid JSON.");
         RuleForEach(x => x.ZoneRates).ChildRules(r =>
         {
@@ -76,7 +87,11 @@ public class UpdateShippingMethodCommandHandler : IRequestHandler<UpdateShipping
         entity.FlatRatePerItem = request.MethodType == ShippingMethodType.FlatRate && request.FlatRatePerItem;
         entity.FflFlatRate = request.MethodType == ShippingMethodType.SizeBased ? request.FflFlatRate : null;
         entity.InternationalViaUsps = request.MethodType == ShippingMethodType.SizeBased && request.InternationalViaUsps;
+        entity.InternationalFallbackRate = entity.InternationalViaUsps ? request.InternationalFallbackRate : null;
         entity.TransitDays = request.TransitDays;
+        entity.HandlingFee = request.HandlingFee;
+        entity.MinimumOrderAmount = request.MinimumOrderAmount;
+        entity.ShipToCountries = ShippingMethodRules.JoinCountries(request.ShipToCountries);
         entity.IsEnabled = request.IsEnabled;
         entity.DisplayOrder = request.DisplayOrder;
 

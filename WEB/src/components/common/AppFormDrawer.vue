@@ -64,6 +64,9 @@ const props = defineProps({
   minWidth: { type: Number, default: 320 },
   maxWidth: { type: Number, default: 720 },
   defaultWidth: { type: Number, default: 460 },
+  // LocalStorage key for the remembered width. Shared by default; a form that needs a different size
+  // passes its own key so a narrow width remembered elsewhere does not shrink it (and vice versa).
+  widthKey: { type: String, default: STORAGE_KEYS.FORM_DRAWER_WIDTH },
   validate: { type: Boolean, default: true }
 })
 
@@ -71,9 +74,9 @@ const emit = defineEmits(['update:modelValue', 'submit', 'cancel'])
 
 const formRef = ref(null)
 
-const stored = Number(getItem(STORAGE_KEYS.FORM_DRAWER_WIDTH, props.defaultWidth))
+const stored = Number(getItem(props.widthKey, props.defaultWidth))
 const width = ref(
-  Number.isFinite(stored) && stored >= props.minWidth ? stored : props.defaultWidth
+  Number.isFinite(stored) && stored >= props.minWidth && stored <= props.maxWidth ? stored : props.defaultWidth
 )
 
 // ---- Resize ---------------------------------------------------------------
@@ -90,7 +93,7 @@ function onMove (e) {
 function stopResize () {
   window.removeEventListener('mousemove', onMove)
   window.removeEventListener('mouseup', stopResize)
-  setItem(STORAGE_KEYS.FORM_DRAWER_WIDTH, width.value)
+  setItem(props.widthKey, width.value)
 }
 
 function startResize (e) {

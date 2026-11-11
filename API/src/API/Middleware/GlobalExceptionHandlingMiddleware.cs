@@ -48,6 +48,12 @@ public class GlobalExceptionHandlingMiddleware
 
         if (status >= 500 && ex is not ServiceUnavailableException)
             _logger.LogError(ex, "Unhandled exception. CorrelationId={CorrelationId}", correlationId);
+        else if (ex is ValidationException { Errors.Count: > 0 } validation)
+            // Field-level failures are the whole diagnosis; the stack trace through ValidationBehavior is noise.
+            _logger.LogWarning(
+                "Request {Method} {Path} failed validation. CorrelationId={CorrelationId} Errors: {Errors}",
+                context.Request.Method, context.Request.Path, correlationId,
+                string.Join("; ", validation.Errors.Select(e => $"{e.Key}: {string.Join(" | ", e.Value)}")));
         else
             _logger.LogWarning(ex, "Request failed with {Status}. CorrelationId={CorrelationId}", status, correlationId);
 

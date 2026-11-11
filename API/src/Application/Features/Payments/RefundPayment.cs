@@ -35,15 +35,18 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
     private readonly IDateTimeProvider _clock;
 
     private readonly GiftCertificates.IGiftCertificateService? _giftCertificates;
+    private readonly ICurrentUserService? _current;
 
     public RefundPaymentCommandHandler(
         IApplicationDbContext db, IPaymentGatewayRouter router, IDateTimeProvider clock,
-        GiftCertificates.IGiftCertificateService? giftCertificates = null)
+        GiftCertificates.IGiftCertificateService? giftCertificates = null,
+        ICurrentUserService? current = null)
     {
         _db = db;
         _router = router;
         _clock = clock;
         _giftCertificates = giftCertificates;
+        _current = current;
     }
 
     public async Task<PaymentDto> Handle(RefundPaymentCommand request, CancellationToken cancellationToken)
@@ -72,16 +75,20 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
         }
 
         var result = await _router.RefundAsync(payment, amount, cancellationToken);
+        PaymentLedger.Record(_db, payment, PaymentTransactionType.Refund, amount, result, _clock.UtcNow, _current?.UserId);
 
         if (result.Success)
         {
             payment.RefundedAmount += amount;
             payment.RefundedOnUtc = _clock.UtcNow;
-            payment.Status = payment.RefundedAmount >= payment.Amount
-                ? PaymentStatus.Refunded
-                : PaymentStatus.PartiallyRefunded;
-            payment.GatewayReference = result.GatewayReference ?? payment.GatewayReference;
-            payment.TransactionId = result.TransactionId ?? payment.TransactionId;
+            // A same-day full refund the gateway ran as a void (Authorize.Net, unsettled): nothing settled at all.
+            payment.Status = result.Status == PaymentStatus.Voided
+                ? PaymentStatus.Voided
+                : payment.RefundedAmount >= payment.Amount
+                    ? PaymentStatus.Refunded
+                    : PaymentStatus.PartiallyRefunded;
+            // TransactionId stays the ORIGINAL transaction: every further partial refund references it (AN-25).
+            // The refund's own id lives on its PaymentTransaction row.
             payment.ErrorMessage = null;
 
             var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId, cancellationToken);
@@ -89,7 +96,7 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
                 order.PaymentStatus = payment.Status;
 
             // A fully refunded purchase voids the gift certificates it bought (unused ones; partly used flags review).
-            if (order is not null && payment.Status == PaymentStatus.Refunded && _giftCertificates is not null)
+            if (order is not null && payment.Status is PaymentStatus.Refunded or PaymentStatus.Voided && _giftCertificates is not null)
             {
                 await _db.SaveChangesAsync(cancellationToken);
                 await _giftCertificates.VoidPurchasedAsync(order.Id, "refunded", cancellationToken);
@@ -102,6 +109,12 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // AN-27: a failed refund must not look like a success. Throwing (after the failure row is saved) stops
+        // RefundOrder from restocking / emailing the customer, and the admin sees the gateway's reason.
+        if (!result.Success)
+            throw new ConflictException(result.ErrorMessage ?? "The gateway did not accept the refund.");
+
         return PaymentDto.From(payment);
     }
 }

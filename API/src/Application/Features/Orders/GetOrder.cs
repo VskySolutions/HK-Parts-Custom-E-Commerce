@@ -22,6 +22,8 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDto>
             .Include(o => o.AssignedStore)
             .AsNoTracking()
             .Include(o => o.Lines)
+            .Include(o => o.Shippings)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(o => o.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException(nameof(Order), request.Id);
 

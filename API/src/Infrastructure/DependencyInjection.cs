@@ -84,9 +84,22 @@ public static class DependencyInjection
         services.AddScoped<IApiKeyService, ApiKeyService>();
 
         // Credential vault (WO-7): deployment-specific Data Protection key ring persisted outside the DB.
+        // Every [Encrypted] secret in the DB is readable only with the key that wrote it, so this folder must
+        // outlive deployments. Set DataProtection:KeysPath to a folder OUTSIDE the site on a server — the
+        // default lives inside the app folder, where a publish with DeleteExistingFiles wipes it and the
+        // app silently starts a new key ring. A relative path is anchored to the content root (the project
+        // folder under Visual Studio / dotnet run, the site folder under IIS) rather than to whatever the
+        // process working directory happens to be.
         var dpKeysPath = configuration["DataProtection:KeysPath"];
         if (string.IsNullOrWhiteSpace(dpKeysPath))
             dpKeysPath = "keys/dataprotection";
+        if (!Path.IsPathRooted(dpKeysPath))
+        {
+            var contentRoot = configuration["contentRoot"];
+            if (string.IsNullOrWhiteSpace(contentRoot))
+                contentRoot = Directory.GetCurrentDirectory();
+            dpKeysPath = Path.GetFullPath(Path.Combine(contentRoot, dpKeysPath));
+        }
         services.AddDataProtection()
             .SetApplicationName("VSky.ECommerce")
             .PersistKeysToFileSystem(new DirectoryInfo(dpKeysPath));
@@ -173,9 +186,15 @@ public static class DependencyInjection
         services.AddScoped<IGdprService, HKPartsEcommerce.Infrastructure.Customers.GdprService>();
         // Shipping: custom-method + carrier rate aggregation (WO-40/43).
         services.AddScoped<ICarrierClient, DhlExpressCarrierClient>();
-        services.AddScoped<ICarrierClient, UpsCarrierClient>();
-        services.AddScoped<ICarrierClient, FedExCarrierClient>();
-        services.AddScoped<ICarrierClient, UspsCarrierClient>();
+        services.AddScoped<UpsCarrierClient>();
+        services.AddScoped<ICarrierClient>(sp => sp.GetRequiredService<UpsCarrierClient>());
+        services.AddScoped<IUpsRater>(sp => sp.GetRequiredService<UpsCarrierClient>());
+        services.AddScoped<FedExCarrierClient>();
+        services.AddScoped<ICarrierClient>(sp => sp.GetRequiredService<FedExCarrierClient>());
+        services.AddScoped<IFedExRater>(sp => sp.GetRequiredService<FedExCarrierClient>());
+        services.AddScoped<UspsCarrierClient>();
+        services.AddScoped<ICarrierClient>(sp => sp.GetRequiredService<UspsCarrierClient>());
+        services.AddScoped<IUspsRater>(sp => sp.GetRequiredService<UspsCarrierClient>());
         services.AddScoped<ICarrierClient, FreightviewCarrierClient>();
         services.AddScoped<IShippingRateService, ShippingRateService>();
         services.AddScoped<IShippingOptionSelector, HKPartsEcommerce.Infrastructure.Shipping.ShippingOptionSelector>();
@@ -190,7 +209,9 @@ public static class DependencyInjection
         services.AddScoped<IPaymentGatewayAdapter, PaypalGatewayAdapter>();
         services.AddScoped<IPaymentGatewayAdapter, RazorpayGatewayAdapter>();
         services.AddScoped<IPaymentGatewayAdapter, SquareGatewayAdapter>();
-        services.AddScoped<IPaymentGatewayAdapter, AuthorizeNetGatewayAdapter>();
+        services.AddScoped<AuthorizeNetGatewayAdapter>();
+        services.AddScoped<IPaymentGatewayAdapter>(sp => sp.GetRequiredService<AuthorizeNetGatewayAdapter>());
+        services.AddScoped<IAuthorizeNetClient>(sp => sp.GetRequiredService<AuthorizeNetGatewayAdapter>());
         services.AddScoped<IPaymentGatewayAdapter, CodGatewayAdapter>();
         services.AddScoped<IPaymentGatewayAdapter, BankTransferGatewayAdapter>();
         services.AddScoped<IPaymentGatewayRouter, PaymentGatewayRouter>();
@@ -199,6 +220,7 @@ public static class DependencyInjection
         services.AddScoped<IOrderDocumentService, OrderDocumentService>();
         // Checkout orchestrator: cart → routing → shipping → tax → discounts → payment → order (WO-30).
         services.AddScoped<ICheckoutOrchestrator, CheckoutOrchestrator>();
+        services.AddScoped<ICheckoutLockService, CheckoutLockService>();
         // reCAPTCHA server-side verification for protected forms (WO-107).
         services.AddScoped<IRecaptchaVerifier, RecaptchaVerifier>();
 

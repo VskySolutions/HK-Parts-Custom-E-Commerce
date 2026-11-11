@@ -29,6 +29,13 @@ export const shippingConfigApi = {
   update (payload) { return api.put(CONFIG, payload).then(unwrap) }
 }
 
+/* Shipping rules (AD-20/21): add-on fees + destination restrictions, read at quote and placement. */
+const RULES = '/api/admin/shipping/rules'
+export const shippingRulesApi = {
+  get () { return api.get(RULES).then(unwrap) },
+  update (payload) { return api.put(RULES, payload).then(unwrap) }
+}
+
 
 export const shippingSelectionModeOptions = [
   { label: 'Manual — the customer picks from every option', value: 'Manual' },
@@ -70,6 +77,7 @@ export default {
   shippingMethodApi,
   shippingZoneApi,
   shippingConfigApi,
+  shippingRulesApi,
   shippingMethodTypeOptions,
   shippingSelectionModeOptions,
   shippingCarrierMeta,

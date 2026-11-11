@@ -33,7 +33,33 @@ public record CheckoutQuoteRequest(
     CheckoutAddress ShipTo,
     string? ShippingMethodId,
     bool PickupInStore = false,
-    Guid? PickupStoreId = null);
+    Guid? PickupStoreId = null,
+    ShippingAddOnSelection? AddOns = null);
+
+/// <summary>
+/// The buyer's shipping add-on answers for the shipment (SR-80): Require Signature and Shipping Insurance.
+/// Both default to No. Ignored for pickup and for carts that ship nothing.
+/// </summary>
+public record ShippingAddOnSelection(bool RequireSignature = false, bool Insurance = false);
+
+/// <summary>
+/// The add-ons on offer for the quoted shipment and what they cost (SR-80/81). The shipment's total is the
+/// method price plus the fees of the add-ons the buyer selected (SR-83); it is the quote's ShippingTotal.
+/// </summary>
+public class ShippingAddOnQuote
+{
+    public bool SignatureAvailable { get; set; }
+    public decimal SignatureFee { get; set; }
+    public bool SignatureSelected { get; set; }
+
+    public bool InsuranceAvailable { get; set; }
+    /// <summary>The insurance fee for this cart's declared value, whether or not it is selected.</summary>
+    public decimal InsuranceFee { get; set; }
+    public bool InsuranceSelected { get; set; }
+
+    /// <summary>Sum of the shipped lines' totals: what insurance is banded on.</summary>
+    public decimal DeclaredValue { get; set; }
+}
 
 /// <summary>
 /// The priced outcome of a checkout quote: the cart subtotal, itemized discounts, the available
@@ -66,7 +92,15 @@ public class CheckoutQuote
     public List<AppliedDiscount> Discounts { get; set; } = new();
     public decimal DiscountTotal { get; set; }
     public List<ShippingRateOption> ShippingOptions { get; set; } = new();
+
+    /// <summary>Shipping charged: the selected method's price plus the selected add-ons' fees.</summary>
     public decimal ShippingTotal { get; set; }
+
+    /// <summary>The selected method's price alone, before add-ons.</summary>
+    public decimal ShippingMethodTotal { get; set; }
+
+    /// <summary>The signature / insurance add-ons for the shipment; null when nothing is shipped (pickup, no shippable items, inquiry).</summary>
+    public ShippingAddOnQuote? ShippingAddOns { get; set; }
     public TaxBreakdown Tax { get; set; } = new(0m, new(), false);
     public decimal TaxTotal { get; set; }
 
@@ -105,6 +139,35 @@ public class CheckoutQuote
 
     /// <summary>The certificate covers everything: show "Pay with Gift Certificate" instead of payment methods.</summary>
     public bool PayWithGiftCertificate { get; set; }
+
+    /// <summary>
+    /// Which payment view the storefront renders (6.1): "Methods" (choose a method and pay), "GiftCertificate"
+    /// (the certificate covers the total) or "None" (the total is 0.00, e.g. a 100 % coupon: no payment required).
+    /// Decided here so the UI never works out which methods to show.
+    /// </summary>
+    public string PaymentMode { get; set; } = CheckoutPaymentModes.Methods;
+
+    /// <summary>CK-20: the soonest deadline of the low-stock locks this cart holds (storefront countdown); null when nothing is locked.</summary>
+    public DateTime? CheckoutLockExpiresUtc { get; set; }
+
+    /// <summary>CK-02: when the checkout session expires if the buyer does nothing; null when the timeout is off.</summary>
+    public DateTime? CheckoutExpiresUtc { get; set; }
+
+    /// <summary>SH-23: notice for the ship-to state (e.g. Washington), or null.</summary>
+    public string? StateNotice { get; set; }
+
+    /// <summary>SH-40 / SH-43: the terms checkbox. Placement is refused without it when required.</summary>
+    public bool TermsRequired { get; set; }
+    public string? TermsText { get; set; }
+    public string? TermsUrl { get; set; }
+}
+
+/// <summary>Values of <see cref="CheckoutQuote.PaymentMode"/>.</summary>
+public static class CheckoutPaymentModes
+{
+    public const string Methods = "Methods";
+    public const string GiftCertificate = "GiftCertificate";
+    public const string None = "None";
 }
 
 /// <summary>
@@ -120,6 +183,9 @@ public class PaymentMethodOption
     /// <summary>The gateway's transaction fee as a percentage of the order total (0 when none). The storefront
     /// shows it against each method and adds it to the total the buyer pays when the method is selected.</summary>
     public decimal FeePercent { get; set; }
+
+    /// <summary>The method's configured buyer-facing name (e.g. "Credit Card"); null = the storefront's default label.</summary>
+    public string? DisplayName { get; set; }
 }
 
 /// <summary>
@@ -146,7 +212,22 @@ public record PlaceCheckoutRequest(
     /// </summary>
     string? PaymentInstrument = null,
     /// <summary>Confirm the "Pay with Gift Certificate" page: only allowed when the certificate covers the full total.</summary>
-    bool PayWithGiftCertificate = false);
+    bool PayWithGiftCertificate = false,
+    /// <summary>The signature / insurance add-ons the buyer chose (the same answers the last quote was priced with).</summary>
+    ShippingAddOnSelection? AddOns = null,
+    /// <summary>
+    /// The shipping total the buyer was shown (the last quote's ShippingTotal). Placement re-prices the
+    /// shipment, and refuses before charging when the price no longer matches, so the buyer is never charged
+    /// a price they did not see (OP-11/21/41). Null skips the check (older clients).
+    /// </summary>
+    decimal? ExpectedShippingTotal = null,
+    /// <summary>The order total the buyer was shown (the last quote's Total, before any payment fee). Same rule as above.</summary>
+    decimal? ExpectedTotal = null,
+    /// <summary>The buyer ticked the terms checkbox (SH-40). Required when the checkout settings say so (SH-41, PY-13, PY-43).</summary>
+    bool? TermsAccepted = null);
+
+/// <summary>Identifies the buyer's cart for a checkout call that needs nothing else (e.g. releasing the checkout lock).</summary>
+public record CheckoutCartRef(Guid? CartId, string? SessionId);
 
 /// <summary>
 /// The outcome of placing a checkout: the created order's id/number/status and grand total, the

@@ -36,7 +36,13 @@ public enum OrderStatus
     /// reserved. Kept as a dedicated status so every existing query that filters on a fulfilment status
     /// naturally excludes inquiries; the sales pipeline itself lives in <see cref="InquiryStatus"/>.
     /// </summary>
-    Inquiry = 12
+    Inquiry = 12,
+
+    /// <summary>
+    /// Placed, but the payment gateway held the transaction for fraud review (Authorize.Net responseCode 4).
+    /// Not fulfilled until the hold is approved (→ Pending) or declined (→ Cancelled), per AN-16.
+    /// </summary>
+    PaymentReview = 13
 }
 
 /// <summary>

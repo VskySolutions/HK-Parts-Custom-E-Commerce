@@ -16,7 +16,57 @@ public record PaymentRequest(
     string? PaymentToken = null,
     string? ReturnUrl = null,
     IDictionary<string, string>? Metadata = null,
-    string? OrderNumber = null);
+    string? OrderNumber = null,
+    PaymentCustomer? Customer = null);
+
+/// <summary>A postal address as sent to a gateway (bill-to / ship-to).</summary>
+public record PaymentAddress(
+    string? FirstName,
+    string? LastName,
+    string? Company,
+    string? Line1,
+    string? Line2,
+    string? City,
+    string? Region,
+    string? PostalCode,
+    string? CountryCode,
+    string? Phone = null);
+
+/// <summary>
+/// Who is paying, for gateways that take it (Authorize.Net AN-14/15): the customer id (null for guests), email,
+/// bill-to and ship-to addresses, the buyer's IP and an optional PO number. It is what lets gateway reports be
+/// matched to orders and what feeds the fraud filters.
+/// </summary>
+public record PaymentCustomer(
+    Guid? CustomerId,
+    string? Email,
+    PaymentAddress? BillTo,
+    PaymentAddress? ShipTo,
+    string? CustomerIp,
+    string? PoNumber = null);
+
+/// <summary>
+/// The gateway's raw response detail behind a <see cref="PaymentResult"/>: result/reason codes and text, and
+/// the card verification results. Admin-facing; the buyer only sees <see cref="PaymentResult.ErrorMessage"/>.
+/// </summary>
+public record PaymentGatewayDetails
+{
+    public string? ResponseCode { get; init; }
+    public string? ReasonCode { get; init; }
+    public string? ResponseText { get; init; }
+    public string? AuthCode { get; init; }
+    public string? AvsResultCode { get; init; }
+    public string? CvvResultCode { get; init; }
+    public string? NetworkTransactionId { get; init; }
+    public string? CardType { get; init; }
+    public string? CardLastFour { get; init; }
+    public string? CustomerProfileId { get; init; }
+    public string? CustomerPaymentProfileId { get; init; }
+    /// <summary>The transaction this operation referenced (capture / void / refund).</summary>
+    public string? RefTransactionId { get; init; }
+    /// <summary>The operation the gateway actually ran, when it differs from the one asked (a refund sent as a void).</summary>
+    public PaymentTransactionType? PerformedAs { get; init; }
+}
 
 /// <summary>
 /// A payment method currently offered at checkout: the <see cref="Method"/> plus its environment —
@@ -53,6 +103,9 @@ public record PaymentResult(
     /// verified via <see cref="Interfaces.IPaymentGatewayRouter.VerifyClientPaymentAsync"/>.
     /// </summary>
     public IReadOnlyDictionary<string, string>? ClientAction { get; init; }
+
+    /// <summary>Raw gateway response detail (codes, AVS/CVV, card brand, last four). Null when the gateway returns none.</summary>
+    public PaymentGatewayDetails? Details { get; init; }
 
     /// <summary>A "send the buyer to this URL" result for redirect gateways; the order stays pending until they return.</summary>
     public static PaymentResult Redirect(string url, string? gatewayReference)

@@ -36,6 +36,13 @@ public class ShippingMethod : AuditableEntity, ISoftDeletable
     /// withheld rather than offered free.
     /// </summary>
     public bool InternationalViaUsps { get; set; }
+
+    /// <summary>
+    /// <see cref="InternationalViaUsps"/> only: price charged when USPS cannot quote (US-23). Null withholds
+    /// the method, which blocks checkout with "no delivery options" when nothing else quotes — never $0.
+    /// </summary>
+    public decimal? InternationalFallbackRate { get; set; }
+
     /// <summary>Order-subtotal threshold that unlocks free shipping.</summary>
     public decimal? FreeShippingThreshold { get; set; }
     /// <summary>
@@ -51,6 +58,16 @@ public class ShippingMethod : AuditableEntity, ISoftDeletable
     /// as <see cref="ShippingProviderConfiguration.AssumedTransitDays"/> rather than as instant.
     /// </summary>
     public int? TransitDays { get; set; }
+
+    // Common method settings (AD-04), the same three every carrier method has.
+    /// <summary>Added to the method's computed rate (free shipping included). Null = none.</summary>
+    public decimal? HandlingFee { get; set; }
+
+    /// <summary>The method is offered only when the order subtotal is at least this. Null = no minimum.</summary>
+    public decimal? MinimumOrderAmount { get; set; }
+
+    /// <summary>Comma-separated ISO country codes the method ships to. Null = all countries.</summary>
+    public string? ShipToCountries { get; set; }
 
     public bool IsEnabled { get; set; } = true;
     public int DisplayOrder { get; set; }

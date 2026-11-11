@@ -137,6 +137,11 @@ public class AppDbContext : DbContext, IApplicationDbContext
     // Orders & store fulfilment (WO-51, WO-52)
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderLineItem> OrderLineItems => Set<OrderLineItem>();
+    public DbSet<OrderShipping> OrderShippings => Set<OrderShipping>();
+    public DbSet<ShippingRuleSettings> ShippingRuleSettings => Set<ShippingRuleSettings>();
+    public DbSet<CheckoutLock> CheckoutLocks => Set<CheckoutLock>();
+    public DbSet<CustomerBlacklistEntry> CustomerBlacklistEntries => Set<CustomerBlacklistEntry>();
+    public DbSet<CustomerBlacklistHit> CustomerBlacklistHits => Set<CustomerBlacklistHit>();
     public DbSet<StoreManagerAssignment> StoreManagerAssignments => Set<StoreManagerAssignment>();
     public DbSet<Shipment> Shipments => Set<Shipment>();
     public DbSet<ShipmentLineItem> ShipmentLineItems => Set<ShipmentLineItem>();
@@ -158,6 +163,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ShippingProviderConfiguration> ShippingProviderConfigurations => Set<ShippingProviderConfiguration>();
     public DbSet<ShippingCarrierSetting> ShippingCarrierSettings => Set<ShippingCarrierSetting>();
     public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<TaxProviderConfiguration> TaxProviderConfigurations => Set<TaxProviderConfiguration>();
     public DbSet<StateNexusAccumulator> StateNexusAccumulators => Set<StateNexusAccumulator>();
     public DbSet<OrderStatusHistory> OrderStatusHistory => Set<OrderStatusHistory>();
@@ -212,7 +218,9 @@ public class AppDbContext : DbContext, IApplicationDbContext
         {
             var encryptedConverter = new ValueConverter<string, string>(
                 v => protector.Protect(v),
-                v => protector.Unprotect(v));
+                // TryUnprotect: a secret encrypted under a key this deployment lacks reads as null (not set)
+                // rather than throwing out of every query that materializes the row.
+                v => protector.TryUnprotect(v)!);
 
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
                 foreach (var property in entityType.GetProperties())

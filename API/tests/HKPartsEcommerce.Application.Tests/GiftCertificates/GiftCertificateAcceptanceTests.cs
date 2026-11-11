@@ -536,7 +536,7 @@ public class GiftCertificateAcceptanceTests : GiftCertificateTestBase
         await using (var db = NewContext())
             await Orchestrator(db).PlaceAsync(new HKPartsEcommerce.Application.Common.Models.PlaceCheckoutRequest(
                 null, other, ShipTo with { FirstName = "Bob", LastName = "Redeemer" }, null,
-                PaymentMethodType.GiftCertificate, null, null, PayWithGiftCertificate: true), default);
+                PaymentMethodType.GiftCertificate, null, null, PayWithGiftCertificate: true, TermsAccepted: true), default);
 
         await using var ctx = NewContext();
         var list = await new ListGiftCertificatesHandler(ctx).Handle(new ListGiftCertificatesQuery(Search: code), default);

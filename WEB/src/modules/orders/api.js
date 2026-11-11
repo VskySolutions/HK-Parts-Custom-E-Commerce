@@ -47,6 +47,14 @@ export const orderApi = {
   refund (id, payload) {
     return api.post(`${ORDERS}/${id}/refund`, payload).then(unwrap)
   },
+  // Payment actions (PaymentController, /api/payments). Capture = "Charge" an authorize-only payment
+  // (amount null = the authorized amount). Sync re-reads the gateway, e.g. a payment held for review.
+  capturePayment (paymentId, amount = null) {
+    return api.post(`/api/payments/${paymentId}/capture`, { amount }).then(unwrap)
+  },
+  syncPayment (paymentId) {
+    return api.post(`/api/payments/${paymentId}/sync`).then(unwrap)
+  },
   // PDF documents (blob download)
   invoice (id) {
     return downloadPdf(`${ORDERS}/${id}/invoice`, `invoice-${id}.pdf`)
@@ -90,6 +98,7 @@ export const orderStatusColor = (status) => {
   if (s.includes('ship')) return 'teal'
   if (s.includes('process') || s.includes('prepar') || s.includes('pending') || s.includes('routing')) return 'orange'
   if (s.includes('readyforpickup')) return 'purple'
+  if (s === 'paymentreview') return 'amber-9'
   return 'grey'
 }
 
@@ -99,6 +108,8 @@ export const allowedTransitions = (status) => {
     case 'Pending': return ['Processing', 'Cancelled']
     case 'Processing': return ['Shipped', 'Cancelled']
     case 'Shipped': return ['Delivered', 'Cancelled']
+    // Released by "Check gateway status" on the payment, never by hand.
+    case 'PaymentReview': return ['Cancelled']
     default: return []
   }
 }
@@ -110,6 +121,7 @@ export const paymentStatusColor = (status) => {
   if (s === 'captured') return 'positive'
   if (s === 'refunded' || s === 'partiallyrefunded') return 'deep-orange'
   if (s === 'authorized') return 'teal'
+  if (s === 'heldforreview') return 'amber-9'
   if (s === 'pending' || s === 'awaitingpayment') return 'orange'
   return 'grey'
 }

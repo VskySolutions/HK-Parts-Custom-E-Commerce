@@ -9,4 +9,12 @@ public interface ICredentialProtector
 {
     string Protect(string plaintext);
     string Unprotect(string ciphertext);
+
+    /// <summary>
+    /// Like <see cref="Unprotect"/>, but returns null (and logs a warning) when the value cannot be
+    /// decrypted — typically because it was encrypted under a key this deployment's key ring does not hold
+    /// (a DB copied from another machine, or a key folder wiped by a redeploy). Reading such a secret as
+    /// "not set" lets the admin re-enter it instead of every request that touches the row failing.
+    /// </summary>
+    string? TryUnprotect(string ciphertext);
 }

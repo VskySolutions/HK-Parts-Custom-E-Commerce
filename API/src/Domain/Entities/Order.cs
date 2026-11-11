@@ -150,4 +150,7 @@ public class Order : AuditableEntity, ISoftDeletable
     public ICollection<OrderLineItem> Lines { get; set; } = new List<OrderLineItem>();
     public ICollection<OrderStatusHistory> StatusHistory { get; set; } = new List<OrderStatusHistory>();
     public ICollection<PaymentRecord> Payments { get; set; } = new List<PaymentRecord>();
+
+    /// <summary>The shipping settings frozen at placement, one row per shipment (today exactly one; none for an inquiry).</summary>
+    public ICollection<OrderShipping> Shippings { get; set; } = new List<OrderShipping>();
 }

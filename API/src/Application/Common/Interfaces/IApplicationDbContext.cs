@@ -116,6 +116,11 @@ public interface IApplicationDbContext
     // Orders & store fulfilment (WO-51, WO-52)
     DbSet<Order> Orders { get; }
     DbSet<OrderLineItem> OrderLineItems { get; }
+    DbSet<OrderShipping> OrderShippings { get; }
+    DbSet<ShippingRuleSettings> ShippingRuleSettings { get; }
+    DbSet<CheckoutLock> CheckoutLocks { get; }
+    DbSet<CustomerBlacklistEntry> CustomerBlacklistEntries { get; }
+    DbSet<CustomerBlacklistHit> CustomerBlacklistHits { get; }
     DbSet<StoreManagerAssignment> StoreManagerAssignments { get; }
     DbSet<Shipment> Shipments { get; }
     DbSet<ShipmentLineItem> ShipmentLineItems { get; }
@@ -137,6 +142,7 @@ public interface IApplicationDbContext
     DbSet<ShippingProviderConfiguration> ShippingProviderConfigurations { get; }
     DbSet<ShippingCarrierSetting> ShippingCarrierSettings { get; }
     DbSet<PaymentRecord> PaymentRecords { get; }
+    DbSet<PaymentTransaction> PaymentTransactions { get; }
     DbSet<TaxProviderConfiguration> TaxProviderConfigurations { get; }
     DbSet<StateNexusAccumulator> StateNexusAccumulators { get; }
     DbSet<OrderStatusHistory> OrderStatusHistory { get; }

@@ -15,7 +15,11 @@ public record CarrierAddress(
     string? PostalCode,
     double? Latitude,
     double? Longitude,
-    string? City = null);
+    string? City = null,
+    string? Line1 = null,
+    string? Line2 = null,
+    /// <summary>Person or business at the address (UPS sends real shipper / recipient names, UP-18).</summary>
+    string? Name = null);
 
 /// <summary>
 /// Input to the shipping-rate service: the shipment's origin and destination, the package weight and
@@ -83,7 +87,10 @@ public record ShippingRateOption(
     string Carrier,
     int? EstimatedDeliveryDays,
     decimal Rate,
-    bool IsRecommended = false);
+    bool IsRecommended = false,
+    /// <summary>The method's handling fee (AD-04), already included in <paramref name="Rate"/>. Kept apart so the
+    /// order's shipping row can show method price and handling separately (order-placement section 3).</summary>
+    decimal HandlingFee = 0m);
 
 /// <summary>Input to a carrier label request (WO-42): shipment endpoints, weight, service and a reference.</summary>
 public record CarrierLabelRequest(

@@ -10,7 +10,8 @@ namespace HKPartsEcommerce.Application.Common.Interfaces;
 public interface ICredentialVault
 {
     string Encrypt(string plaintext);
-    string Decrypt(string ciphertext);
+    /// <summary>Null when the value cannot be decrypted under this deployment's key ring.</summary>
+    string? Decrypt(string ciphertext);
 
     /// <summary>
     /// Resolves the active credential for a runtime service type (e.g. "stripe", "fedex", "azure-blob")

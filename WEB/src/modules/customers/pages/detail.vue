@@ -40,6 +40,22 @@
                 @update:model-value="onToggleActive"
               />
             </div>
+            <div class="row items-center justify-between no-wrap q-mt-md">
+              <div class="col">
+                <div class="text-body2">Shipping restriction exempt</div>
+                <div class="text-caption text-grey-6">
+                  {{ customer.isShippingRestrictionExempt
+                    ? 'May receive state-restricted products in restricted states when signed in.'
+                    : 'State-restricted products cannot ship to this customer in restricted states.' }}
+                </div>
+              </div>
+              <q-toggle
+                :model-value="customer.isShippingRestrictionExempt"
+                :disable="!canWrite || exemptSaving"
+                color="primary"
+                @update:model-value="onToggleShippingExempt"
+              />
+            </div>
           </AppSection>
 
           <AppSection title="Pricing group">
@@ -294,6 +310,16 @@ async function onToggleActive (val) {
     customer.value = await customerAdminApi.setActive(customer.value.id, val)
     notify.success(val ? 'Account activated' : 'Account deactivated')
   } catch (e) { notify.error(getApiErrorMessage(e)) } finally { activeSaving.value = false }
+}
+
+// Restricted-state shipping exemption (SR-92).
+const exemptSaving = ref(false)
+async function onToggleShippingExempt (val) {
+  exemptSaving.value = true
+  try {
+    customer.value = await customerAdminApi.setShippingRestrictionExempt(customer.value.id, val)
+    notify.success(val ? 'Customer exempted from shipping restrictions' : 'Shipping restriction exemption removed')
+  } catch (e) { notify.error(getApiErrorMessage(e)) } finally { exemptSaving.value = false }
 }
 
 async function onChangeGroup (val) {

@@ -17,6 +17,7 @@ public class GetOrderPaymentsQueryHandler : IRequestHandler<GetOrderPaymentsQuer
     {
         var payments = await _db.PaymentRecords
             .AsNoTracking()
+            .Include(p => p.Transactions)
             .Where(p => p.OrderId == request.OrderId)
             .OrderByDescending(p => p.CreatedOnUtc)
             .ToListAsync(cancellationToken);

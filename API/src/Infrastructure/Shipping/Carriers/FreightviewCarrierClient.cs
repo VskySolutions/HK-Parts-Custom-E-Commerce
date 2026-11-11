@@ -67,6 +67,13 @@ public class FreightviewCarrierClient : ICarrierClient
             throw new InvalidOperationException(
                 "The active Freightview credential has no Base URL. Set it on the integration (Integrations → Freightview).");
 
+        // AD-04: minimum order amount and ship-to countries, as on the other carriers.
+        if (credential.MinimumOrderAmount is { } min && request.OrderSubtotal < min)
+            return Array.Empty<ShippingRateOption>();
+        var destinationCountry = (request.Destination.CountryCode ?? string.Empty).Trim().ToUpperInvariant();
+        if (credential.ShipToCountries is { Count: > 0 } countries && !countries.Contains(destinationCountry))
+            return Array.Empty<ShippingRateOption>();
+
         try
         {
             var client = _httpClientFactory.CreateClient("freightview");
@@ -87,7 +94,7 @@ public class FreightviewCarrierClient : ICarrierClient
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-            return MapResponse(document.RootElement);
+            return MapResponse(document.RootElement, credential.DisplayName, credential.HandlingFee);
         }
         catch (Exception ex)
         {
@@ -146,7 +153,7 @@ public class FreightviewCarrierClient : ICarrierClient
         return d;
     }
 
-    private static IReadOnlyList<ShippingRateOption> MapResponse(JsonElement root)
+    private static IReadOnlyList<ShippingRateOption> MapResponse(JsonElement root, string? displayName = null, decimal handlingFee = 0m)
     {
         var rates = root.ValueKind == JsonValueKind.Array
             ? root
@@ -169,10 +176,11 @@ public class FreightviewCarrierClient : ICarrierClient
 
             options.Add(new ShippingRateOption(
                 MethodId: $"freightview:{GetString(rate, "id") ?? name}",
-                Name: name,
+                Name: string.IsNullOrWhiteSpace(displayName) ? name : $"{displayName.Trim()} - {name}",
                 Carrier: "Freightview",
                 EstimatedDeliveryDays: days,
-                Rate: Math.Round(total, 2, MidpointRounding.AwayFromZero)));
+                Rate: Math.Round(total + handlingFee, 2, MidpointRounding.AwayFromZero),
+                HandlingFee: handlingFee));
         }
         return options;
     }
@@ -200,7 +208,9 @@ public class FreightviewCarrierClient : ICarrierClient
 
     private sealed record FreightviewCredential(
         string? BaseUrl, string? ApiKey, string? OriginType, string? ContactName, string? ContactPhone,
-        string? ContactEmail, string? PickupInstructions, string? DockOpenTime, string? DockCloseTime)
+        string? ContactEmail, string? PickupInstructions, string? DockOpenTime, string? DockCloseTime,
+        string? DisplayName = null, decimal HandlingFee = 0m, decimal? MinimumOrderAmount = null,
+        IReadOnlyList<string>? ShipToCountries = null)
     {
         public static FreightviewCredential Parse(string raw)
         {
@@ -211,7 +221,14 @@ public class FreightviewCarrierClient : ICarrierClient
                 return new FreightviewCredential(
                     GetString(r, "baseUrl"), GetString(r, "apiKey"), GetString(r, "originType"),
                     GetString(r, "contactName"), GetString(r, "contactPhone"), GetString(r, "contactEmail"),
-                    GetString(r, "pickupInstructions"), GetString(r, "dockOpenTime"), GetString(r, "dockCloseTime"));
+                    GetString(r, "pickupInstructions"), GetString(r, "dockOpenTime"), GetString(r, "dockCloseTime"),
+                    GetString(r, "displayName"),
+                    TryGetDecimal(r, "handlingFee", out var handling) ? handling : 0m,
+                    TryGetDecimal(r, "minimumOrderAmount", out var min) ? min : null,
+                    (GetString(r, "shipToCountries") ?? string.Empty)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(c => c.ToUpperInvariant())
+                        .ToList());
             }
             catch (JsonException)
             {

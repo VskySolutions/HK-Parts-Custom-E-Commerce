@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using HKPartsEcommerce.API.Authorization;
 using HKPartsEcommerce.Application.Common.Authorization;
+using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Features.IntegrationCredentials;
 
 namespace HKPartsEcommerce.API.Controllers;
@@ -126,6 +127,11 @@ public class PaymentCredentialsController : ApiControllerBase
     [HttpPut("authorizenet/{id:guid}")]
     public async Task<ActionResult<AuthorizeNetCredentialDto>> UpdateAuthorizeNet(Guid id, [FromBody] SaveAuthorizeNetCredentialCommand command)
         => Ok(await Mediator.Send(command with { Id = id }));
+
+    /// <summary>Authenticates the saved row against its endpoint (authenticateTestRequest).</summary>
+    [HttpPost("authorizenet/{id:guid}/test")]
+    public async Task<ActionResult<GatewayTestResult>> TestAuthorizeNet(Guid id)
+        => Ok(await Mediator.Send(new TestAuthorizeNetCredentialCommand(id)));
 
     [HttpDelete("authorizenet/{id:guid}")]
     public async Task<IActionResult> DeleteAuthorizeNet(Guid id)

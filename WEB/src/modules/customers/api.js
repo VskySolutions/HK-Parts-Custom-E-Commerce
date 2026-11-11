@@ -22,6 +22,11 @@ export const customerAdminApi = {
     return api.put(`${CUSTOMERS}/${id}/active`, { customerId: id, isActive }).then(unwrap)
   },
 
+  // Exempt from the restricted-state shipping rule (SR-92). Returns the refreshed detail.
+  setShippingRestrictionExempt (id, isExempt) {
+    return api.put(`${CUSTOMERS}/${id}/shipping-restriction-exempt`, { customerId: id, isExempt }).then(unwrap)
+  },
+
   getStoreCredit (id) { return api.get(`${CUSTOMERS}/${id}/store-credit`).then(unwrap) },
   issueStoreCredit (id, payload) { return api.post(`${CUSTOMERS}/${id}/store-credit`, { customerId: id, ...payload }).then(unwrap) }
 }

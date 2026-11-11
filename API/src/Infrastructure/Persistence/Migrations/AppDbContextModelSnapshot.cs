@@ -318,8 +318,16 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AcceptedCardTypes")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<bool>("Active")
                         .HasColumnType("bit");
+
+                    b.Property<string>("AllowedCustomerGroupIds")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("ApplicationLoginId")
                         .HasMaxLength(200)
@@ -334,14 +342,36 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("CustomerProfilesEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("DefaultOrderStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<bool>("Deleted")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("IsProduction")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("LoggingEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaxOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -361,6 +391,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("TransactionKey")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TransactionType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<Guid?>("UpdatedById")
                         .HasColumnType("uniqueidentifier");
@@ -1018,6 +1052,12 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsCheckedOut")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("LastCheckoutActivityUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PlacementLockUntilUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("PointsApplied")
                         .HasColumnType("int");
 
@@ -1243,6 +1283,33 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("CategoryPictures", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CheckoutLock", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("LockedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OwnerCartId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerCartId");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique();
+
+                    b.ToTable("CheckoutLocks", (string)null);
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ContentTranslation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1377,6 +1444,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("IsShippingRestrictionExempt")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsTaxExempt")
                         .HasColumnType("bit");
 
@@ -1475,6 +1545,95 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasFilter("[IsDefault] = 1 AND [Deleted] = 0");
 
                     b.ToTable("CustomerAddresses", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerBlacklistEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("LastName", "FirstName");
+
+                    b.ToTable("CustomerBlacklist", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerBlacklistHit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("BlacklistEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CartId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("MatchedOn")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtUtc");
+
+                    b.HasIndex("BlacklistEntryId");
+
+                    b.ToTable("CustomerBlacklistHits", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerGroup", b =>
@@ -2226,6 +2385,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Active")
                         .HasColumnType("bit");
 
+                    b.Property<string>("AllowedServices")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("ApiKey")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
@@ -2242,19 +2405,65 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal?>("DefaultHeightIn")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.Property<decimal?>("DefaultLengthIn")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.Property<decimal?>("DefaultWidthIn")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
                     b.Property<bool>("Deleted")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("FflAllowedServices")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("HandlingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("IsProduction")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("LoggingEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MinimumOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PickupType")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("RateMode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("SendPackageInfo")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ShipToCountries")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<decimal?>("TransactionFeePercent")
                         .HasPrecision(5, 2)
@@ -2309,6 +2518,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("DockCloseTime")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
@@ -2317,8 +2530,16 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<decimal?>("HandlingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("IsProduction")
                         .HasColumnType("bit");
+
+                    b.Property<decimal?>("MinimumOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2330,6 +2551,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("PickupInstructions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ShipToCountries")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
@@ -3164,6 +3389,100 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("OrderLineItems", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.OrderShipping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Carrier")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("ContainsFflItems")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("DeclaredValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("EstimatedDeliveryDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FflDealerName")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("FflNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("HandlingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("InsuranceFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("InsuranceSelected")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MethodId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("MethodName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("MethodPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RulesVersion")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ShipToType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ShipmentType")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ShippingTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("SignatureFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("SignatureRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("WasRecommended")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("WeightLb")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId", "ShipmentType");
+
+                    b.ToTable("OrderShippings", (string)null);
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.OrderStatusHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3261,6 +3580,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("AuthCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime?>("AuthorizationExpiresUtc")
                         .HasColumnType("datetime2");
 
@@ -3268,11 +3591,27 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<decimal?>("AuthorizedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("AuthorizedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("AvsResultCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<DateTime?>("CapturedOnUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("CardLastFour")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.Property<string>("CardType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uniqueidentifier");
@@ -3285,6 +3624,18 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)");
 
+                    b.Property<string>("CustomerPaymentProfileId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CustomerProfileId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CvvResultCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("nvarchar(max)");
 
@@ -3292,15 +3643,31 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("GatewayReasonCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("GatewayReference")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("GatewayResponseCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("GatewayResponseText")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<bool>("IsMaster")
                         .HasColumnType("bit");
 
                     b.Property<int>("Method")
                         .HasColumnType("int");
+
+                    b.Property<string>("NetworkTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
@@ -3336,6 +3703,57 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("PaymentRecords", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PaymentTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("PaymentRecordId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("RefTransactionId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ResponseCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("TransactionId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentRecordId");
+
+                    b.ToTable("PaymentTransactions", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PlatformSetting", b =>
@@ -5145,6 +5563,14 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("HandlingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("InternationalFallbackRate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("InternationalViaUsps")
                         .HasColumnType("bit");
 
@@ -5154,10 +5580,18 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<int>("MethodType")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("MinimumOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ShipToCountries")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("TiersJson")
                         .HasColumnType("nvarchar(max)");
@@ -5236,6 +5670,75 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("ShippingProviderConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ShippingRuleSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AllowedCountryCodes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InsuranceBandsJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<bool>("InsuranceEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("InsuranceExcessFeePer100")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("InternationalRestrictionEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("InvalidDestinationMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PoBoxMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("RefusePoBoxes")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("RestrictedStates")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("SignatureEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("SignatureFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("StateRestrictionEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ShippingRuleSettings", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ShippingZone", b =>
@@ -6378,6 +6881,14 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Active")
                         .HasColumnType("bit");
 
+                    b.Property<string>("AllowedServices")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ApiVersion")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("BaseUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -6400,17 +6911,51 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("FflAllowedServices")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("HandlingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("IsProduction")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("LoggingEnabled")
                         .HasColumnType("bit");
 
                     b.Property<string>("MerchantId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<decimal?>("MinimumOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PackageType")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("PickupType")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<bool>("SendPackageInfo")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ShipToCountries")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<decimal?>("TransactionFeePercent")
                         .HasPrecision(5, 2)
@@ -6421,6 +6966,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("UpdatedOnUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("UseNegotiatedRates")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -6547,6 +7095,14 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Active")
                         .HasColumnType("bit");
 
+                    b.Property<string>("AllowedDomesticServices")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("AllowedInternationalServices")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("BaseUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -6563,19 +7119,54 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal?>("DefaultHeightIn")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.Property<decimal?>("DefaultLengthIn")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.Property<decimal?>("DefaultWidthIn")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
                     b.Property<bool>("Deleted")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("HandlingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("IsProduction")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("LoggingEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MinimumOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PriceType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ShipToCountries")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<decimal?>("TransactionFeePercent")
                         .HasPrecision(5, 2)
@@ -7062,6 +7653,17 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerBlacklistHit", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.CustomerBlacklistEntry", "BlacklistEntry")
+                        .WithMany("Hits")
+                        .HasForeignKey("BlacklistEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BlacklistEntry");
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerGroupPrice", b =>
                 {
                     b.HasOne("HKPartsEcommerce.Domain.Entities.CustomerGroup", "CustomerGroup")
@@ -7270,6 +7872,17 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("Order");
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.OrderShipping", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Order", "Order")
+                        .WithMany("Shippings")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.OrderStatusHistory", b =>
                 {
                     b.HasOne("HKPartsEcommerce.Domain.Entities.Order", "Order")
@@ -7290,6 +7903,17 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PaymentTransaction", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.PaymentRecord", "PaymentRecord")
+                        .WithMany("Transactions")
+                        .HasForeignKey("PaymentRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PaymentRecord");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PointsTransaction", b =>
@@ -7970,6 +8594,11 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("ProductCategories");
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerBlacklistEntry", b =>
+                {
+                    b.Navigation("Hits");
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CustomerGroup", b =>
                 {
                     b.Navigation("GroupPrices");
@@ -8001,7 +8630,14 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Navigation("Payments");
 
+                    b.Navigation("Shippings");
+
                     b.Navigation("StatusHistory");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PaymentRecord", b =>
+                {
+                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.PriceRule", b =>

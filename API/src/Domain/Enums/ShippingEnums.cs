@@ -57,3 +57,23 @@ public enum ShipmentStatus
     Exception = 6,
     Cancelled = 7
 }
+
+/// <summary>Which shipment of an order an <see cref="Entities.OrderShipping"/> row describes.</summary>
+public enum OrderShipmentType
+{
+    /// <summary>The order's only shipment, holding every shippable line (today's checkout).</summary>
+    Combined = 0,
+    /// <summary>The non-FFL lines of a mixed cart, shipped to the customer.</summary>
+    NonFfl = 1,
+    /// <summary>The FFL lines of a mixed cart, shipped to the FFL dealer.</summary>
+    Ffl = 2
+}
+
+/// <summary>Who a shipment is delivered to.</summary>
+public enum ShipToType
+{
+    Customer = 0,
+    FflDealer = 1,
+    /// <summary>Collected in store; nothing is shipped.</summary>
+    StorePickup = 2
+}

@@ -23,6 +23,7 @@
             <q-tooltip v-if="methodsBlocked">{{ methodsBlocked }}</q-tooltip>
           </q-tab>
           <q-tab name="zones" label="Zones" icon="o_map" />
+          <q-tab name="rules" label="Rules" icon="o_rule" />
         </q-tabs>
 
         <div v-if="isList" class="app-tabs-toolbar__actions">
@@ -61,13 +62,14 @@ import AppListHeader from 'components/common/AppListHeader.vue'
 import ShippingMethodsPanel from 'modules/shipping/components/ShippingMethodsPanel.vue'
 import ShippingZonesPanel from 'modules/shipping/components/ShippingZonesPanel.vue'
 import ShippingConfigPanel from 'modules/shipping/components/ShippingConfigPanel.vue'
+import ShippingRulesPanel from 'modules/shipping/components/ShippingRulesPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { has } = usePermissions()
 const canWrite = computed(() => has('Stores.Write'))
 
-const TABS = { config: ShippingConfigPanel, methods: ShippingMethodsPanel, zones: ShippingZonesPanel }
+const TABS = { config: ShippingConfigPanel, methods: ShippingMethodsPanel, zones: ShippingZonesPanel, rules: ShippingRulesPanel }
 
 const tab = ref(TABS[route.query.tab] ? route.query.tab : 'config')
 const search = ref('')
@@ -80,7 +82,8 @@ const saveStatus = ref(null)
 const methodsBlocked = ref('')
 
 const isZones = computed(() => tab.value === 'zones')
-const isList = computed(() => tab.value !== 'config')
+// Configuration and Rules are settings forms, not lists: no search / filter / add toolbar.
+const isList = computed(() => tab.value === 'methods' || tab.value === 'zones')
 const activeComponent = computed(() => TABS[tab.value] || ShippingConfigPanel)
 const searchPlaceholder = computed(() => (isZones.value ? 'Search zones' : 'Search methods'))
 const addLabel = computed(() => (isZones.value ? 'New zone' : 'New method'))

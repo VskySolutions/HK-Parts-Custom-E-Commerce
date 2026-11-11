@@ -17,7 +17,7 @@ public class AdminManufacturersController : ApiControllerBase
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
         => Ok(await Mediator.Send(new ListManufacturersQuery(page, pageSize, search)));
 
-    /// <summary>Get a single manufacturer by id.</summary>
+    /// <summary>Get a single manufacturer by id</summary>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ManufacturerDto>> Get(Guid id)
         => Ok(await Mediator.Send(new GetManufacturerQuery(id)));

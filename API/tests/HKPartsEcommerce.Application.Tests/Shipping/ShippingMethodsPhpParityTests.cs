@@ -25,7 +25,7 @@ public class ShippingMethodsPhpParityTests : CatalogTestBase
     private static readonly CarrierAddress UsDest = new("US", "FL", "33139", null, null);
     private static readonly CarrierAddress CanadaDest = new("CA", "ON", "M5V 2T6", null, null);
 
-    private sealed class StubUsps : ICarrierClient
+    private sealed class StubUsps : ICarrierClient, IUspsRater
     {
         private readonly IReadOnlyList<ShippingRateOption> _rates;
         public StubUsps(params ShippingRateOption[] rates) => _rates = rates;
@@ -33,6 +33,10 @@ public class ShippingMethodsPhpParityTests : CatalogTestBase
         public string CarrierName => "USPS";
         public Task<IReadOnlyList<ShippingRateOption>> GetRatesAsync(CarrierRateRequest request, CancellationToken ct)
             => Task.FromResult(_rates);
+        public Task<IReadOnlyList<ShippingRateOption>> GetInternationalRatesAsync(CarrierRateRequest request, CancellationToken ct)
+            => Task.FromResult(_rates);
+        public Task<CarrierTestResult> TestCredentialAsync(Guid credentialId, CancellationToken ct)
+            => throw new NotSupportedException();
     }
 
     private static ShippingRateLine Line(string? size, bool ffl = false, int qty = 1, decimal total = 50m, bool giftCert = false)
@@ -71,6 +75,7 @@ public class ShippingMethodsPhpParityTests : CatalogTestBase
         var carriers = usps is null ? Array.Empty<ICarrierClient>() : new[] { usps };
         foreach (var c in carriers)
             services.AddScoped<ICarrierClient>(_ => c);
+        services.AddScoped<IUspsRater>(_ => usps as IUspsRater ?? new StubUsps());
         using var provider = services.BuildServiceProvider();
         var service = new ShippingRateService(
             db, carriers, provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<ShippingRateService>.Instance);
@@ -136,7 +141,7 @@ public class ShippingMethodsPhpParityTests : CatalogTestBase
         var options = await RateAsync(Req(CanadaDest, Line("Small")), usps);
         var option = Assert.Single(options);
         Assert.Equal(38.40m, option.Rate);
-        Assert.Contains("International", option.Name);
+        Assert.Equal("International Shipping", option.Name);
     }
 
     [Fact]
@@ -145,6 +150,30 @@ public class ShippingMethodsPhpParityTests : CatalogTestBase
         Seed(SizeBased());
         var options = await RateAsync(Req(CanadaDest, Line("Small")), new StubUsps());
         Assert.Empty(options);
+    }
+
+    /// <summary>usps-shipping-requirements US-T8: USPS down, fallback 45.00 → "International Shipping" 45.00.</summary>
+    [Fact]
+    public async Task US_T8_abroad_with_usps_down_charges_the_fallback_rate()
+    {
+        var method = SizeBased();
+        method.InternationalFallbackRate = 45m;
+        Seed(method);
+        var options = await RateAsync(Req(CanadaDest, Line("Small")), new StubUsps());
+        var option = Assert.Single(options);
+        Assert.Equal(45m, option.Rate);
+        Assert.Equal("International Shipping", option.Name);
+    }
+
+    [Fact]
+    public async Task Fallback_rate_is_not_used_when_usps_quotes()
+    {
+        var method = SizeBased();
+        method.InternationalFallbackRate = 45m;
+        Seed(method);
+        var usps = new StubUsps(new ShippingRateOption("PMI", "Priority Mail International", "USPS", null, 38.40m));
+        var options = await RateAsync(Req(CanadaDest, Line("Small")), usps);
+        Assert.Equal(38.40m, Assert.Single(options).Rate);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using HKPartsEcommerce.API.Authorization;
 using HKPartsEcommerce.Application.Common.Authorization;
+using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.IntegrationCredentials;
 
 namespace HKPartsEcommerce.API.Controllers;
@@ -26,6 +27,11 @@ public class ShippingCredentialsController : ApiControllerBase
     [HttpPut("fedex/{id:guid}")]
     public async Task<ActionResult<FedExCredentialDto>> UpdateFedEx(Guid id, [FromBody] SaveFedExCredentialCommand command)
         => Ok(await Mediator.Send(command with { Id = id }));
+
+    /// <summary>FX-40: rate a sample 5 lb residential parcel 28270 → 10001; reports token status.</summary>
+    [HttpPost("fedex/{id:guid}/test")]
+    public async Task<ActionResult<CarrierTestResult>> TestFedEx(Guid id)
+        => Ok(await Mediator.Send(new TestFedExCredentialCommand(id)));
 
     [HttpDelete("fedex/{id:guid}")]
     public async Task<IActionResult> DeleteFedEx(Guid id)
@@ -75,6 +81,11 @@ public class ShippingCredentialsController : ApiControllerBase
     public async Task<ActionResult<UspsCredentialDto>> UpdateUsps(Guid id, [FromBody] SaveUspsCredentialCommand command)
         => Ok(await Mediator.Send(command with { Id = id }));
 
+    /// <summary>US-40: rate a sample domestic (28270 → 10001) and international (→ Canada) 2 lb parcel.</summary>
+    [HttpPost("usps/{id:guid}/test")]
+    public async Task<ActionResult<CarrierTestResult>> TestUsps(Guid id)
+        => Ok(await Mediator.Send(new TestUspsCredentialCommand(id)));
+
     [HttpDelete("usps/{id:guid}")]
     public async Task<IActionResult> DeleteUsps(Guid id)
     {
@@ -98,6 +109,11 @@ public class ShippingCredentialsController : ApiControllerBase
     [HttpPut("ups/{id:guid}")]
     public async Task<ActionResult<UpsCredentialDto>> UpdateUps(Guid id, [FromBody] SaveUpsCredentialCommand command)
         => Ok(await Mediator.Send(command with { Id = id }));
+
+    /// <summary>UP-40/41: rate a sample 5 lb residential parcel 28270 → 10001; reports token status.</summary>
+    [HttpPost("ups/{id:guid}/test")]
+    public async Task<ActionResult<CarrierTestResult>> TestUps(Guid id)
+        => Ok(await Mediator.Send(new TestUpsCredentialCommand(id)));
 
     [HttpDelete("ups/{id:guid}")]
     public async Task<IActionResult> DeleteUps(Guid id)

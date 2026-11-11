@@ -26,7 +26,8 @@ public class CredentialVault : ICredentialVault
 
     public string Encrypt(string plaintext) => _protector.Protect(plaintext);
 
-    public string Decrypt(string ciphertext) => _protector.Unprotect(ciphertext);
+    /// <summary>Null when the value cannot be decrypted under this deployment's key ring (logged).</summary>
+    public string? Decrypt(string ciphertext) => _protector.TryUnprotect(ciphertext);
 
     public async Task<string?> GetCredentialAsync(string serviceType, CancellationToken cancellationToken = default)
         => (await GetResolvedCredentialAsync(serviceType, cancellationToken))?.Value;
@@ -59,6 +60,8 @@ public class CredentialVault : ICredentialVault
                 baseUrl = c.BaseUrl, apiKey = c.ApiKey, originType = c.OriginType,
                 contactName = c.ContactName, contactPhone = c.ContactPhone, contactEmail = c.ContactEmail,
                 pickupInstructions = c.PickupInstructions, dockOpenTime = c.DockOpenTime, dockCloseTime = c.DockCloseTime,
+                displayName = c.DisplayName, handlingFee = c.HandlingFee, minimumOrderAmount = c.MinimumOrderAmount,
+                shipToCountries = c.ShipToCountries,
             })),
             _              => null,
         };

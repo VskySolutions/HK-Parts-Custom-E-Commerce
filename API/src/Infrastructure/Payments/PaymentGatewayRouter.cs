@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
+using HKPartsEcommerce.Application.Features.Payments;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
 
@@ -55,6 +56,12 @@ public class PaymentGatewayRouter : IPaymentGatewayRouter
     public Task<PaymentResult> VerifyClientPaymentAsync(PaymentRecord payment, IReadOnlyDictionary<string, string> data, CancellationToken ct = default)
         => Resolve(payment.Method).VerifyClientPaymentAsync(payment, data, ct);
 
+    public Task<PaymentResult?> ReverseAsync(PaymentRecord payment, CancellationToken ct = default)
+        => Resolve(payment.Method).ReverseAsync(payment, ct);
+
+    public Task<PaymentResult?> GetStatusAsync(PaymentRecord payment, CancellationToken ct = default)
+        => Resolve(payment.Method).GetStatusAsync(payment, ct);
+
     public async Task CaptureForOrderAsync(Guid orderId, CancellationToken ct = default)
     {
         // Auto-capture the order's authorized-but-uncaptured payment when it ships/fulfils (AC-PAY-002.3).
@@ -63,11 +70,13 @@ public class PaymentGatewayRouter : IPaymentGatewayRouter
         if (payment is null)
             return;
 
+        // The authorized amount, never the order total: they differ when a gift certificate paid part (AN-21).
         var outstanding = payment.Amount - payment.RefundedAmount;
         if (outstanding <= 0)
             return;
 
         var result = await Resolve(payment.Method).CaptureAsync(payment, outstanding, ct);
+        PaymentLedger.Record(_db, payment, PaymentTransactionType.Capture, outstanding, result, _clock.UtcNow);
 
         if (result.Success)
         {
@@ -75,6 +84,7 @@ public class PaymentGatewayRouter : IPaymentGatewayRouter
             payment.TransactionId = result.TransactionId ?? payment.TransactionId;
             payment.GatewayReference = result.GatewayReference ?? payment.GatewayReference;
             payment.CapturedOnUtc = _clock.UtcNow;
+            payment.AuthorizationExpiresUtc = null;
             payment.ErrorMessage = null;
 
             var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId, ct);
