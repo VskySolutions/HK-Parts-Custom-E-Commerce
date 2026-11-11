@@ -60,6 +60,7 @@ import analyticsRoutes from 'modules/analytics/routes'
 import logViewerRoutes from 'modules/log-viewer/routes'
 import auditTrailRoutes from 'modules/audit-trail/routes'
 import operationalReportsRoutes from 'modules/reports/operational-routes'
+import contactUsRoutes from 'modules/contact-us/routes'
 
 // Append every app-module child route under the authenticated shell.
 const moduleChildren = [
@@ -100,7 +101,8 @@ const moduleChildren = [
   ...analyticsRoutes,
   ...logViewerRoutes,
   ...auditTrailRoutes,
-  ...operationalReportsRoutes
+  ...operationalReportsRoutes,
+  ...contactUsRoutes
 ]
 appShellRoute.children.push(...moduleChildren)
 

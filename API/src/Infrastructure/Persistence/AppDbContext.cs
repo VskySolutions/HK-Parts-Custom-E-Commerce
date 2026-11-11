@@ -50,6 +50,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ApplicationLog> ApplicationLogs => Set<ApplicationLog>();
     public DbSet<AuditTrail> AuditTrails => Set<AuditTrail>();
     public DbSet<BackgroundTaskLog> BackgroundTaskLogs => Set<BackgroundTaskLog>();
+    public DbSet<ContactUs> ContactUsEnquiries => Set<ContactUs>();
 
     // Central media library (WO-122)
     public DbSet<Media> Media => Set<Media>();

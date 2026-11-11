@@ -256,11 +256,12 @@ defineExpose({
 }
 
 .app-phone__cc {
-  width: 55px;
+  width: 65px;
+  border-right: 1px solid #c2c2c2;
   :deep(.q-field__control),
   :deep(.q-field__native),
   :deep(.q-field__marginal) {
-    min-height: 22px;
+    min-height: 38px;
     padding-top: 0;
     padding-bottom: 0;
   }
