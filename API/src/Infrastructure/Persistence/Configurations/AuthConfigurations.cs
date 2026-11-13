@@ -80,6 +80,9 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         // Custom information: "Long" text + "Allow Restricted Capacity Purchases" (No by default).
         b.Property(x => x.LongText).HasMaxLength(4000);
         b.Property(x => x.AllowRestrictedCapacityPurchases).HasDefaultValue(false);
+        // Current blacklist state; the BlacklistedCustomers rows are the append-only event history.
+        b.Property(x => x.IsBlacklisted).HasDefaultValue(false);
+        b.HasIndex(x => x.IsBlacklisted);
 
         // Pricing group (AC-CUS-003.2): optional, at most one. Restrict — a lookup FK must never
         // cascade a group delete into customer rows.

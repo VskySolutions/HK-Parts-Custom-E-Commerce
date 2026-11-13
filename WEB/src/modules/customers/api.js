@@ -33,7 +33,7 @@ export const customerAdminApi = {
   remove (id) { return api.delete(`${CUSTOMERS}/${id}`).then(unwrap) },
 
   // Blacklist (block) a customer. payload: { reason, internalNotes }. Requires Customers.Blacklist server-side.
-  // Returns the new blacklist record id; the customer then no longer appears in the list.
+  // Returns the new blacklist history row id; the customer then no longer appears in the list.
   // 400 invalid; 404 unknown; 409 already blacklisted / staff account.
   blacklist (id, payload) { return api.post(`${CUSTOMERS}/${id}/blacklist`, payload).then(unwrap) },
 

@@ -26,6 +26,13 @@ public class Customer : AuditableEntity, ISoftDeletable
     public Guid? CustomerGroupId { get; set; }
     public CustomerGroup? CustomerGroup { get; set; }
 
+    /// <summary>
+    /// Current blacklist state (Customers list → Blacklist). Only the blacklist service methods may change it;
+    /// <see cref="BlacklistedCustomer"/> rows are the append-only event history. Blacklisted customers are hidden
+    /// from the admin Customers list but their data is untouched.
+    /// </summary>
+    public bool IsBlacklisted { get; set; }
+
     public bool IsTaxExempt { get; set; }
     public string? TaxExemptionCertificate { get; set; }
     public string? VatId { get; set; }

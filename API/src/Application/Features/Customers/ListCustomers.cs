@@ -81,9 +81,9 @@ public class ListCustomersQueryHandler : IRequestHandler<ListCustomersQuery, Pag
             .Include(c => c.User)
             .Include(c => c.CustomerGroup)
             .Where(c => c.User != null && c.User.UserRoles.Any(ur => ur.Role!.Name == customerRole))
-            // Blacklisted customers are hidden: NOT EXISTS an active (Deleted = 0, global filter) blacklist row.
-            // Applied in the base query so count, paging, search, filters and sort all agree.
-            .Where(c => !_db.BlacklistedCustomers.Any(b => b.CustomerId == c.Id))
+            // Blacklisted customers are hidden by the current-state flag. Applied in the base query so count,
+            // paging, search, filters and sort all agree.
+            .Where(c => !c.IsBlacklisted)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(request.Search))

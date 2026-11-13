@@ -53,8 +53,9 @@ public class AdminCustomersController : ApiControllerBase
     }
 
     /// <summary>
-    /// Blacklist (block) a customer. Body: { reason, internalNotes }. The customer record is kept untouched but no
-    /// longer appears in the Customers list. Returns the new blacklist record id. 400 invalid, 404 unknown customer,
+    /// Blacklist (block) a customer. Body: { reason, internalNotes }. Sets Customers.IsBlacklisted and appends a
+    /// Blocked row to the blacklist history; the rest of the customer record is untouched, but the customer no
+    /// longer appears in the Customers list. Returns the new history row id. 400 invalid, 404 unknown customer,
     /// 409 already blacklisted or a staff account. Requires <c>Customers.Blacklist</c>.
     /// </summary>
     [HttpPost("{id:guid}/blacklist")]

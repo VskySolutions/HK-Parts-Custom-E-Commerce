@@ -455,6 +455,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uniqueidentifier");
 
@@ -464,35 +467,19 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<bool>("Deleted")
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.Property<DateTime?>("DeletedOnUtc")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("InternalNotes")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("Reason")
-                        .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
-
-                    b.Property<Guid?>("UpdatedById")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("UpdatedOnUtc")
-                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
                     b.HasIndex(new[] { "CustomerId" }, "IX_BlacklistedCustomers_CustomerId");
 
-                    b.HasIndex(new[] { "CustomerId" }, "UX_BlacklistedCustomers_CustomerId_Active")
-                        .IsUnique()
-                        .HasFilter("[Deleted] = 0");
+                    b.HasIndex(new[] { "CustomerId", "CreatedOnUtc" }, "IX_BlacklistedCustomers_CustomerId_CreatedOnUtc");
 
                     b.ToTable("BlacklistedCustomers", (string)null);
                 });
@@ -1481,6 +1468,11 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("IsBlacklisted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsTaxExempt")
                         .HasColumnType("bit");
 
@@ -1530,6 +1522,8 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerGroupId");
+
+                    b.HasIndex("IsBlacklisted");
 
                     b.HasIndex("UserId")
                         .IsUnique();

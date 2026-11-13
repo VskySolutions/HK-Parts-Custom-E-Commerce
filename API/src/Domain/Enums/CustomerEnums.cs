@@ -1,5 +1,15 @@
 namespace HKPartsEcommerce.Domain.Enums;
 
+/// <summary>One blacklist history event (Customers list → Blacklist).</summary>
+public enum BlacklistAction
+{
+    /// <summary>The customer was blacklisted. Reason is required.</summary>
+    Blocked = 1,
+
+    /// <summary>The customer was removed from the blacklist.</summary>
+    Unblocked = 2
+}
+
 /// <summary>How a customer group adjusts prices for its members (REQ-CUS-003).</summary>
 public enum CustomerGroupPricingRuleType
 {
