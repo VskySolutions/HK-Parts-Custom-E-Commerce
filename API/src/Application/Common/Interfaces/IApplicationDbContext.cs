@@ -29,6 +29,7 @@ public interface IApplicationDbContext
     DbSet<ApplicationLog> ApplicationLogs { get; }
     DbSet<AuditTrail> AuditTrails { get; }
     DbSet<BackgroundTaskLog> BackgroundTaskLogs { get; }
+    DbSet<ContactUs> ContactUsEnquiries { get; }
 
     // Central media library (WO-122)
     DbSet<Media> Media { get; }

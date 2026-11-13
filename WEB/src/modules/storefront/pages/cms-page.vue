@@ -28,6 +28,7 @@
         <div class="sf-cms-body" v-html="safeBody" />
       </article>
     </div>
+    <ContactUsForm v-if="page && page.slug === 'contact-us'" />
   </q-page>
 </template>
 
@@ -42,6 +43,8 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useStorefrontSeo } from 'composables/useStorefrontSeo'
 import { cmsApi, sanitizeCmsHtml } from 'modules/storefront/cms-api'
+
+import ContactUsForm from 'modules/contact-us/components/contact-us.vue'
 
 const route = useRoute()
 

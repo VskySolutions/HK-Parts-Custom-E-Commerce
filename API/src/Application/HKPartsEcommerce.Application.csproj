@@ -1,6 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Remove="Features\ContactUsEnquiries\UpdateProductCustomField.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Domain\HKPartsEcommerce.Domain.csproj" />
   </ItemGroup>
 
