@@ -718,6 +718,9 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                   <q-input
                     v-model="authNetCard.number"
                     outlined dense
+                    lazy-rules
+                    :rules="[(v) => !cardNumberError(v) || cardNumberError(v)]"
+                    autocomplete="cc-number"
                     inputmode="numeric"
                     maxlength="23"
                     label="Card number"
@@ -729,6 +732,9 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                       <q-input
                         v-model="authNetCard.expiry"
                         outlined dense
+                        lazy-rules
+                        :rules="[(v) => !expiryError(v) || expiryError(v)]"
+                        autocomplete="cc-exp"
                         mask="##/##"
                         label="Expiry (MM/YY)"
                         placeholder="MM/YY"
@@ -738,6 +744,9 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                       <q-input
                         v-model="authNetCard.cvc"
                         outlined dense
+                        lazy-rules
+                        :rules="[(v) => !cvcError(v, authNetCard.number) || cvcError(v, authNetCard.number)]"
+                        autocomplete="cc-csc"
                         inputmode="numeric"
                         maxlength="4"
                         label="CVC"
@@ -757,6 +766,9 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                   <q-input
                     v-model="authNetBank.nameOnAccount"
                     outlined dense
+                    lazy-rules
+                    maxlength="22"
+                    :rules="[(v) => !accountNameError(v) || accountNameError(v)]"
                     label="Name on account"
                     placeholder="Full name as it appears on the account"
                     class="q-mb-sm"
@@ -766,6 +778,8 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                       <q-input
                         v-model="authNetBank.routingNumber"
                         outlined dense
+                        lazy-rules
+                        :rules="[(v) => !routingNumberError(v) || routingNumberError(v)]"
                         inputmode="numeric"
                         mask="#########"
                         unmasked-value
@@ -777,6 +791,8 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                       <q-input
                         v-model="authNetBank.accountNumber"
                         outlined dense
+                        lazy-rules
+                        :rules="[(v) => !accountNumberError(v) || accountNumberError(v)]"
                         inputmode="numeric"
                         maxlength="17"
                         label="Account number"
@@ -1089,6 +1105,12 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
               :disable="!canPlace"
               @click="placeOrder"
             />
+            <div v-if="quote && paymentDetailsIncomplete" class="text-caption text-grey-7 q-mt-xs text-center">
+              {{ authNetInstrument === 'ach' ? 'Enter valid bank account details to place your order.' : 'Enter valid card details to place your order.' }}
+            </div>
+            <div v-else-if="quote && termsRequired && !termsAccepted" class="text-caption text-grey-7 q-mt-xs text-center">
+              Accept the terms and conditions to place your order.
+            </div>
             <q-btn
               v-else
               unelevated
@@ -1139,6 +1161,9 @@ import ApplyGiftCertificate from 'modules/storefront/components/ApplyGiftCertifi
 import { isPossiblePhoneNumber } from 'libphonenumber-js'
 import { emptyAddress } from 'composables/useAddress'
 import { checkoutApi } from 'modules/storefront/api'
+import {
+  cardNumberError, expiryError, cvcError, accountNameError, routingNumberError, accountNumberError, authNetDetailsValid
+} from 'modules/storefront/composables/paymentValidation'
 import { pointsApi } from 'modules/storefront/checkout-extras-api'
 import { customerAuthApi, accountApi } from 'modules/storefront/account-api'
 import { useCustomerAuthStore } from 'stores/customerAuth'
@@ -1977,6 +2002,13 @@ const confirming = ref(false)
 const retrying = ref(false)
 const retryState = ref(null) // { orderId, message } while a payment is cancelled/unconfirmed
 
+// Authorize.Net is chosen but the card / bank fields are empty or invalid.
+const paymentDetailsIncomplete = computed(() =>
+  paymentMethod.value === 'AuthorizeNet' && !payWithGiftCertificate.value && !noPaymentRequired.value &&
+  !authNetNotConfigured.value &&
+  !authNetDetailsValid(authNetInstrument.value, authNetCard.value, authNetBank.value)
+)
+
 const canPlace = computed(
   () =>
     !!quote.value &&
@@ -1989,6 +2021,9 @@ const canPlace = computed(
     (payWithGiftCertificate.value || noPaymentRequired.value || !!paymentMethod.value) &&
     !squareNotConfigured.value &&
     !authNetNotConfigured.value &&
+    // Card / bank fields live outside the q-form, so check them here (and again before tokenizing).
+    (paymentMethod.value !== 'AuthorizeNet' || payWithGiftCertificate.value || noPaymentRequired.value ||
+      authNetDetailsValid(authNetInstrument.value, authNetCard.value, authNetBank.value)) &&
     !placing.value
 )
 
