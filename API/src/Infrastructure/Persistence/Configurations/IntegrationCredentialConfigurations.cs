@@ -75,6 +75,13 @@ public sealed class AuthorizeNetCredentialConfig : IntegrationCredentialConfig<A
     {
         b.Property(x => x.ApplicationLoginId).HasMaxLength(200);
         b.Property(x => x.PublicClientKey).HasMaxLength(200);
+        b.Property(x => x.TransactionType).HasMaxLength(20);
+        b.Property(x => x.AcceptedCardTypes).HasMaxLength(200);
+        b.Property(x => x.DisplayName).HasMaxLength(100);
+        b.Property(x => x.MinOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.MaxOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.AllowedCustomerGroupIds).HasMaxLength(2000);
+        b.Property(x => x.DefaultOrderStatus).HasMaxLength(20);
     }
 }
 
@@ -103,6 +110,17 @@ public sealed class FedExCredentialConfig : IntegrationCredentialConfig<FedExCre
     {
         b.Property(x => x.ApiKey).HasMaxLength(300);
         b.Property(x => x.AccountNumber).HasMaxLength(50);
+        b.Property(x => x.DisplayName).HasMaxLength(100);
+        b.Property(x => x.RateMode).HasMaxLength(20);
+        b.Property(x => x.AllowedServices).HasMaxLength(1000);
+        b.Property(x => x.FflAllowedServices).HasMaxLength(1000);
+        b.Property(x => x.PickupType).HasMaxLength(40);
+        b.Property(x => x.ShipToCountries).HasMaxLength(1000);
+        b.Property(x => x.HandlingFee).HasPrecision(18, 2);
+        b.Property(x => x.MinimumOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.DefaultLengthIn).HasPrecision(9, 2);
+        b.Property(x => x.DefaultWidthIn).HasPrecision(9, 2);
+        b.Property(x => x.DefaultHeightIn).HasPrecision(9, 2);
     }
 }
 
@@ -120,7 +138,19 @@ public sealed class UspsCredentialConfig : IntegrationCredentialConfig<UspsCrede
 {
     protected override string TableName => "Credentials_USPS";
     protected override void ConfigureFields(EntityTypeBuilder<UspsCredential> b)
-        => b.Property(x => x.ConsumerKey).HasMaxLength(300);
+    {
+        b.Property(x => x.ConsumerKey).HasMaxLength(300);
+        b.Property(x => x.DisplayName).HasMaxLength(100);
+        b.Property(x => x.PriceType).HasMaxLength(20);
+        b.Property(x => x.AllowedDomesticServices).HasMaxLength(1000);
+        b.Property(x => x.AllowedInternationalServices).HasMaxLength(1000);
+        b.Property(x => x.ShipToCountries).HasMaxLength(1000);
+        b.Property(x => x.HandlingFee).HasPrecision(18, 2);
+        b.Property(x => x.MinimumOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.DefaultLengthIn).HasPrecision(9, 2);
+        b.Property(x => x.DefaultWidthIn).HasPrecision(9, 2);
+        b.Property(x => x.DefaultHeightIn).HasPrecision(9, 2);
+    }
 }
 
 public sealed class FreightviewCredentialConfig : IntegrationCredentialConfig<FreightviewCredential>
@@ -135,6 +165,10 @@ public sealed class FreightviewCredentialConfig : IntegrationCredentialConfig<Fr
         b.Property(x => x.PickupInstructions).HasMaxLength(1000);
         b.Property(x => x.DockOpenTime).HasMaxLength(20);
         b.Property(x => x.DockCloseTime).HasMaxLength(20);
+        b.Property(x => x.DisplayName).HasMaxLength(100);
+        b.Property(x => x.HandlingFee).HasPrecision(18, 2);
+        b.Property(x => x.MinimumOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.ShipToCountries).HasMaxLength(1000);
     }
 }
 
@@ -145,6 +179,15 @@ public sealed class UpsCredentialConfig : IntegrationCredentialConfig<UpsCredent
     {
         b.Property(x => x.MerchantId).HasMaxLength(100);
         b.Property(x => x.ClientId).HasMaxLength(300);
+        b.Property(x => x.ApiVersion).HasMaxLength(20);
+        b.Property(x => x.DisplayName).HasMaxLength(100);
+        b.Property(x => x.AllowedServices).HasMaxLength(500);
+        b.Property(x => x.FflAllowedServices).HasMaxLength(500);
+        b.Property(x => x.PackageType).HasMaxLength(10);
+        b.Property(x => x.PickupType).HasMaxLength(10);
+        b.Property(x => x.ShipToCountries).HasMaxLength(1000);
+        b.Property(x => x.HandlingFee).HasPrecision(18, 2);
+        b.Property(x => x.MinimumOrderAmount).HasPrecision(18, 2);
     }
 }
 

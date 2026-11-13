@@ -78,6 +78,9 @@ public class OrderDto
     public string? ShippingCarrier { get; set; }
     public string? TrackingNumber { get; set; }
 
+    /// <summary>The shipping settings frozen at placement, one per shipment. Empty when not Include()d or for legacy orders.</summary>
+    public List<OrderShippingDto> Shippings { get; set; } = new();
+
     /// <summary>Set when the flat-rate tax fallback was applied and the order needs manual tax review.</summary>
     public bool TaxFlaggedForReview { get; set; }
     /// <summary>Provider calculation reference captured at placement (e.g. Stripe Tax calculation id).</summary>
@@ -143,6 +146,60 @@ public class OrderDto
         TaxFlaggedForReview = o.TaxFlaggedForReview,
         TaxProviderCalculationRef = o.TaxProviderCalculationRef,
         Lines = o.Lines.Select(OrderLineItemDto.From).ToList(),
+        Shippings = o.Shippings.OrderBy(s => s.ShipmentType).Select(OrderShippingDto.From).ToList(),
+    };
+}
+
+/// <summary>One shipment's shipping settings as frozen onto the order at placement.</summary>
+public class OrderShippingDto
+{
+    public string ShipmentType { get; set; } = string.Empty;
+    public string ShipToType { get; set; } = string.Empty;
+    public string? MethodId { get; set; }
+    public string? MethodName { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Carrier { get; set; }
+    public decimal MethodPrice { get; set; }
+    public decimal HandlingFee { get; set; }
+    public bool SignatureRequired { get; set; }
+    public decimal SignatureFee { get; set; }
+    public bool InsuranceSelected { get; set; }
+    public decimal InsuranceFee { get; set; }
+    public decimal DeclaredValue { get; set; }
+    public decimal ShippingTotal { get; set; }
+    public int? EstimatedDeliveryDays { get; set; }
+    public bool WasRecommended { get; set; }
+    public int ItemCount { get; set; }
+    public decimal? WeightLb { get; set; }
+    public bool ContainsFflItems { get; set; }
+    public string? FflDealerName { get; set; }
+    public string? FflNumber { get; set; }
+    public int RulesVersion { get; set; }
+
+    public static OrderShippingDto From(OrderShipping s) => new()
+    {
+        ShipmentType = s.ShipmentType.ToString(),
+        ShipToType = s.ShipToType.ToString(),
+        MethodId = s.MethodId,
+        MethodName = s.MethodName,
+        DisplayName = s.DisplayName,
+        Carrier = s.Carrier,
+        MethodPrice = s.MethodPrice,
+        HandlingFee = s.HandlingFee,
+        SignatureRequired = s.SignatureRequired,
+        SignatureFee = s.SignatureFee,
+        InsuranceSelected = s.InsuranceSelected,
+        InsuranceFee = s.InsuranceFee,
+        DeclaredValue = s.DeclaredValue,
+        ShippingTotal = s.ShippingTotal,
+        EstimatedDeliveryDays = s.EstimatedDeliveryDays,
+        WasRecommended = s.WasRecommended,
+        ItemCount = s.ItemCount,
+        WeightLb = s.WeightLb,
+        ContainsFflItems = s.ContainsFflItems,
+        FflDealerName = s.FflDealerName,
+        FflNumber = s.FflNumber,
+        RulesVersion = s.RulesVersion,
     };
 }
 

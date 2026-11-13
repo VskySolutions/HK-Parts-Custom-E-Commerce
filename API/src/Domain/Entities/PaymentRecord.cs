@@ -44,4 +44,40 @@ public class PaymentRecord : AuditableEntity
 
     /// <summary>When an authorization-only hold expires; used to flag orders for manual review (AC-PAY-002.4).</summary>
     public DateTime? AuthorizationExpiresUtc { get; set; }
+
+    /// <summary>
+    /// The amount the gateway authorized at checkout. <see cref="Amount"/> becomes the captured (settled) amount
+    /// once a lower capture is taken, so this keeps the ceiling a capture may never exceed (AN-21).
+    /// </summary>
+    public decimal? AuthorizedAmount { get; set; }
+
+    // ---- Gateway response detail (Authorize.Net AN-18; null for gateways that do not return it) ----
+
+    /// <summary>Issuer approval code.</summary>
+    public string? AuthCode { get; set; }
+    /// <summary>AVS (address verification) result code, e.g. "Y", "Z", "N".</summary>
+    public string? AvsResultCode { get; set; }
+    /// <summary>Card code (CVV) verification result, e.g. "M" match, "N" no match.</summary>
+    public string? CvvResultCode { get; set; }
+    /// <summary>Card network transaction id.</summary>
+    public string? NetworkTransactionId { get; set; }
+    /// <summary>Card brand / account type the gateway reported, e.g. "Visa", "MasterCard", "eCheck".</summary>
+    public string? CardType { get; set; }
+    /// <summary>Last four digits of the card / account (never the full number).</summary>
+    public string? CardLastFour { get; set; }
+
+    /// <summary>Raw gateway result: responseCode (1 approved, 2 declined, 3 error, 4 held for review).</summary>
+    public string? GatewayResponseCode { get; set; }
+    /// <summary>Raw gateway reason / error code, e.g. "2", "27", "E00027". Admin-only.</summary>
+    public string? GatewayReasonCode { get; set; }
+    /// <summary>Raw gateway response text, kept for the admin; the buyer only sees a friendly message (AN-19).</summary>
+    public string? GatewayResponseText { get; set; }
+
+    /// <summary>Authorize.Net CIM customer profile id created from this transaction (AN-30).</summary>
+    public string? CustomerProfileId { get; set; }
+    /// <summary>Authorize.Net CIM payment profile id: the chargeable stored card (AN-31).</summary>
+    public string? CustomerPaymentProfileId { get; set; }
+
+    /// <summary>Every gateway operation on this payment (sale, capture, void, refund), oldest first (AN-25/26/42).</summary>
+    public ICollection<PaymentTransaction> Transactions { get; set; } = new List<PaymentTransaction>();
 }

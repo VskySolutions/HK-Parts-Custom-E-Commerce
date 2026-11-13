@@ -1,4 +1,20 @@
-<template>
+watch(lockExpired, async (expired) => {
+  if (!expired || placing.value) return
+  lockExpiresMs.value = null
+const nowMs = ref(Date.now())
+// Kept apart from the quote: clearing the quote (an address edit) must not look like the lock ran out.
+const lockExpiresMs = ref(null)
+function trackLock (at) {
+  if (!at) { lockExpiresMs.value = null; return }
+  // The API sends UTC; add the zone when the serializer left it off.
+  const iso = /(Z|[+-]dd:dd)$/.test(at) ? at : at + 'Z'
+  lockExpiresMs.value = new Date(iso).getTime()
+}
+const lockSecondsLeft = computed(() => {
+  if (!lockExpiresMs.value || orderResult.value) return 0
+  return Math.max(0, Math.floor((lockExpiresMs.value - nowMs.value) / 1000))
+})
+const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value && lockExpiresMs.value <= nowMs.value)<template>
   <q-page class="q-pa-md storefront-container">
     <div class="text-h5 text-weight-bold q-mb-md">Checkout</div>
 
@@ -43,8 +59,11 @@
           </div>
           <div>
             <div class="text-caption text-grey-6">Payment</div>
-            <div class="text-subtitle1 text-weight-bold">{{ orderResult.paymentStatus }}</div>
+            <div class="text-subtitle1 text-weight-bold">{{ orderResult.paymentStatus === 'HeldForReview' ? 'Under review' : orderResult.paymentStatus }}</div>
           </div>
+        </div>
+        <div v-if="orderResult.paymentStatus === 'HeldForReview'" class="text-body2 text-grey-8 q-mt-md">
+          Your payment is being reviewed. We will email you once it is confirmed. No further action is needed.
         </div>
         <div v-if="orderResult.transactionId" class="q-mt-lg">
           <div class="text-caption text-grey-6">Transaction ID</div>
@@ -387,6 +406,12 @@
           {{ quoteError }}
         </q-banner>
 
+        <!-- Low-stock checkout lock (CK-20): an item is held for this buyer until the countdown ends. -->
+        <q-banner v-if="lockSecondsLeft > 0" dense class="bg-amber-1 text-amber-10 rounded-borders q-mb-lg">
+          <template #avatar><q-icon name="o_timer" color="amber-10" /></template>
+          An item in your cart is low in stock and is reserved for you for <b>{{ lockCountdown }}</b>. Please complete your order before the time runs out.
+        </q-banner>
+
         <!-- Not routable to any store -->
         <q-banner
           v-if="quote && !isRoutable"
@@ -435,6 +460,11 @@
         <q-card v-if="canCollectDetails && !isInquiry" flat bordered class="q-mb-lg">
           <q-card-section>
             <div class="text-subtitle1 text-weight-bold q-mb-sm">{{ isPickup ? 'Collection' : 'Shipping method' }}</div>
+            <!-- Per-state notice from the checkout settings (SH-23), e.g. Washington. -->
+            <q-banner v-if="quote && quote.stateNotice" dense class="bg-red-1 text-red-9 rounded-borders q-mb-sm">
+              <template #avatar><q-icon name="o_warning" color="red-9" /></template>
+              {{ quote.stateNotice }}
+            </q-banner>
             <div v-if="shippingCarriers.length" class="row items-center q-gutter-xs q-mb-sm">
               <span class="text-caption text-grey-6">Rates from</span>
               <q-chip
@@ -526,6 +556,32 @@
                 or contact us and we'll help.
               </span>
             </div>
+
+            <!-- Shipping add-ons (SR-80/81): priced by the server on every quote and charged on top of the method. -->
+            <div v-if="shippingAddOns && shippingOptions.length" class="q-mt-md">
+              <q-separator class="q-mb-sm" />
+              <div class="text-body2 text-weight-medium q-mb-xs">Delivery options</div>
+              <q-checkbox
+                v-if="shippingAddOns.signatureAvailable"
+                :model-value="requireSignature"
+                dense
+                class="q-mb-xs full-width"
+                :disable="quoting"
+                @update:model-value="onAddOnChange('signature', $event)"
+              >
+                Require signature on delivery <span class="text-grey-7">(+{{ format(shippingAddOns.signatureFee) }})</span>
+              </q-checkbox>
+              <q-checkbox
+                v-if="shippingAddOns.insuranceAvailable"
+                :model-value="insureShipment"
+                dense
+                class="full-width"
+                :disable="quoting"
+                @update:model-value="onAddOnChange('insurance', $event)"
+              >
+                Shipping insurance <span class="text-grey-7">(+{{ format(shippingAddOns.insuranceFee) }}, declared value {{ format(shippingAddOns.declaredValue) }})</span>
+              </q-checkbox>
+            </div>
           </q-card-section>
         </q-card>
 
@@ -544,8 +600,19 @@
           </q-card-section>
         </q-card>
 
+        <!-- No payment required (PY-40): the total is 0.00, e.g. a 100 % coupon. -->
+        <q-card v-if="canCollectDetails && !isInquiry && noPaymentRequired" flat bordered class="q-mb-lg">
+          <q-card-section class="row items-center no-wrap q-gutter-md">
+            <q-icon name="o_check_circle" size="40px" color="positive" />
+            <div>
+              <div class="text-subtitle1 text-weight-bold">No payment required</div>
+              <div class="text-body2">Your order total is {{ format(0) }}. Confirm below to place your order.</div>
+            </div>
+          </q-card-section>
+        </q-card>
+
         <!-- Payment method (AC-PAY-001.4/5) — absent for an inquiry; no money changes hands. -->
-        <q-card v-if="canCollectDetails && !isInquiry && !payWithGiftCertificate" flat bordered class="q-mb-lg">
+        <q-card v-if="canCollectDetails && !isInquiry && !payWithGiftCertificate && !noPaymentRequired" flat bordered class="q-mb-lg">
           <q-card-section>
             <div class="text-subtitle1 text-weight-bold q-mb-sm">Payment method</div>
 
@@ -651,6 +718,9 @@
                   <q-input
                     v-model="authNetCard.number"
                     outlined dense
+                    lazy-rules
+                    :rules="[(v) => !cardNumberError(v) || cardNumberError(v)]"
+                    autocomplete="cc-number"
                     inputmode="numeric"
                     maxlength="23"
                     label="Card number"
@@ -662,6 +732,9 @@
                       <q-input
                         v-model="authNetCard.expiry"
                         outlined dense
+                        lazy-rules
+                        :rules="[(v) => !expiryError(v) || expiryError(v)]"
+                        autocomplete="cc-exp"
                         mask="##/##"
                         label="Expiry (MM/YY)"
                         placeholder="MM/YY"
@@ -671,6 +744,9 @@
                       <q-input
                         v-model="authNetCard.cvc"
                         outlined dense
+                        lazy-rules
+                        :rules="[(v) => !cvcError(v, authNetCard.number) || cvcError(v, authNetCard.number)]"
+                        autocomplete="cc-csc"
                         inputmode="numeric"
                         maxlength="4"
                         label="CVC"
@@ -690,6 +766,9 @@
                   <q-input
                     v-model="authNetBank.nameOnAccount"
                     outlined dense
+                    lazy-rules
+                    maxlength="22"
+                    :rules="[(v) => !accountNameError(v) || accountNameError(v)]"
                     label="Name on account"
                     placeholder="Full name as it appears on the account"
                     class="q-mb-sm"
@@ -699,6 +778,8 @@
                       <q-input
                         v-model="authNetBank.routingNumber"
                         outlined dense
+                        lazy-rules
+                        :rules="[(v) => !routingNumberError(v) || routingNumberError(v)]"
                         inputmode="numeric"
                         mask="#########"
                         unmasked-value
@@ -710,6 +791,8 @@
                       <q-input
                         v-model="authNetBank.accountNumber"
                         outlined dense
+                        lazy-rules
+                        :rules="[(v) => !accountNumberError(v) || accountNumberError(v)]"
                         inputmode="numeric"
                         maxlength="17"
                         label="Account number"
@@ -842,6 +925,13 @@
                   </SummaryHint>
                 </span>
                 <span>{{ format(quote.shippingTotal) }}</span>
+              </div>
+              <div
+                v-if="shippingAddOnTotal > 0"
+                class="row items-center justify-between q-mb-xs q-pl-sm text-caption text-grey-7"
+              >
+                <span>incl. {{ shippingAddOnLabel }}</span>
+                <span>{{ format(shippingAddOnTotal) }}</span>
               </div>
 
               <div class="row items-center justify-between q-mb-xs">
@@ -984,6 +1074,19 @@
 
             <template v-else>
 
+            <!-- Terms and conditions (SH-40): required by the checkout settings; enforced again by the server. -->
+            <div v-if="quote && termsRequired" class="q-mt-md">
+              <q-checkbox v-model="termsAccepted" dense>
+                <span class="text-body2">
+                  {{ quote.termsText }}<template v-if="quote.termsUrl">
+                    (<a :href="quote.termsUrl" target="_blank" rel="noopener" @click.stop>read the terms</a>)</template>.
+                </span>
+              </q-checkbox>
+              <div v-if="!termsAccepted" class="text-caption text-grey-7 q-mt-xs">
+                To continue and complete your purchase you must accept our terms and conditions.
+              </div>
+            </div>
+
             <!-- Place order / retry -->
             <q-banner v-if="placeError" dense class="bg-red-1 text-red-9 rounded-borders q-mt-md">
               <template #avatar><q-icon name="o_error" color="red-9" /></template>
@@ -996,12 +1099,18 @@
               color="primary"
               class="full-width q-mt-md"
               no-caps
-              :label="placeError ? 'Retry payment' : (payWithGiftCertificate ? 'Confirm and pay with gift certificate' : 'Place order')"
+              :label="placeError ? 'Retry payment' : (payWithGiftCertificate ? 'Confirm and pay with gift certificate' : (noPaymentRequired ? 'Confirm order' : 'Place order'))"
               icon-right="o_lock"
               :loading="placing"
               :disable="!canPlace"
               @click="placeOrder"
             />
+            <div v-if="quote && paymentDetailsIncomplete" class="text-caption text-grey-7 q-mt-xs text-center">
+              {{ authNetInstrument === 'ach' ? 'Enter valid bank account details to place your order.' : 'Enter valid card details to place your order.' }}
+            </div>
+            <div v-else-if="quote && termsRequired && !termsAccepted" class="text-caption text-grey-7 q-mt-xs text-center">
+              Accept the terms and conditions to place your order.
+            </div>
             <q-btn
               v-else
               unelevated
@@ -1041,7 +1150,7 @@
  * the quote reports guest ordering is not allowed, the buyer is prompted to sign
  * in instead (AC-CHK-003.2 / AC-STR-001.5).
  */
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { LocalStorage } from 'quasar'
 import { useRouter, useRoute } from 'vue-router'
 import AppAddressForm from 'components/common/AppAddressForm.vue'
@@ -1052,6 +1161,9 @@ import ApplyGiftCertificate from 'modules/storefront/components/ApplyGiftCertifi
 import { isPossiblePhoneNumber } from 'libphonenumber-js'
 import { emptyAddress } from 'composables/useAddress'
 import { checkoutApi } from 'modules/storefront/api'
+import {
+  cardNumberError, expiryError, cvcError, accountNameError, routingNumberError, accountNumberError, authNetDetailsValid
+} from 'modules/storefront/composables/paymentValidation'
 import { pointsApi } from 'modules/storefront/checkout-extras-api'
 import { customerAuthApi, accountApi } from 'modules/storefront/account-api'
 import { useCustomerAuthStore } from 'stores/customerAuth'
@@ -1395,6 +1507,29 @@ const quoting = ref(false)
 const quoteError = ref('')
 const selectedShippingMethodId = ref(null)
 
+// Shipping add-ons (SR-80): the buyer's answers, sent with every quote and with the placement so both are
+// priced the same way. The quote reports which are offered and what they cost.
+const requireSignature = ref(false)
+const insureShipment = ref(false)
+const shippingAddOns = computed(() => quote.value?.shippingAddOns || null)
+function addOnSelection () {
+  return { requireSignature: requireSignature.value, insurance: insureShipment.value }
+}
+const shippingAddOnTotal = computed(() =>
+  quote.value ? Math.max(0, (quote.value.shippingTotal || 0) - (quote.value.shippingMethodTotal || 0)) : 0
+)
+const shippingAddOnLabel = computed(() => {
+  const a = shippingAddOns.value
+  if (!a) return ''
+  return [a.signatureSelected ? 'signature' : null, a.insuranceSelected ? 'insurance' : null]
+    .filter(Boolean).join(' + ')
+})
+function onAddOnChange (which, value) {
+  if (which === 'signature') requireSignature.value = value
+  else insureShipment.value = value
+  runQuote()
+}
+
 // The summary's "Subtotal" row shows the list-price subtotal so the itemized customer-group discount
 // reconciles with the (list-priced) line items above it; the group saving is then subtracted on its own
 // line. Falls back to the member subtotal when there is no group saving, and to the cart before a quote.
@@ -1590,9 +1725,11 @@ async function runQuote () {
       shipTo: buildShipTo(),
       shippingMethodId: selectedShippingMethodId.value || null,
       pickupInStore: isPickup.value,
-      pickupStoreId: isPickup.value ? pickupStoreId.value : null
+      pickupStoreId: isPickup.value ? pickupStoreId.value : null,
+      addOns: isPickup.value ? null : addOnSelection()
     })
     quote.value = q
+    trackLock(q && q.checkoutLockExpiresUtc)
     // Keep a valid shipping selection, defaulting to whatever the quote actually priced. This mirrors the
     // server's rule (recommended, else cheapest) — if the two disagreed, the radio would show one option
     // while the totals reflected another.
@@ -1613,6 +1750,7 @@ async function runQuote () {
   } catch (err) {
     quote.value = null
     if (handleGiftCertificateError(err)) return
+    if (handleCheckoutSessionError(err)) return
     quoteError.value = getApiErrorMessage(err)
   } finally {
     quoting.value = false
@@ -1669,7 +1807,17 @@ const PAYMENT_METHOD_META = {
 const paymentMethods = computed(() =>
   (quote.value?.availablePaymentMethods || [])
     .filter((m) => PAYMENT_METHOD_META[m.method])
-    .map((m) => ({ value: m.method, isProduction: m.isProduction, feePercent: m.feePercent || 0, ...PAYMENT_METHOD_META[m.method] }))
+    // The default method (Authorize.Net) is listed first; the rest keep the server's order.
+    .slice()
+    .sort((a, b) => (b.method === 'AuthorizeNet') - (a.method === 'AuthorizeNet'))
+    // A configured display name (e.g. Authorize.Net shown as "Credit Card") overrides the default label.
+    .map((m) => ({
+      value: m.method,
+      isProduction: m.isProduction,
+      feePercent: m.feePercent || 0,
+      ...PAYMENT_METHOD_META[m.method],
+      ...(m.displayName ? { label: m.displayName } : {})
+    }))
 )
 const paymentMethod = ref(null)
 
@@ -1678,6 +1826,8 @@ const paymentMethod = ref(null)
 // it covers everything the payment step becomes "Pay with Gift Certificate".
 const giftCertificateApplied = computed(() => quote.value?.giftCertificateApplied || 0)
 const payWithGiftCertificate = computed(() => !!quote.value?.payWithGiftCertificate)
+// The server decides which payment view applies (6.1): Methods / GiftCertificate / None (total is 0.00).
+const noPaymentRequired = computed(() => quote.value?.paymentMode === 'None')
 const GC_NO_LONGER_VALID = 'The gift certificate you have submitted is no longer valid'
 
 // A certificate that became invalid (deactivated, spent elsewhere, expired) is detached server-side; send the
@@ -1724,9 +1874,16 @@ const grandTotal = computed(() => {
   return total > 0 ? total : 0
 })
 // Keep the selection valid as availability changes — default to the first offered method.
+// Authorize.Net (the store's card gateway, "Credit Card") is the default method whenever it is offered;
+// otherwise the first available one. A buyer's own choice is kept while it stays available.
+const DEFAULT_PAYMENT_METHOD = 'AuthorizeNet'
 watch(paymentMethods, (methods) => {
   if (!methods.length) paymentMethod.value = null
-  else if (!methods.some((m) => m.value === paymentMethod.value)) paymentMethod.value = methods[0].value
+  else if (!methods.some((m) => m.value === paymentMethod.value)) {
+    paymentMethod.value = methods.some((m) => m.value === DEFAULT_PAYMENT_METHOD)
+      ? DEFAULT_PAYMENT_METHOD
+      : methods[0].value
+  }
 }, { immediate: true })
 
 // ---- Square on-site card field (Web Payments SDK) ---------------------------
@@ -1845,17 +2002,28 @@ const confirming = ref(false)
 const retrying = ref(false)
 const retryState = ref(null) // { orderId, message } while a payment is cancelled/unconfirmed
 
+// Authorize.Net is chosen but the card / bank fields are empty or invalid.
+const paymentDetailsIncomplete = computed(() =>
+  paymentMethod.value === 'AuthorizeNet' && !payWithGiftCertificate.value && !noPaymentRequired.value &&
+  !authNetNotConfigured.value &&
+  !authNetDetailsValid(authNetInstrument.value, authNetCard.value, authNetBank.value)
+)
+
 const canPlace = computed(
   () =>
     !!quote.value &&
     isRoutable.value &&
     guestOrderingAllowed.value &&
+    (!termsRequired.value || termsAccepted.value) &&
     items.value.length > 0 &&
     // An all-online-gift-certificate cart ships nothing, so it has no shipping options to pick from.
     (!!selectedShippingMethodId.value || !(quote.value.shippingOptions || []).length) &&
-    (payWithGiftCertificate.value || !!paymentMethod.value) &&
+    (payWithGiftCertificate.value || noPaymentRequired.value || !!paymentMethod.value) &&
     !squareNotConfigured.value &&
     !authNetNotConfigured.value &&
+    // Card / bank fields live outside the q-form, so check them here (and again before tokenizing).
+    (paymentMethod.value !== 'AuthorizeNet' || payWithGiftCertificate.value || noPaymentRequired.value ||
+      authNetDetailsValid(authNetInstrument.value, authNetCard.value, authNetBank.value)) &&
     !placing.value
 )
 
@@ -1879,9 +2047,10 @@ async function placeOrder () {
     // Square: tokenize the entered card into a single-use nonce (source id) before placing — the server
     // charges this token. A tokenization error (empty/invalid card) stops placement with a clear message;
     // the finally block resets `placing` on the early return.
-    // Pay with Gift Certificate: the certificate covers everything; no gateway, no card tokenization.
-    if (payWithGiftCertificate.value) {
-      const result = await checkoutApi.payWithGiftCertificate({
+    // Pay with Gift Certificate, or nothing to pay (0.00 total): no gateway, no card tokenization.
+    if (payWithGiftCertificate.value || noPaymentRequired.value) {
+      const submit = payWithGiftCertificate.value ? checkoutApi.payWithGiftCertificate : checkoutApi.payNone
+      const result = await submit({
         cartId: null,
         sessionId: sessionId.value,
         shipTo: buildShipTo(),
@@ -1890,7 +2059,8 @@ async function placeOrder () {
         couponCode: null,
         recaptchaToken: await getRecaptchaToken('guestCheckout'),
         pickupInStore: isPickup.value,
-        pickupStoreId: isPickup.value ? pickupStoreId.value : null
+        pickupStoreId: isPickup.value ? pickupStoreId.value : null,
+        ...shownPrices()
       })
       if (result && result.success) {
         orderResult.value = result
@@ -1945,7 +2115,8 @@ async function placeOrder () {
       pickupInStore: isPickup.value,
       pickupStoreId: isPickup.value ? pickupStoreId.value : null,
       // UI-only preference for mixed carts (AC-CHK-005.2); harmless extra field the backend may ignore.
-      splitShipment: hasMixedFulfilment.value ? splitShipment.value : false
+      splitShipment: hasMixedFulfilment.value ? splitShipment.value : false,
+      ...shownPrices()
     })
     if (result && result.redirectUrl) {
       // Redirect gateway (Stripe Checkout): hand off to the hosted payment page. The buyer returns to
@@ -1975,12 +2146,76 @@ async function placeOrder () {
     }
   } catch (err) {
     if (handleGiftCertificateError(err)) return
+    if (handleCheckoutSessionError(err)) return
     placeError.value = getApiErrorMessage(err)
     notify.error(placeError.value)
+    // 409 = the server refused before charging (price changed, method gone, address no longer allowed, …).
+    // Re-price so the summary shows what placing again would cost; the buyer then confirms it.
+    if (err?.response?.status === 409) runQuote()
   } finally {
     placing.value = false
   }
 }
+
+// What the buyer was shown, sent with the placement: the server refuses (409, nothing charged) when its
+// re-priced shipping or total differs, so the buyer is never charged a price they did not see (OP-11/41).
+function shownPrices () {
+  return {
+    addOns: isPickup.value ? null : addOnSelection(),
+    expectedShippingTotal: quote.value ? quote.value.shippingTotal : null,
+    expectedTotal: quote.value ? quote.value.total : null,
+    // SH-41 / PY-13: the server refuses the placement without it when terms are required.
+    termsAccepted: termsAccepted.value
+  }
+}
+
+// ---- Terms, checkout lock and session (checkout settings) -----------------
+const termsAccepted = ref(false)
+const termsRequired = computed(() => !!quote.value?.termsRequired)
+
+// The cart was idle too long (CHECKOUT_EXPIRED) or a low-stock item is held by another buyer
+// (CHECKOUT_LOCKED): back to the cart with the server message, as the legacy checkout did.
+function handleCheckoutSessionError (err) {
+  const code = err?.response?.data?.code
+  if (code !== 'CHECKOUT_EXPIRED' && code !== 'CHECKOUT_LOCKED') return false
+  notify.error(getApiErrorMessage(err))
+  router.push({ name: 'shop-cart' })
+  return true
+}
+
+// CK-21 / CK-23: count down to the lock deadline the server set (a refresh never extends it); at 0 release
+// the lock and send the buyer back to the cart.
+const nowMs = ref(Date.now())
+// Kept apart from the quote: clearing the quote (an address edit) must not look like the lock ran out.
+const lockExpiresMs = ref(null)
+function trackLock (at) {
+  if (!at) {
+    lockExpiresMs.value = null
+    return
+  }
+  // The API sends UTC; add the zone when the serializer left it off.
+  const iso = /(Z|[+-]\d\d:\d\d)$/.test(at) ? at : at + 'Z'
+  lockExpiresMs.value = new Date(iso).getTime()
+}
+const lockSecondsLeft = computed(() => {
+  if (!lockExpiresMs.value || orderResult.value) return 0
+  return Math.max(0, Math.floor((lockExpiresMs.value - nowMs.value) / 1000))
+})
+const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value && lockExpiresMs.value <= nowMs.value)
+const lockCountdown = computed(() => {
+  const s = lockSecondsLeft.value
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')
+})
+const lockTimer = setInterval(() => { nowMs.value = Date.now() }, 1000)
+onBeforeUnmount(() => clearInterval(lockTimer))
+
+watch(lockExpired, async (expired) => {
+  if (!expired || placing.value) return
+  lockExpiresMs.value = null
+  await checkoutApi.releaseLock({ cartId: null, sessionId: sessionId.value }).catch(() => {})
+  notify.error('Your reservation on a low-stock item has expired. Please check out again.')
+  router.push({ name: 'shop-cart' })
+})
 
 // ---- On-site payment widget (Razorpay Checkout) -----------------------------
 // checkout.js is loaded on demand — only when a Razorpay payment is actually placed — and once per page.

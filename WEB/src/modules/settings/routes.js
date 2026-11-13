@@ -11,5 +11,12 @@ export default [
     name: 'settings-commerce-mode',
     meta: { title: 'Commerce Mode', permissions: ['Settings.Read'] },
     component: () => import('modules/settings/pages/commerce-mode.vue')
+  },
+  {
+    // Checkout settings (session, low-stock lock, terms, state notices, blacklist matching).
+    path: 'settings/checkout',
+    name: 'settings-checkout',
+    meta: { title: 'Checkout Settings', permissions: ['Settings.Read'] },
+    component: () => import('modules/settings/pages/checkout-settings.vue')
   }
 ]

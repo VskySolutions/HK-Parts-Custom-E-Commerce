@@ -126,4 +126,10 @@ public class AdminCustomersController : ApiControllerBase
     [RequirePermission(Permissions.UsersWrite)]
     public async Task<ActionResult<CustomerDetailDto>> SetActive(Guid id, [FromBody] SetCustomerActiveCommand command)
         => Ok(await Mediator.Send(command with { CustomerId = id }));
+
+    /// <summary>Exempt the customer from the restricted-state shipping rule (SR-92), or remove the exemption.</summary>
+    [HttpPut("{id:guid}/shipping-restriction-exempt")]
+    public async Task<ActionResult<CustomerDetailDto>> SetShippingRestrictionExempt(
+        Guid id, [FromBody] SetCustomerShippingRestrictionExemptCommand command)
+        => Ok(await Mediator.Send(command with { CustomerId = id }));
 }

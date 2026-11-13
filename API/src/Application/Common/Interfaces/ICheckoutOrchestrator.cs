@@ -39,4 +39,7 @@ public interface ICheckoutOrchestrator
 
     /// <summary>Re-opens a payment session for a still-pending order (retry after a cancelled redirect payment).</summary>
     Task<CheckoutResult> RetryPaymentAsync(Guid orderId, CancellationToken ct);
+
+    /// <summary>Releases the cart's low-stock checkout locks (CK-23): called when the storefront countdown runs out.</summary>
+    Task ReleaseCheckoutLockAsync(CheckoutCartRef cart, CancellationToken ct);
 }

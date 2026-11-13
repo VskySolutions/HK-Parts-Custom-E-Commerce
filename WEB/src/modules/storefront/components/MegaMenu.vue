@@ -2,7 +2,8 @@
   <nav class="sf-megamenu">
     <div class="sf-container row items-center no-wrap">
       <!-- Mobile: hamburger opens the category drawer -->
-      <q-btn
+       <!-- Commented As it's reference in storefront_layout page with menu icons. -->
+      <!-- <q-btn
         flat
         dense
         round
@@ -11,7 +12,7 @@
         aria-label="Browse categories"
         @click="drawer = true"
       />
-      <span class="lt-md text-weight-medium q-ml-sm cursor-pointer" @click="drawer = true">Shop by category</span>
+      <span class="lt-md text-weight-medium q-ml-sm cursor-pointer" @click="drawer = true">Shop by category</span> -->
 
       <!-- ===== Desktop ===== -->
       <div class="gt-sm row items-center no-wrap full-width">
@@ -439,5 +440,13 @@ function onPillarShow () {
   }
 }
 
+function openMobileDrawer () {
+  drawer.value = true
+}
+
 onMounted(loadCategories)
+
+defineExpose({
+  openMobileDrawer
+})
 </script>

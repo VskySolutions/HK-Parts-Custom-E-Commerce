@@ -8,6 +8,8 @@ using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.Checkout;
 using HKPartsEcommerce.Application.Features.GiftCertificates;
 using HKPartsEcommerce.Application.Features.OrderRouting;
+using HKPartsEcommerce.Application.Features.Payments;
+using HKPartsEcommerce.Application.Features.Shipping;
 using HKPartsEcommerce.Domain.Common;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
@@ -41,6 +43,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     private readonly ICommerceModeService _commerce;
     private readonly IGiftCertificateService? _giftCertificates;
     private readonly ISettingsService? _settings;
+    private readonly ICheckoutLockService? _checkoutLocks;
 
     public CheckoutOrchestrator(
         IApplicationDbContext db,
@@ -61,7 +64,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         ICommerceModeService commerce,
         // Optional so existing composition (tests) keeps working; DI always supplies them.
         IGiftCertificateService? giftCertificates = null,
-        ISettingsService? settings = null)
+        ISettingsService? settings = null,
+        ICheckoutLockService? checkoutLocks = null)
     {
         _db = db;
         _routing = routing;
@@ -81,13 +85,14 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         _commerce = commerce;
         _giftCertificates = giftCertificates;
         _settings = settings;
+        _checkoutLocks = checkoutLocks;
     }
 
     public async Task<CheckoutQuote> QuoteAsync(CheckoutQuoteRequest req, CancellationToken ct)
     {
         var priced = await BuildAsync(
             req.CartId, req.SessionId, req.ShipTo, req.ShippingMethodId,
-            requestCouponCode: null, forPlacement: false, req.PickupInStore, req.PickupStoreId, ct);
+            requestCouponCode: null, forPlacement: false, req.PickupInStore, req.PickupStoreId, req.AddOns, ct);
 
         var quote = new CheckoutQuote
         {
@@ -99,6 +104,19 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             DiscountTotal = priced.DiscountTotal,
             ShippingOptions = priced.ShippingOptions.ToList(),
             ShippingTotal = priced.ShippingTotal,
+            ShippingMethodTotal = priced.Shipping?.MethodPrice ?? priced.ShippingTotal,
+            ShippingAddOns = priced.Shipping is { } s && (s.SignatureAvailable || s.InsuranceAvailable)
+                ? new ShippingAddOnQuote
+                {
+                    SignatureAvailable = s.SignatureAvailable,
+                    SignatureFee = s.SignatureFeeOffered,
+                    SignatureSelected = s.SignatureSelected,
+                    InsuranceAvailable = s.InsuranceAvailable,
+                    InsuranceFee = s.InsuranceFeeOffered,
+                    InsuranceSelected = s.InsuranceSelected,
+                    DeclaredValue = s.DeclaredValue,
+                }
+                : null,
             Tax = priced.Tax,
             TaxTotal = priced.TaxTotal,
             Total = priced.Total,
@@ -112,24 +130,57 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // renders the request form instead of the payment step.
         // Only a routed order has a fulfilling store, and so a concrete set of payment methods to offer.
         if (priced.Store is not null && !priced.IsInquiry)
-            quote.AvailablePaymentMethods = (await FilterForGiftCertificatePurchaseAsync(
-                    await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct))
-                .Select(m => new PaymentMethodOption { Method = m.Method.ToString(), IsProduction = m.IsProduction, FeePercent = m.FeePercent })
+        {
+            var (methods, authNetName) = await ApplyMethodRulesAsync(
+                await FilterForGiftCertificatePurchaseAsync(await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct),
+                priced.Total, ct);
+            quote.AvailablePaymentMethods = methods
+                .Select(m => new PaymentMethodOption
+                {
+                    Method = m.Method.ToString(),
+                    IsProduction = m.IsProduction,
+                    FeePercent = m.FeePercent,
+                    DisplayName = m.Method == PaymentMethodType.AuthorizeNet ? authNetName : null,
+                })
                 .ToList();
+        }
 
-        // Gift certificate: same formula as the cart and the placed order — min(balance, grand total).
+        // Gift certificate: same formula as the placed order (PY-21) — min(balance, grand total after points).
         quote.AmountDue = priced.Total;
         if (!priced.IsInquiry)
         {
-            var (certificate, apply) = await ResolveGiftCertificateAsync(priced.Cart, priced.Lines, priced.Total, ct);
+            var netTotal = priced.Total - PointsDiscountFor(priced);
+            var (certificate, apply) = await ResolveGiftCertificateAsync(priced.Cart, priced.Lines, netTotal, ct);
             if (certificate is not null)
             {
                 quote.GiftCertificateCode = certificate.Code;
                 quote.GiftCertificateBalance = certificate.CurrentBalance;
                 quote.GiftCertificateApplied = apply;
                 quote.AmountDue = priced.Total - apply;
-                quote.PayWithGiftCertificate = apply > 0m && quote.AmountDue == 0m;
+                quote.PayWithGiftCertificate = apply > 0m && netTotal - apply == 0m;
             }
+
+            // 6.1: which payment view to render. The storefront renders exactly this.
+            quote.PaymentMode = quote.PayWithGiftCertificate
+                ? CheckoutPaymentModes.GiftCertificate
+                : netTotal - quote.GiftCertificateApplied <= 0m && priced.Store is not null
+                    ? CheckoutPaymentModes.None
+                    : CheckoutPaymentModes.Methods;
+            if (quote.PaymentMode == CheckoutPaymentModes.None)
+                quote.AvailablePaymentMethods.Clear();
+
+            // Checkout settings: terms, state notice, session expiry, low-stock lock (CK-20, SH-23, SH-40).
+            var settings = await CheckoutSettingsStore.LoadAsync(_settings, ct);
+            quote.TermsRequired = settings.TermsRequired;
+            quote.TermsText = settings.TermsText;
+            quote.TermsUrl = settings.TermsUrl;
+            if (!priced.IsPickup)
+                quote.StateNotice = CheckoutSettingsStore.NoticeFor(settings, req.ShipTo?.Region);
+
+            await TouchCheckoutActivityAsync(priced.Cart.Id, ct);
+            if (settings.SessionTimeoutSeconds > 0)
+                quote.CheckoutExpiresUtc = _clock.UtcNow.AddSeconds(settings.SessionTimeoutSeconds);
+            quote.CheckoutLockExpiresUtc = await AcquireCheckoutLocksAsync(priced, ct);
         }
 
         // The active tax provider (for the storefront's "calculated via …" indicator); defaults to FlatRate
@@ -162,9 +213,11 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
 
     public async Task<CheckoutResult> PlaceAsync(PlaceCheckoutRequest req, CancellationToken ct)
     {
+        // Placement re-prices the whole checkout from current data: the chosen method must still be offered,
+        // the destination rules run again (OP-54), and the add-ons are re-priced from the current rules.
         var priced = await BuildAsync(
             req.CartId, req.SessionId, req.ShipTo, req.SelectedShippingMethodId,
-            requestCouponCode: req.CouponCode, forPlacement: true, req.PickupInStore, req.PickupStoreId, ct);
+            requestCouponCode: req.CouponCode, forPlacement: true, req.PickupInStore, req.PickupStoreId, req.AddOns, ct);
 
         // Inquiry carts never reach a gateway (REQ-INQ-001). The storefront already renders the request
         // form instead of the payment step, but the switch is enforced here so a crafted request cannot
@@ -173,6 +226,208 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             throw new ConflictException(
                 "This store does not accept online payment for these items. Please submit an inquiry instead.");
 
+        // Pre-payment checks (CK-01..03, SH-41, PY-10..15), before any gateway is contacted and on every path
+        // (gateway, gift certificate, zero total — PY-41): session, terms, blacklist, low-stock lock.
+        var settings = await CheckoutSettingsStore.LoadAsync(_settings, ct);
+        EnsureCheckoutNotExpired(priced.Cart, settings);
+        if (settings.TermsRequired && req.TermsAccepted != true)
+            throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.TermsRequired,
+                "You must accept our terms and conditions to place your order.");
+        await EnsureNotBlacklistedAsync(req, priced, settings, ct);
+        await AcquireCheckoutLocksAsync(priced, ct);
+        await TouchCheckoutActivityAsync(priced.Cart.Id, ct);
+
+        // The buyer is charged the price they saw, or nothing: refuse before any order or charge exists.
+        EnsureShownPricesHold(req, priced);
+
+        // One placement per cart at a time (OP-56): a double-submitted payment form must not charge twice.
+        var lockUntil = await AcquirePlacementLockAsync(priced.Cart.Id, ct);
+        try
+        {
+            return await PlaceCoreAsync(req, priced, ct);
+        }
+        finally
+        {
+            await ReleasePlacementLockAsync(priced.Cart.Id, lockUntil);
+        }
+    }
+
+    /// <summary>Releases the cart's low-stock checkout locks (CK-23): the storefront countdown ran out, or the buyer left.</summary>
+    public async Task ReleaseCheckoutLockAsync(CheckoutCartRef cartRef, CancellationToken ct)
+    {
+        var cart = await LoadCartAsync(cartRef.CartId, cartRef.SessionId, ct);
+        await ReleaseCheckoutLocksAsync(cart.Id);
+    }
+
+    /// <summary>Loyalty points staged on the cart, clamped to the total (same rule as placement).</summary>
+    private static decimal PointsDiscountFor(PricedCheckout priced) =>
+        priced.Cart.PointsApplied > 0 ? Math.Min(priced.Cart.PointsDiscountAmount, priced.Total) : 0m;
+
+    /// <summary>CK-01 / CK-02: every checkout step refreshes the session.</summary>
+    private async Task TouchCheckoutActivityAsync(Guid cartId, CancellationToken ct)
+    {
+        var now = _clock.UtcNow;
+        await _db.Carts.Where(c => c.Id == cartId)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.LastCheckoutActivityUtc, now), ct);
+    }
+
+    /// <summary>CK-01: refuse a placement when the buyer was inactive on the checkout for longer than the timeout.</summary>
+    private void EnsureCheckoutNotExpired(Cart cart, CheckoutSettingsDto settings)
+    {
+        if (settings.SessionTimeoutSeconds <= 0 || cart.LastCheckoutActivityUtc is not DateTime last)
+            return;
+        if (_clock.UtcNow - last > TimeSpan.FromSeconds(settings.SessionTimeoutSeconds))
+            throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.CheckoutExpired,
+                "Your checkout has expired. Please review your cart and check out again.");
+    }
+
+    /// <summary>CK-20: acquire or confirm the low-stock locks for the cart's products (sale checkouts only).</summary>
+    private Task<DateTime?> AcquireCheckoutLocksAsync(PricedCheckout priced, CancellationToken ct) =>
+        _checkoutLocks is null || priced.IsInquiry
+            ? Task.FromResult<DateTime?>(null)
+            : _checkoutLocks.AcquireAsync(
+                priced.Cart.Id,
+                priced.Lines.Select(l => new CheckoutLockItem(l.ProductId, l.ProductName)).ToList(),
+                ct);
+
+    /// <summary>CK-23: release on every successful placement path. Never fails the placement.</summary>
+    private Task ReleaseCheckoutLocksAsync(Guid cartId) =>
+        _checkoutLocks is null ? Task.CompletedTask : _checkoutLocks.ReleaseAsync(cartId, CancellationToken.None);
+
+    /// <summary>
+    /// PY-10 / PY-11 / PY-15: refuse a blocked buyer before any gateway is contacted. The billing name is the
+    /// checkout address's name (the storefront collects one address). Each refusal is logged, and the alert
+    /// email is best-effort: a failed email never lets the order through.
+    /// </summary>
+    private async Task EnsureNotBlacklistedAsync(
+        PlaceCheckoutRequest req, PricedCheckout priced, CheckoutSettingsDto settings, CancellationToken ct)
+    {
+        var first = req.ShipTo.FirstName?.Trim().ToLower();
+        var last = req.ShipTo.LastName?.Trim().ToLower();
+        var email = req.ShipTo.Email?.Trim().ToLower();
+
+        // Narrow in SQL (the default collation is case-insensitive), then apply the exact rule in memory.
+        var hasEmail = !string.IsNullOrEmpty(email);
+        var hasName = !string.IsNullOrEmpty(first) && !string.IsNullOrEmpty(last);
+        if (!hasEmail && !hasName)
+            return;
+        var candidates = await _db.CustomerBlacklistEntries.AsNoTracking()
+            .Where(b => b.Status == CustomerBlacklistStatus.Blocked
+                        && ((hasEmail && b.Email == email) || (hasName && b.FirstName == first && b.LastName == last)))
+            .ToListAsync(ct);
+        var match = CustomerBlacklistMatcher.Match(candidates, req.ShipTo.FirstName, req.ShipTo.LastName, req.ShipTo.Email, settings.BlacklistMatchMode);
+        if (match is null)
+            return;
+
+        _db.CustomerBlacklistHits.Add(new CustomerBlacklistHit
+        {
+            BlacklistEntryId = match.Entry.Id,
+            CartId = priced.Cart.Id,
+            FirstName = Trim(req.ShipTo.FirstName, 100),
+            LastName = Trim(req.ShipTo.LastName, 100),
+            Email = Trim(req.ShipTo.Email, 256),
+            IpAddress = Trim(_current.IpAddress, 64),
+            MatchedOn = match.MatchedOn,
+            AtUtc = _clock.UtcNow,
+        });
+        await _db.SaveChangesAsync(ct);
+
+        var store = priced.Store;
+        try
+        {
+            var recipients = (settings.BlacklistAlertEmail is { Length: > 0 } configured
+                    ? configured.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    : store is null ? Array.Empty<string>() : ResolveStoreRecipients(store))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var a = req.ShipTo;
+            static string H(string? v) => System.Net.WebUtility.HtmlEncode(v ?? string.Empty);
+            var vars = new Dictionary<string, string>
+            {
+                ["customerName"] = H($"{a.FirstName} {a.LastName}".Trim()),
+                ["customerEmail"] = H(a.Email),
+                ["billingAddress"] = H(string.Join(", ", new[] { a.Line1, a.Line2, a.City, $"{a.Region} {a.PostalCode}".Trim(), a.CountryCode }
+                    .Where(x => !string.IsNullOrWhiteSpace(x)))),
+                ["itemsSummary"] = string.Join("<br>", priced.Lines.Select(l => $"- {System.Net.WebUtility.HtmlEncode(l.ProductName)} (Qty: {l.Quantity})")),
+                ["reason"] = string.IsNullOrWhiteSpace(match.Entry.Reason) ? "No reason recorded" : H(match.Entry.Reason),
+                ["matchedOn"] = match.MatchedOn,
+                ["attemptDate"] = _clock.UtcNow.ToString("MMM d, yyyy h:mm tt 'UTC'", CultureInfo.InvariantCulture),
+                ["storeName"] = H(store?.Name),
+            };
+            foreach (var to in recipients)
+                await _templates.SendAsync(BlacklistAlertTemplateKey, to, store?.Name, vars, ct);
+        }
+        catch (Exception)
+        {
+            // PY-11: an alert failure never lets a blocked order through.
+        }
+
+        var contact = new List<string>();
+        if (!string.IsNullOrWhiteSpace(store?.ContactPhone)) contact.Add($"Phone: {store!.ContactPhone}");
+        if (!string.IsNullOrWhiteSpace(store?.ContactEmail)) contact.Add($"Email: {store!.ContactEmail}");
+        throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.CustomerBlocked,
+            "Your account has been blocked from placing orders. To unblock your account, please contact our customer support team"
+            + (contact.Count > 0 ? ": " + string.Join(", ", contact) + "." : "."),
+            new Dictionary<string, object?> { ["supportPhone"] = store?.ContactPhone, ["supportEmail"] = store?.ContactEmail });
+    }
+
+    /// <summary>Email template sent when a blocked buyer tries to order (seeded in DefaultEmailTemplates).</summary>
+    public const string BlacklistAlertTemplateKey = "checkout.blacklist-alert";
+
+    /// <summary>How long a placement holds its cart. Longer than any gateway call, short enough that a crashed request frees the cart quickly.</summary>
+    private static readonly TimeSpan PlacementLockWindow = TimeSpan.FromMinutes(2);
+
+    private async Task<DateTime> AcquirePlacementLockAsync(Guid cartId, CancellationToken ct)
+    {
+        var now = _clock.UtcNow;
+        var until = now.Add(PlacementLockWindow);
+        // Atomic test-and-set in the database: of two concurrent requests exactly one updates the row.
+        var acquired = await _db.Carts
+            .Where(c => c.Id == cartId && (c.PlacementLockUntilUtc == null || c.PlacementLockUntilUtc < now))
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.PlacementLockUntilUtc, until), ct);
+        if (acquired == 0)
+            throw new ConflictException(
+                "Your order is already being placed. Please wait a moment and check your email or order history before trying again.");
+        return until;
+    }
+
+    private async Task ReleasePlacementLockAsync(Guid cartId, DateTime until)
+    {
+        try
+        {
+            // Only our own lock: if it expired and another request took the cart, leave that one alone.
+            await _db.Carts
+                .Where(c => c.Id == cartId && c.PlacementLockUntilUtc == until)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.PlacementLockUntilUtc, (DateTime?)null), CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            // Never mask the placement's own outcome; the lock expires on its own.
+        }
+    }
+
+    /// <summary>
+    /// OP-11 / OP-21 / OP-41: shipping is re-priced at placement, so a method or fee changed by an admin, a
+    /// carrier rate that moved, or a cart edited in another tab can make the total differ from the one the
+    /// buyer accepted. Refuse instead of charging a different amount. The buyer re-quotes and places again.
+    /// </summary>
+    private static void EnsureShownPricesHold(PlaceCheckoutRequest req, PricedCheckout priced)
+    {
+        if (req.ExpectedShippingTotal is decimal shownShipping
+            && decimal.Round(shownShipping, 2) != decimal.Round(priced.ShippingTotal, 2))
+            throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.TotalChanged,
+                $"The shipping price for this order changed from {ShippingRulesEngine.Money(shownShipping)} to " +
+                $"{ShippingRulesEngine.Money(priced.ShippingTotal)}. Please review your order and place it again.");
+
+        if (req.ExpectedTotal is decimal shownTotal
+            && decimal.Round(shownTotal, 2) != decimal.Round(priced.Total, 2))
+            throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.TotalChanged,
+                $"Your order total changed from {ShippingRulesEngine.Money(shownTotal)} to " +
+                $"{ShippingRulesEngine.Money(priced.Total)}. Please review your order and place it again.");
+    }
+
+    private async Task<CheckoutResult> PlaceCoreAsync(PlaceCheckoutRequest req, PricedCheckout priced, CancellationToken ct)
+    {
         var now = _clock.UtcNow;
         var storeId = priced.Routing.AssignedStoreId!.Value; // non-null: placement short-circuits when unrouted.
 
@@ -187,17 +442,28 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         var remaining = netTotal - giftCertificateApplied;
         if (req.PayWithGiftCertificate && (giftCertificate is null || remaining > 0m))
             throw new ConflictException("The gift certificate does not cover this order. Please choose a payment method for the remaining amount.");
-        if (giftCertificate is not null && remaining == 0m)
-            return await PlaceWithGiftCertificateAsync(req, priced, giftCertificate, giftCertificateApplied, pointsRedeemed, pointsDiscount, ct);
+        // PY-42: "no payment required" only while the total is still 0.00 now, at placement.
+        if (req.PaymentMethod == PaymentMethodType.NoPaymentRequired && remaining > 0m)
+            throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.TotalChanged,
+                $"Your order total is now {ShippingRulesEngine.Money(remaining)}. Please review your order and choose a payment method.");
+        if (remaining <= 0m)
+        {
+            // Gift certificate covers it, or nothing is owed (PY-40): same placement path, no gateway call.
+            var certificate = giftCertificateApplied > 0m ? giftCertificate : null;
+            return await PlaceWithoutGatewayAsync(req, priced, certificate, giftCertificateApplied, pointsRedeemed, pointsDiscount, ct);
+        }
 
         // Enforce the store's payment-method availability (e.g. COD switched off, or a deactivated gateway)
         // server-side — the storefront only ever offers these, but never trust the client. A cart that buys
         // gift certificates is further limited to the methods allowed for that.
         var availableMethods = priced.Store is null
             ? (IReadOnlyList<PaymentMethodAvailability>)Array.Empty<PaymentMethodAvailability>()
-            : await FilterForGiftCertificatePurchaseAsync(await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct);
+            : (await ApplyMethodRulesAsync(
+                await FilterForGiftCertificatePurchaseAsync(await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct),
+                netTotal, ct)).Methods;
         if (priced.Store is not null && !availableMethods.Any(m => m.Method == req.PaymentMethod))
-            throw new ConflictException("The selected payment method is not available for this order.");
+            throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.PaymentMethodNotAllowed,
+                "The selected payment method is not available for this order.");
 
         // Payment transaction fee: the chosen gateway's configured fee (% of what it collects) is added as an
         // additional charge the buyer pays (WO-fee). Resolved authoritatively here from the active credential —
@@ -273,6 +539,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
 
         foreach (var line in priced.Lines)
             order.Lines.Add(ToOrderLine(line));
+        // Frozen with the order in the same SaveChanges, so an order never exists without its shipping row.
+        order.Shippings.Add(await BuildShippingSnapshotAsync(priced, ct));
 
         order.StatusHistory.Add(new OrderStatusHistory
         {
@@ -307,7 +575,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
 
         var payResult = await _payments.AuthorizeAsync(
             new PaymentRequest(order.Id, req.PaymentMethod, gatewayAmount, order.CurrencyCode, req.PaymentToken,
-                OrderNumber: order.OrderNumber, Metadata: InstrumentMetadata(instrument)),
+                OrderNumber: order.OrderNumber, Metadata: InstrumentMetadata(instrument),
+                Customer: BuildPaymentCustomer(req.ShipTo, customerId)),
             ct);
 
         payment.Status = payResult.Status;
@@ -315,18 +584,55 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         payment.TransactionId = payResult.TransactionId;
         payment.GatewayReference = payResult.GatewayReference;
         payment.ErrorMessage = payResult.ErrorMessage;
+        payment.AuthorizedAmount = gatewayAmount;
+        // AN-18: auth code, AVS / CVV results, network id, card brand + last four, raw codes (decline included).
+        PaymentLedger.ApplyDetails(payment, payResult);
+        if (payResult.RedirectUrl is null && payResult.ClientAction is null)
+            PaymentLedger.Record(_db, payment,
+                payResult.Status == PaymentStatus.Authorized ? PaymentTransactionType.Authorization : PaymentTransactionType.Sale,
+                gatewayAmount, payResult, now);
         if (payResult.Status == PaymentStatus.Captured)
         {
             payment.AuthorizedOnUtc = now;
             payment.CapturedOnUtc = now;
         }
-        else if (payResult.Status == PaymentStatus.Authorized)
+        else if (payResult.Status is PaymentStatus.Authorized or PaymentStatus.HeldForReview)
         {
             payment.AuthorizedOnUtc = now;
+            // AN-23: an Authorize.Net authorization lapses after 30 days; the admin page warns from day 25.
+            if (payResult.Status == PaymentStatus.Authorized && req.PaymentMethod == PaymentMethodType.AuthorizeNet)
+                payment.AuthorizationExpiresUtc = now.AddDays(SyncPaymentStatusCommandHandler.AuthorizeNetAuthHoldDays);
         }
 
         // Mirror the payment state onto the order for at-a-glance status.
         order.PaymentStatus = payResult.Status;
+
+        if (payResult.Status == PaymentStatus.HeldForReview)
+        {
+            // AN-16: held by the gateway's fraud filters. The order is placed (the buyer is told it is being
+            // reviewed) but parked in Payment Review until the hold is approved or declined.
+            order.Status = OrderStatus.PaymentReview;
+            order.StatusHistory.Add(new OrderStatusHistory
+            {
+                FromStatus = OrderStatus.Pending,
+                ToStatus = OrderStatus.PaymentReview,
+                ChangedOnUtc = now,
+                Note = "Payment held for review by the gateway's fraud filters. Approve or decline it in the gateway, then check the gateway status on this order.",
+            });
+        }
+        else if (payResult.Success && req.PaymentMethod == PaymentMethodType.AuthorizeNet
+                 && await AuthorizeNetDefaultOrderStatusAsync(ct) is OrderStatus.Processing)
+        {
+            // §4 "Default order status": the method row may place approved orders straight into Processing.
+            order.Status = OrderStatus.Processing;
+            order.StatusHistory.Add(new OrderStatusHistory
+            {
+                FromStatus = OrderStatus.Pending,
+                ToStatus = OrderStatus.Processing,
+                ChangedOnUtc = now,
+                Note = "Default order status for the payment method.",
+            });
+        }
         await _db.SaveChangesAsync(ct);
 
         // Redirect gateway (Stripe Checkout): the order is created but stays pending while the buyer pays
@@ -379,8 +685,65 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         priced.Cart.IsCheckedOut = true;
         await _db.SaveChangesAsync(ct);
         await FinalizePlacedOrderAsync(order, ct);
+        await ReleaseCheckoutLocksAsync(priced.Cart.Id);
 
         return OrderResult(order, success: true, error: null, redirectUrl: null, transactionId: payment.TransactionId);
+    }
+
+    /// <summary>
+    /// The buyer as the gateway sees it (AN-14/15): bill-to = the checkout address (the storefront collects a
+    /// single address), ship-to = the same address, the customer id for signed-in
+    /// buyers, and the buyer's IP. There is no FFL-dealer address on an order yet, so ship-to is the buyer's.
+    /// </summary>
+    private PaymentCustomer BuildPaymentCustomer(CheckoutAddress a, Guid? customerId)
+    {
+        var address = new PaymentAddress(a.FirstName, a.LastName, null, a.Line1, a.Line2, a.City, a.Region,
+            a.PostalCode, a.CountryCode, a.PhoneNumber);
+        return new PaymentCustomer(customerId, a.Email, address, address, _current.IpAddress);
+    }
+
+    /// <summary>The Authorize.Net row's "default order status" for approved payments (null = Pending).</summary>
+    private async Task<OrderStatus?> AuthorizeNetDefaultOrderStatusAsync(CancellationToken ct)
+    {
+        var raw = await _db.AuthorizeNetCredentials.AsNoTracking()
+            .Where(c => c.Active)
+            .OrderByDescending(c => c.UpdatedOnUtc)
+            .Select(c => c.DefaultOrderStatus)
+            .FirstOrDefaultAsync(ct);
+        return Enum.TryParse<OrderStatus>(raw, ignoreCase: true, out var s) ? s : null;
+    }
+
+    /// <summary>
+    /// AN-10: the Authorize.Net method row's own rules: minimum / maximum amount due and allowed customer groups.
+    /// Its display name (e.g. "Credit Card") replaces the gateway name the storefront would otherwise show.
+    /// </summary>
+    private async Task<(IReadOnlyList<PaymentMethodAvailability> Methods, string? AuthorizeNetDisplayName)> ApplyMethodRulesAsync(
+        IReadOnlyList<PaymentMethodAvailability> methods, decimal amountDue, CancellationToken ct)
+    {
+        if (!methods.Any(m => m.Method == PaymentMethodType.AuthorizeNet))
+            return (methods, null);
+
+        var row = await _db.AuthorizeNetCredentials.AsNoTracking()
+            .Where(c => c.Active)
+            .OrderByDescending(c => c.UpdatedOnUtc)
+            .Select(c => new { c.MinOrderAmount, c.MaxOrderAmount, c.AllowedCustomerGroupIds, c.DisplayName })
+            .FirstOrDefaultAsync(ct);
+        if (row is null)
+            return (methods, null);
+
+        var allowed = (row.MinOrderAmount is not decimal min || amountDue >= min)
+                      && (row.MaxOrderAmount is not decimal max || amountDue <= max);
+        if (allowed && !string.IsNullOrWhiteSpace(row.AllowedCustomerGroupIds))
+        {
+            var groups = row.AllowedCustomerGroupIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var current = await _customerGroups.GetCurrentGroupIdAsync(ct);
+            allowed = current is Guid g && groups.Any(x => Guid.TryParse(x, out var id) && id == g);
+        }
+
+        var name = string.IsNullOrWhiteSpace(row.DisplayName) ? null : row.DisplayName.Trim();
+        return allowed
+            ? (methods, name)
+            : (methods.Where(m => m.Method != PaymentMethodType.AuthorizeNet).ToList(), name);
     }
 
     private static OrderLineItem ToOrderLine(LineWork line) => new()
@@ -421,7 +784,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         }
         catch (GiftCertificateUnavailableException)
         {
-            if (gatewayPayment.Status is PaymentStatus.Captured or PaymentStatus.Authorized)
+            if (gatewayPayment.Status is PaymentStatus.Captured or PaymentStatus.Authorized or PaymentStatus.HeldForReview)
             {
                 var reversal = await _payments.RefundAsync(gatewayPayment, gatewayPayment.Amount, ct);
                 gatewayPayment.Status = reversal.Success ? PaymentStatus.Refunded : gatewayPayment.Status;
@@ -452,12 +815,14 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     }
 
     /// <summary>
-    /// The certificate covers the whole order ("Pay with Gift Certificate"): the order, its gift-certificate
-    /// payment, the atomic balance debit and the ledger entry are written in one DB transaction. If the debit
-    /// fails (spent or deactivated meanwhile) everything rolls back and the buyer gets "no longer valid".
+    /// Nothing is left for a gateway to collect (PY-40), placed through the same pre-payment checks as a card
+    /// order (PY-41). Either the certificate covers the whole order ("Pay with Gift Certificate": the order,
+    /// its gift-certificate payment, the atomic balance debit and the ledger entry are written in one DB
+    /// transaction; if the debit fails everything rolls back and the buyer gets "no longer valid"), or the
+    /// total is 0.00 (<paramref name="certificate"/> null: a "No payment required" 0.00 payment record).
     /// </summary>
-    private async Task<CheckoutResult> PlaceWithGiftCertificateAsync(
-        PlaceCheckoutRequest req, PricedCheckout priced, GiftCertificate certificate, decimal applied,
+    private async Task<CheckoutResult> PlaceWithoutGatewayAsync(
+        PlaceCheckoutRequest req, PricedCheckout priced, GiftCertificate? certificate, decimal applied,
         int pointsRedeemed, decimal pointsDiscount, CancellationToken ct)
     {
         var now = _clock.UtcNow;
@@ -507,20 +872,38 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             ShippingMethodName = priced.SelectedShipping?.Name,
             ShippingCarrier = priced.SelectedShipping?.Carrier,
             ShippingWasRecommended = priced.SelectedShipping?.IsRecommended ?? false,
-            GiftCertificateId = certificate.Id,
-            GiftCertificateCode = certificate.Code,
-            GiftCertificateAppliedAmount = applied,
+            GiftCertificateId = certificate?.Id,
+            GiftCertificateCode = certificate?.Code,
+            GiftCertificateAppliedAmount = certificate is null ? 0m : applied,
         };
         foreach (var line in priced.Lines)
             order.Lines.Add(ToOrderLine(line));
+        order.Shippings.Add(await BuildShippingSnapshotAsync(priced, ct));
         order.StatusHistory.Add(new OrderStatusHistory
         {
             FromStatus = OrderStatus.Pending,
             ToStatus = OrderStatus.Processing,
             ChangedById = _current.UserId,
             ChangedOnUtc = now,
-            Note = "Order created via checkout and paid in full with a gift certificate.",
+            Note = certificate is null
+                ? "Order created via checkout. The total is 0.00, so no payment was required."
+                : "Order created via checkout and paid in full with a gift certificate.",
         });
+        if (certificate is null)
+        {
+            // PY-22: every placement has a master payment record, even a 0.00 one, for reporting.
+            order.Payments.Add(new PaymentRecord
+            {
+                Method = PaymentMethodType.NoPaymentRequired,
+                GatewayName = "No payment required",
+                Amount = 0m,
+                CurrencyCode = priced.Cart.CurrencyCode,
+                Status = PaymentStatus.Captured,
+                IsMaster = true,
+                AuthorizedOnUtc = now,
+                CapturedOnUtc = now,
+            });
+        }
 
         var ownsTransaction = _db.Database.CurrentTransaction is null;
         var tx = ownsTransaction ? await _db.Database.BeginTransactionAsync(ct) : null;
@@ -529,7 +912,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             _db.Orders.Add(order);
             priced.Cart.IsCheckedOut = true;
             await _db.SaveChangesAsync(ct);
-            await _giftCertificates!.RedeemForOrderAsync(order, coversFullAmount: true, ct);
+            if (certificate is not null)
+                await _giftCertificates!.RedeemForOrderAsync(order, coversFullAmount: true, ct);
             if (tx is not null) await tx.CommitAsync(ct);
         }
         catch (GiftCertificateUnavailableException)
@@ -540,6 +924,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 context.Entry(order).State = EntityState.Detached;
                 foreach (var l in order.Lines) context.Entry(l).State = EntityState.Detached;
                 foreach (var h in order.StatusHistory) context.Entry(h).State = EntityState.Detached;
+                foreach (var s in order.Shippings) context.Entry(s).State = EntityState.Detached;
                 if (order.ShippingAddress is not null) context.Entry(order.ShippingAddress).State = EntityState.Detached;
             }
 
@@ -559,7 +944,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         }
 
         await FinalizePlacedOrderAsync(order, ct);
-        return OrderResult(order, success: true, error: null, redirectUrl: null, transactionId: certificate.Code);
+        await ReleaseCheckoutLocksAsync(priced.Cart.Id);
+        return OrderResult(order, success: true, error: null, redirectUrl: null, transactionId: certificate?.Code);
     }
 
     public async Task<InquiryResult> SubmitInquiryAsync(SubmitInquiryRequest req, CancellationToken ct)
@@ -571,7 +957,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // to insist on. BuildAsync itself decides inquiry-ness (tenant mode or a quote-only line).
         var priced = await BuildAsync(
             req.CartId, req.SessionId, req.Contact, shippingMethodId: null,
-            requestCouponCode: req.CouponCode, forPlacement: false, pickupInStore: false, pickupStoreId: null, ct);
+            requestCouponCode: req.CouponCode, forPlacement: false, pickupInStore: false, pickupStoreId: null, addOns: null, ct);
 
         if (!priced.IsInquiry)
             throw new ConflictException(
@@ -795,6 +1181,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             return reversed;
 
         await FinalizePlacedOrderAsync(order, ct);
+        if (order.SourceCartId is Guid placedCartId)
+            await ReleaseCheckoutLocksAsync(placedCartId);
 
         return OrderResult(order, success: true, error: null, redirectUrl: null, transactionId: payment.TransactionId);
     }
@@ -1126,7 +1514,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     /// </summary>
     private async Task<PricedCheckout> BuildAsync(
         Guid? cartId, string? sessionId, CheckoutAddress shipTo, string? shippingMethodId,
-        string? requestCouponCode, bool forPlacement, bool pickupInStore, Guid? pickupStoreId, CancellationToken ct)
+        string? requestCouponCode, bool forPlacement, bool pickupInStore, Guid? pickupStoreId,
+        ShippingAddOnSelection? addOns, CancellationToken ct)
     {
         // 1. Load the cart + its lines and compute the subtotal from the snapshotted unit prices.
         var cart = await LoadCartAsync(cartId, sessionId, ct);
@@ -1228,12 +1617,19 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 BaseSubtotal: baseSubtotal, GroupDiscountTotal: groupDiscountTotal, GroupDiscountName: groupName);
         }
 
-        var weightKg = Math.Max(1m, shippableLines.Sum(l => (decimal)l.Quantity));
+        // Destination rules (SR-90..94): checked on every quote (the address step) and again at placement
+        // (OP-54), since the address or cart can change after the shipping step.
+        var rules = await ShippingRulesEngine.LoadAsync(_db, ct);
         var rateLines = await BuildShippingRateLinesAsync(shippableLines, ct);
+        await EnsureDestinationAllowedAsync(rules, shipTo, rateLines, ct);
+
+        var weightKg = Math.Max(1m, shippableLines.Sum(l => (decimal)l.Quantity));
         var shippingOptions = await _shipping.GetRatesAsync(
             new CarrierRateRequest(
-                new CarrierAddress(store.CountryCode, store.StateProvince, store.PostalCode, store.Latitude, store.Longitude, store.City),
-                new CarrierAddress(shipTo.CountryCode, shipTo.Region, shipTo.PostalCode, shipTo.Latitude, shipTo.Longitude, shipTo.City),
+                new CarrierAddress(store.CountryCode, store.StateProvince, store.PostalCode, store.Latitude, store.Longitude, store.City,
+                    store.AddressLine1, store.AddressLine2, store.Name),
+                new CarrierAddress(shipTo.CountryCode, shipTo.Region, shipTo.PostalCode, shipTo.Latitude, shipTo.Longitude, shipTo.City,
+                    shipTo.Line1, shipTo.Line2, $"{shipTo.FirstName} {shipTo.LastName}".Trim()),
                 weightKg, Length: null, Width: null, Height: null, OrderSubtotal: subtotal,
                 Lines: rateLines),
             ct);
@@ -1278,7 +1674,11 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 : null;
             selected ??= selection.Recommended ?? shippingOptions.OrderBy(o => o.Rate).FirstOrDefault();
         }
-        var shippingTotal = selected?.Rate ?? 0m;
+
+        // Add-ons (SR-80..83): priced from the current rules on every quote and again at placement, and kept
+        // as their own amounts. Shipment total = method price + signature fee + insurance fee.
+        var shipping = PriceShipment(rules, selected, rateLines, addOns);
+        var shippingTotal = shipping.ShippingTotal;
 
         // 5. Coupon + discounts. Validate the coupon first so its bound discount is "unlocked" for the
         // engine: coupon-gated rules (RequiresCoupon) apply only when a valid code carrying them is present,
@@ -1334,7 +1734,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             shippingOptions, selected, shippingTotal,
             discountResult.Applied, discountResult.TotalDiscount,
             tax, tax.TotalTax, total, guestOrderingAllowed, couponCode, couponValid,
-            BaseSubtotal: baseSubtotal, GroupDiscountTotal: groupDiscountTotal, GroupDiscountName: groupName);
+            BaseSubtotal: baseSubtotal, GroupDiscountTotal: groupDiscountTotal, GroupDiscountName: groupName,
+            Shipping: shipping);
     }
 
     /// <summary>
@@ -1874,5 +2275,173 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         decimal GroupDiscountTotal = 0m,
         string? GroupDiscountName = null,
         bool IsInquiry = false,
-        bool IsPickup = false);
+        bool IsPickup = false,
+        ShipmentPricing? Shipping = null);
+
+    /// <summary>
+    /// How the delivered shipment was priced: the method price, the add-ons on offer and chosen, and the
+    /// facts frozen onto the order's shipping row. Null for pickup, inquiries and carts that ship nothing.
+    /// </summary>
+    private sealed record ShipmentPricing(
+        decimal MethodPrice,
+        bool SignatureAvailable,
+        decimal SignatureFeeOffered,
+        bool SignatureSelected,
+        decimal SignatureFee,
+        bool InsuranceAvailable,
+        decimal InsuranceFeeOffered,
+        bool InsuranceSelected,
+        decimal InsuranceFee,
+        decimal DeclaredValue,
+        int ItemCount,
+        decimal? WeightLb,
+        bool ContainsFfl,
+        int RulesVersion)
+    {
+        public decimal ShippingTotal => MethodPrice + SignatureFee + InsuranceFee;
+    }
+
+    /// <summary>Prices the shipment's add-ons for the selected method (no method selected = nothing to add to).</summary>
+    private static ShipmentPricing PriceShipment(
+        ShippingRuleSettings rules, ShippingRateOption? selected, IReadOnlyList<ShippingRateLine> lines, ShippingAddOnSelection? addOns)
+    {
+        var shipped = lines.Where(l => !l.IsGiftCertificate).ToList();
+        var declaredValue = decimal.Round(shipped.Sum(l => l.LineTotal), 2);
+        var hasMethod = selected is not null;
+
+        var signatureAvailable = hasMethod && rules.SignatureEnabled;
+        var insuranceAvailable = hasMethod && rules.InsuranceEnabled;
+        var insuranceOffered = insuranceAvailable
+            ? ShippingRulesEngine.InsuranceFee(declaredValue, ShippingRulesEngine.ParseBands(rules.InsuranceBandsJson), rules.InsuranceExcessFeePer100)
+            : 0m;
+        var signature = signatureAvailable && addOns?.RequireSignature == true;
+        var insurance = insuranceAvailable && addOns?.Insurance == true;
+
+        decimal? weight = shipped.Count > 0 && shipped.All(l => l.WeightLb is > 0m)
+            ? shipped.Sum(l => l.WeightLb!.Value * l.Quantity)
+            : null;
+
+        return new ShipmentPricing(
+            MethodPrice: selected?.Rate ?? 0m,
+            SignatureAvailable: signatureAvailable,
+            SignatureFeeOffered: signatureAvailable ? rules.SignatureFee : 0m,
+            SignatureSelected: signature,
+            SignatureFee: signature ? rules.SignatureFee : 0m,
+            InsuranceAvailable: insuranceAvailable,
+            InsuranceFeeOffered: insuranceOffered,
+            InsuranceSelected: insurance,
+            InsuranceFee: insurance ? insuranceOffered : 0m,
+            DeclaredValue: declaredValue,
+            ItemCount: shipped.Sum(l => l.Quantity),
+            WeightLb: weight,
+            ContainsFfl: lines.Any(l => l.IsFfl),
+            RulesVersion: rules.Version);
+    }
+
+    /// <summary>
+    /// Runs the destination rules for the shippable lines (SR-90..94). Product flags come from the migrated
+    /// PHP spec attributes; the restricted-state exemption from the signed-in customer.
+    /// </summary>
+    private async Task EnsureDestinationAllowedAsync(
+        ShippingRuleSettings rules, CheckoutAddress shipTo, IReadOnlyList<ShippingRateLine> lines, CancellationToken ct)
+    {
+        var productIds = lines.Select(l => l.ProductId).Distinct().ToList();
+        var flags = await _db.ProductSpecificationValues
+            .AsNoTracking()
+            .Where(v => productIds.Contains(v.ProductId)
+                        && (v.SpecificationAttributeOption!.SpecificationAttribute!.Name == ShippingRulesEngine.InternationalAttribute
+                            || v.SpecificationAttributeOption!.SpecificationAttribute!.Name == ShippingRulesEngine.StateRestrictedAttribute))
+            .Select(v => new { Attribute = v.SpecificationAttributeOption!.SpecificationAttribute!.Name, v.SpecificationAttributeOption!.Value })
+            .ToListAsync(ct);
+
+        var internationalBlocked = flags.Any(f =>
+            f.Attribute == ShippingRulesEngine.InternationalAttribute && string.Equals(f.Value?.Trim(), "No", StringComparison.OrdinalIgnoreCase));
+        var stateRestricted = flags.Any(f =>
+            f.Attribute == ShippingRulesEngine.StateRestrictedAttribute && string.Equals(f.Value?.Trim(), "Yes", StringComparison.OrdinalIgnoreCase));
+
+        var exempt = false;
+        if (stateRestricted && _current.UserId is Guid userId)
+            exempt = await _db.Customers.AsNoTracking()
+                .Where(c => c.UserId == userId)
+                .Select(c => c.IsShippingRestrictionExempt)
+                .FirstOrDefaultAsync(ct);
+
+        var refusal = ShippingRulesEngine.CheckDestination(rules, new DestinationCheckInput(
+            shipTo.CountryCode, shipTo.Region, shipTo.Line1, shipTo.Line2, internationalBlocked, stateRestricted, exempt));
+        if (refusal is not null)
+            throw new ConflictException(refusal);
+    }
+
+    /// <summary>
+    /// The order's shipping row (section 3 / 8 of the order-placement requirements): what the buyer chose and
+    /// paid for this shipment, copied from the priced checkout and never re-rated.
+    /// </summary>
+    private async Task<OrderShipping> BuildShippingSnapshotAsync(PricedCheckout priced, CancellationToken ct)
+    {
+        var selected = priced.SelectedShipping;
+        var s = priced.Shipping;
+
+        if (priced.IsPickup)
+            return new OrderShipping
+            {
+                ShipToType = ShipToType.StorePickup,
+                MethodId = selected?.MethodId ?? "pickup",
+                MethodName = "pickup",
+                DisplayName = selected?.Name ?? "Pickup in store",
+                Carrier = selected?.Carrier ?? "Pickup",
+                MethodPrice = priced.ShippingTotal,
+                ShippingTotal = priced.ShippingTotal,
+                DeclaredValue = decimal.Round(priced.Lines.Sum(l => l.LineTotal), 2),
+                ItemCount = priced.Lines.Where(l => !l.IsGiftCertificate).Sum(l => l.Quantity),
+            };
+
+        // A cart of emailed gift certificates ships nothing (OP-53).
+        if (selected is null || s is null)
+            return new OrderShipping
+            {
+                MethodId = "no_shipping",
+                MethodName = "no_shipping",
+                DisplayName = "No Shipment Required",
+                Carrier = "None",
+                DeclaredValue = 0m,
+            };
+
+        // OP-14: the internal method code. A custom method's id is its row id, so store its calculation type;
+        // a carrier option's id is already the carrier's service code.
+        var methodName = selected.MethodId;
+        if (selected.Carrier == "Custom" && Guid.TryParse(selected.MethodId, out var methodId))
+        {
+            var type = await _db.ShippingMethods.IgnoreQueryFilters().AsNoTracking()
+                .Where(m => m.Id == methodId)
+                .Select(m => (ShippingMethodType?)m.MethodType)
+                .FirstOrDefaultAsync(ct);
+            if (type is not null) methodName = type.Value.ToString();
+        }
+
+        return new OrderShipping
+        {
+            ShipmentType = OrderShipmentType.Combined,
+            ShipToType = ShipToType.Customer,
+            MethodId = selected.MethodId,
+            MethodName = methodName,
+            DisplayName = selected.Name,
+            Carrier = selected.Carrier,
+            // The quoted rate already includes the method's handling fee (AD-04); store the two apart so
+            // MethodPrice + HandlingFee + add-ons = ShippingTotal, as the legacy order showed them.
+            MethodPrice = s.MethodPrice - selected.HandlingFee,
+            HandlingFee = selected.HandlingFee,
+            SignatureRequired = s.SignatureSelected,
+            SignatureFee = s.SignatureFee,
+            InsuranceSelected = s.InsuranceSelected,
+            InsuranceFee = s.InsuranceFee,
+            DeclaredValue = s.DeclaredValue,
+            ShippingTotal = s.ShippingTotal,
+            EstimatedDeliveryDays = selected.EstimatedDeliveryDays,
+            WasRecommended = selected.IsRecommended,
+            ItemCount = s.ItemCount,
+            WeightLb = s.WeightLb,
+            ContainsFflItems = s.ContainsFfl,
+            RulesVersion = s.RulesVersion,
+        };
+    }
 }

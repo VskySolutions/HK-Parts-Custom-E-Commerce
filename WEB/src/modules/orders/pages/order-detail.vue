@@ -56,6 +56,47 @@
               </div>
               <div v-if="order.trackingNumber" class="text-grey-8">Tracking: {{ order.trackingNumber }}</div>
             </div>
+            <!-- Shipping settings frozen at placement (one row per shipment). -->
+            <div v-for="(s, i) in order.shippings || []" :key="i" class="col-12">
+              <div class="text-caption text-grey-7">
+                Shipping as placed<span v-if="(order.shippings || []).length > 1"> · {{ humanizeEnum(s.shipmentType) }}</span>
+              </div>
+              <q-markup-table flat dense bordered class="q-mt-xs">
+                <tbody>
+                  <tr>
+                    <td class="text-grey-8">Method</td>
+                    <td>
+                      {{ s.displayName || '—' }}
+                      <span v-if="s.carrier" class="text-grey-7"> · {{ s.carrier }}</span>
+                      <span v-if="s.methodName && s.methodName !== s.methodId" class="text-grey-6 text-caption"> ({{ s.methodName }})</span>
+                    </td>
+                    <td class="text-right">{{ formatMoney(s.methodPrice) }}</td>
+                  </tr>
+                  <tr v-if="s.signatureRequired">
+                    <td class="text-grey-8">Signature required</td>
+                    <td>Yes</td>
+                    <td class="text-right">{{ formatMoney(s.signatureFee) }}</td>
+                  </tr>
+                  <tr v-if="s.insuranceSelected">
+                    <td class="text-grey-8">Insurance</td>
+                    <td>Declared value {{ formatMoney(s.declaredValue) }}</td>
+                    <td class="text-right">{{ formatMoney(s.insuranceFee) }}</td>
+                  </tr>
+                  <tr v-if="s.shipToType === 'FflDealer'">
+                    <td class="text-grey-8">FFL dealer</td>
+                    <td colspan="2">{{ s.fflDealerName || '—' }}<span v-if="s.fflNumber"> · {{ s.fflNumber }}</span></td>
+                  </tr>
+                  <tr class="text-weight-medium">
+                    <td>Shipping total</td>
+                    <td class="text-grey-7 text-caption">
+                      {{ s.itemCount }} item{{ s.itemCount === 1 ? '' : 's' }}<span v-if="s.weightLb"> · {{ s.weightLb }} lb</span>
+                      <span v-if="!s.signatureRequired && !s.insuranceSelected"> · no add-ons</span>
+                    </td>
+                    <td class="text-right">{{ formatMoney(s.shippingTotal) }}</td>
+                  </tr>
+                </tbody>
+              </q-markup-table>
+            </div>
             <div class="col-12">
               <div class="text-caption text-grey-7">Ship to</div>
               <div>{{ shipAddress }}</div>
@@ -117,16 +158,64 @@
                   <span v-if="p.capturedOnUtc" class="q-mb-xs">Captured :- {{ formatDate(p.capturedOnUtc) }}</span><br />
                   <span v-if="p.refundedOnUtc" class="q-mb-xs">Refunded :- {{ formatDate(p.refundedOnUtc) }}</span>
                 </q-item-label>
-                <q-item-label v-if="p.status === 'Authorized' && p.authorizationExpiresUtc" caption class="text-orange-9 q-mb-xs">
-                  Authorization expires {{ formatDate(p.authorizationExpiresUtc) }}
+                <!-- Card + verification detail (Authorize.Net AN-18) -->
+                <q-item-label v-if="p.cardType || p.cardLastFour || p.authCode" caption class="text-grey-9">
+                  <span v-if="p.cardType || p.cardLastFour">{{ p.cardType || 'Card' }}<span v-if="p.cardLastFour"> •••• {{ p.cardLastFour }}</span></span>
+                  <span v-if="p.authCode"> · Auth code {{ p.authCode }}</span>
+                  <span v-if="p.avsResultCode"> · AVS {{ p.avsResultCode }}</span>
+                  <span v-if="p.cvvResultCode"> · CVV {{ p.cvvResultCode }}</span>
+                </q-item-label>
+                <q-item-label v-if="p.customerProfileId" caption class="text-grey-8">
+                  Customer profile {{ p.customerProfileId }}<span v-if="p.customerPaymentProfileId"> · payment profile {{ p.customerPaymentProfileId }}</span>
+                </q-item-label>
+                <!-- AN-23: authorization age, warning from day 25 (Authorize.Net auths lapse after 30 days) -->
+                <q-item-label v-if="p.status === 'Authorized' && p.authorizedOnUtc" caption :class="authAgeDays(p) >= 25 ? 'text-negative text-weight-medium' : 'text-orange-9'" class="q-mb-xs">
+                  Authorized {{ authAgeDays(p) }} day{{ authAgeDays(p) === 1 ? '' : 's' }} ago<span v-if="p.authorizationExpiresUtc"> · expires {{ formatDate(p.authorizationExpiresUtc) }}</span>
+                  <span v-if="authAgeDays(p) >= 25"> · capture soon or it will lapse</span>
+                </q-item-label>
+                <q-item-label v-if="p.status === 'HeldForReview'" caption class="text-amber-10 q-mb-xs">
+                  Held for review by the gateway's fraud filters. Approve or decline it in the gateway, then check the status here.
                 </q-item-label>
                 <q-item-label v-if="p.errorMessage" caption class="text-negative q-mb-xs">{{ p.errorMessage }}</q-item-label>
+                <q-item-label v-if="p.gatewayResponseText && p.status === 'Failed'" caption class="text-grey-8 q-mb-xs">
+                  Gateway: {{ p.gatewayResponseText }}<span v-if="p.gatewayReasonCode"> (code {{ p.gatewayReasonCode }})</span>
+                </q-item-label>
+
+                <!-- Gateway operations on this payment (sale, capture, void, refund) -->
+                <q-expansion-item v-if="p.transactions && p.transactions.length" dense dense-toggle switch-toggle-side
+                  :label="`History (${p.transactions.length})`" header-class="q-px-none text-caption text-grey-8">
+                  <q-markup-table flat dense class="q-mt-xs">
+                    <tbody>
+                      <tr v-for="t in p.transactions" :key="t.id">
+                        <td class="text-caption">{{ formatDate(t.createdOnUtc) }}</td>
+                        <td class="text-caption">{{ humanizeEnum(t.type) }}</td>
+                        <td class="text-caption text-right">{{ formatMoney(t.amount) }}</td>
+                        <td class="text-caption">
+                          <q-badge :color="t.success ? 'positive' : 'negative'" :label="t.success ? 'OK' : 'Failed'" />
+                        </td>
+                        <td class="text-caption">{{ t.transactionId || '' }}</td>
+                        <td class="text-caption text-grey-8" style="white-space: normal">
+                          {{ t.message || '' }}<span v-if="t.reasonCode"> ({{ t.reasonCode }})</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </q-markup-table>
+                </q-expansion-item>
               </q-item-section>
               <q-item-section side top>
                 <div class="text-weight-medium">{{ p.currencyCode }} {{ formatMoney(p.amount) }}</div>
+                <div v-if="p.authorizedAmount && p.authorizedAmount !== p.amount" class="text-caption text-grey-7">
+                  authorized {{ formatMoney(p.authorizedAmount) }}
+                </div>
                 <div v-if="p.refundedAmount > 0" class="text-caption text-deep-orange">
                   −{{ formatMoney(p.refundedAmount) }} refunded
                 </div>
+                <q-btn v-if="p.status === 'Authorized' && p.method !== 'CashOnDelivery' && p.method !== 'BankTransfer'"
+                  class="q-mt-xs" color="primary" unelevated dense no-caps size="sm" icon="o_payments" label="Charge"
+                  @click="openChargeDialog(p)" />
+                <q-btn v-if="p.method === 'AuthorizeNet' && ['HeldForReview', 'Authorized'].includes(p.status)"
+                  class="q-mt-xs" flat dense no-caps size="sm" icon="o_sync" label="Check gateway status"
+                  :loading="syncBusy[p.id]" @click="syncPayment(p)" />
               </q-item-section>
             </q-item>
           </q-list>
@@ -296,6 +385,25 @@
       </q-card>
     </q-dialog>
 
+    <!-- Charge (capture) an authorize-only payment: never more than the authorized amount (AN-20/21) -->
+    <q-dialog v-model="chargeDialog.open">
+      <q-card style="min-width: 380px">
+        <q-card-section class="text-subtitle1 text-weight-medium">Charge payment</q-card-section>
+        <q-card-section class="q-gutter-sm">
+          <div class="text-caption text-grey-7">
+            Authorized: {{ chargeDialog.currency }} {{ formatMoney(chargeDialog.max) }}. Capture that amount, or less if the order total was reduced.
+          </div>
+          <q-input v-model.number="chargeDialog.amount" type="number" dense outlined label="Amount to capture" min="0.01" :max="chargeDialog.max" step="0.01"
+            :rules="[(v) => (v > 0 && v <= chargeDialog.max) || `Between 0.01 and ${formatMoney(chargeDialog.max)}`]" />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Cancel" v-close-popup />
+          <q-btn color="primary" unelevated no-caps label="Charge" :loading="busy"
+            :disable="!(chargeDialog.amount > 0 && chargeDialog.amount <= chargeDialog.max)" @click="confirmCharge" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Refund dialog -->
     <q-dialog v-model="refundDialog.open">
       <q-card style="min-width: 420px">
@@ -359,6 +467,51 @@ const labelBusy = reactive({})
 const trackingDialog = reactive({ open: false, carrier: '', trackingNumber: '' })
 const shipmentDialog = reactive({ open: false, lines: [], carrier: '', trackingNumber: '', serviceName: '' })
 const refundDialog = reactive({ open: false, mode: 'full', lineIds: [], reason: '' })
+const chargeDialog = reactive({ open: false, paymentId: null, amount: 0, max: 0, currency: '' })
+const syncBusy = reactive({})
+
+// Whole days since the payment was authorized (AN-23 warns from day 25 of Authorize.Net's 30).
+function authAgeDays (p) {
+  if (!p.authorizedOnUtc) return 0
+  return Math.max(0, Math.floor((Date.now() - new Date(p.authorizedOnUtc).getTime()) / 86400000))
+}
+
+function openChargeDialog (p) {
+  const max = Number(p.authorizedAmount || p.amount || 0)
+  chargeDialog.paymentId = p.id
+  chargeDialog.max = max
+  chargeDialog.amount = Number(p.amount || max)
+  chargeDialog.currency = p.currencyCode
+  chargeDialog.open = true
+}
+
+async function confirmCharge () {
+  busy.value = true
+  try {
+    await orderApi.capturePayment(chargeDialog.paymentId, Number(chargeDialog.amount))
+    notify.success('Payment captured')
+    chargeDialog.open = false
+    await load()
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+    await load()
+  } finally {
+    busy.value = false
+  }
+}
+
+async function syncPayment (p) {
+  syncBusy[p.id] = true
+  try {
+    const updated = await orderApi.syncPayment(p.id)
+    notify.success(updated && updated.status !== p.status ? `Payment is now ${humanizeEnum(updated.status)}` : 'No change at the gateway')
+    await load()
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+  } finally {
+    syncBusy[p.id] = false
+  }
+}
 
 // The value refunded/restocked by a partial refund = the sum of the chosen line items' totals.
 const partialRefundTotal = computed(() => {
@@ -427,7 +580,7 @@ function onTransition (t) {
     return
   }
   if (t === 'Cancelled') {
-    $q.dialog({ title: 'Cancel order', message: 'Cancel this order? Any authorized payment will be released.', cancel: true, ok: { label: 'Cancel order', color: 'negative' } })
+    $q.dialog({ title: 'Cancel order', message: 'Cancel this order? An Authorize.Net payment is voided if it has not settled yet, or refunded in full if it has.', cancel: true, ok: { label: 'Cancel order', color: 'negative' } })
       .onOk(() => advance(t))
     return
   }
@@ -515,6 +668,8 @@ async function confirmRefund () {
     await load()
   } catch (err) {
     notify.error(getApiErrorMessage(err))
+    // A failed gateway refund is recorded on the payment's history: reload so it shows.
+    await load()
   } finally {
     busy.value = false
   }

@@ -139,11 +139,13 @@ public abstract class GiftCertificateTestBase : CatalogTestBase
 
     protected static readonly CheckoutAddress ShipTo = new("Alice", "Buyer", "alice@example.com", "1 Main St", null, "Austin", "TX", "78701", "US");
 
-    protected CheckoutOrchestrator Orchestrator(AppDbContext db) => new(
+    protected CheckoutOrchestrator Orchestrator(AppDbContext db) => OrchestratorWith(db, null);
+
+    protected CheckoutOrchestrator OrchestratorWith(AppDbContext db, ICheckoutLockService? checkoutLocks) => new(
         db, new FakeRouting(StoreId), new FakeShipping(() => ShippingRate), new FakeSelector(), new DiscountService(db),
         new FakeCoupons(), Tax, Payments, new FakeCurrentUser(), Clock, new FakeTemplates(), new FakeNoopPublisher(),
         Groups(db), new InventoryService(db, new FakeAdminAlertService(), new FakeNoopPublisher()), new FakeRewardPointsService(),
-        new FakeCommerce(), Service(db), Settings(db));
+        new FakeCommerce(), Service(db), Settings(db), checkoutLocks);
 
     protected async Task<CheckoutQuote> Quote(string session)
     {
@@ -155,7 +157,7 @@ public abstract class GiftCertificateTestBase : CatalogTestBase
     {
         await using var db = NewContext();
         return await Orchestrator(db).PlaceAsync(new PlaceCheckoutRequest(
-            null, session, ShipTo, null, method, "tok_test", null, PayWithGiftCertificate: payWithGc), default);
+            null, session, ShipTo, null, method, "tok_test", null, PayWithGiftCertificate: payWithGc, TermsAccepted: true), default);
     }
 
     protected Order LoadOrder(Guid orderId)

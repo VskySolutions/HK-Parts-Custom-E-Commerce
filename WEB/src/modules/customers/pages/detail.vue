@@ -669,6 +669,16 @@ async function onToggleActive (val) {
   } catch (e) { notify.error(getApiErrorMessage(e)) } finally { activeSaving.value = false }
 }
 
+// Restricted-state shipping exemption (SR-92).
+const exemptSaving = ref(false)
+async function onToggleShippingExempt (val) {
+  exemptSaving.value = true
+  try {
+    customer.value = await customerAdminApi.setShippingRestrictionExempt(customer.value.id, val)
+    notify.success(val ? 'Customer exempted from shipping restrictions' : 'Shipping restriction exemption removed')
+  } catch (e) { notify.error(getApiErrorMessage(e)) } finally { exemptSaving.value = false }
+}
+
 async function onChangeGroup (val) {
   const prev = groupId.value
   const next = val || null

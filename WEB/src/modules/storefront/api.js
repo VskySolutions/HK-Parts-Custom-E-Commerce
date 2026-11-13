@@ -177,6 +177,15 @@ export const checkoutApi = {
   payWithGiftCertificate (payload) {
     return customerApi.post(CHECKOUT + '/pay-with-gift-certificate', { ...payload, paymentMethod: 'GiftCertificate', payWithGiftCertificate: true }).then(unwrap)
   },
+  // "No payment required": the total is 0.00 (e.g. a 100 % coupon). Same payload as place; 409 TOTAL_CHANGED
+  // when the total is no longer 0.00 at placement (PY-42).
+  payNone (payload) {
+    return customerApi.post(CHECKOUT + '/pay-none', { ...payload, paymentMethod: 'NoPaymentRequired', payWithGiftCertificate: false }).then(unwrap)
+  },
+  // Release the cart's low-stock checkout lock when the countdown runs out (CK-23). Body { cartId, sessionId }.
+  releaseLock (payload) {
+    return customerApi.post(CHECKOUT + '/lock/release', payload).then(unwrap)
+  },
   // Confirm a redirect payment on return: verifies the gateway session and finalizes on success.
   confirm (orderId) {
     return customerApi.post(CHECKOUT + '/confirm', { orderId }).then(unwrap)

@@ -41,4 +41,19 @@ public interface IPaymentGatewayAdapter
     /// Captured when it succeeds. Non-widget gateways return a non-captured result (base default).
     /// </summary>
     Task<PaymentResult> VerifyClientPaymentAsync(PaymentRecord payment, IReadOnlyDictionary<string, string> data, CancellationToken ct);
+
+    /// <summary>
+    /// Reverses the whole outstanding amount when an order is cancelled: voids an unsettled transaction, refunds
+    /// a settled one (Authorize.Net AN-24). Returns <c>null</c> when the gateway has no automatic reversal, in
+    /// which case the cancellation leaves the payment for the admin to refund by hand (the previous behaviour).
+    /// </summary>
+    Task<PaymentResult?> ReverseAsync(PaymentRecord payment, CancellationToken ct)
+        => Task.FromResult<PaymentResult?>(null);
+
+    /// <summary>
+    /// Looks the payment up at the gateway and reports its current state (e.g. a held-for-review transaction the
+    /// merchant has since approved → Captured / Authorized, or declined → Failed). <c>null</c> when unsupported.
+    /// </summary>
+    Task<PaymentResult?> GetStatusAsync(PaymentRecord payment, CancellationToken ct)
+        => Task.FromResult<PaymentResult?>(null);
 }

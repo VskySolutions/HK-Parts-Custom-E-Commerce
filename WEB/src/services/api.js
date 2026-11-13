@@ -98,14 +98,16 @@ export function getApiErrorMessage (error) {
   const data = error && error.response && error.response.data
   if (data) {
     if (typeof data === 'string' && data.trim()) return data
+    // ASP.NET ProblemDetails / FluentValidation field errors come first: the accompanying title is only the
+    // generic "One or more validation errors occurred." and never says which field is wrong.
+    if (data.errors && typeof data.errors === 'object') {
+      const messages = Object.values(data.errors)
+        .flatMap((v) => (Array.isArray(v) ? v : [v]))
+        .filter((m) => typeof m === 'string' && m.trim())
+      if (messages.length) return [...new Set(messages)].join(' ')
+    }
     const msg = data.message || data.error || data.title || data.detail
     if (msg) return msg
-    // ASP.NET ProblemDetails / ModelState validation errors.
-    if (data.errors && typeof data.errors === 'object') {
-      const first = Object.values(data.errors)[0]
-      if (Array.isArray(first) && first.length) return first[0]
-      if (typeof first === 'string') return first
-    }
   }
   return DEFAULT_MESSAGES[getApiErrorCode(error)] || DEFAULT_MESSAGES[ApiErrorCodes.UNKNOWN]
 }

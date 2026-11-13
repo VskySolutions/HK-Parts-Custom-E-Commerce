@@ -42,4 +42,12 @@ public interface IPaymentGatewayRouter
     /// active credential's live/sandbox mode (null for manual methods).
     /// </summary>
     Task<IReadOnlyList<PaymentMethodAvailability>> AvailableMethodsAsync(CancellationToken ct = default);
+
+    /// <summary>Void-or-refund on cancellation via the originating gateway; null when that gateway can't (see adapter).</summary>
+    Task<PaymentResult?> ReverseAsync(PaymentRecord payment, CancellationToken ct = default)
+        => Task.FromResult<PaymentResult?>(null);
+
+    /// <summary>The payment's current state at its gateway; null when that gateway can't report it.</summary>
+    Task<PaymentResult?> GetStatusAsync(PaymentRecord payment, CancellationToken ct = default)
+        => Task.FromResult<PaymentResult?>(null);
 }

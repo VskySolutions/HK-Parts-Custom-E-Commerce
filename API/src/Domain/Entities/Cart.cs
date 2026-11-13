@@ -27,6 +27,19 @@ public class Cart : AuditableEntity, ISoftDeletable
     public string CurrencyCode { get; set; } = "USD";
     public bool IsCheckedOut { get; set; }
 
+    /// <summary>
+    /// Set while an order is being placed from this cart and cleared when placement returns (OP-56). A second
+    /// Place request inside the window is refused, so a double-submitted payment form cannot charge twice or
+    /// create two orders. It expires on its own, so a crashed request cannot lock the cart for good.
+    /// </summary>
+    public DateTime? PlacementLockUntilUtc { get; set; }
+
+    /// <summary>
+    /// Last time the buyer was active on the checkout (every quote and placement refreshes it). Placement is
+    /// refused once it is older than the checkout session timeout (CK-01 / CK-02). Null = never quoted.
+    /// </summary>
+    public DateTime? LastCheckoutActivityUtc { get; set; }
+
     /// <summary>When a recovery email was sent for this abandoned cart; null = not yet notified (WO-31).</summary>
     public DateTime? AbandonmentNotifiedOnUtc { get; set; }
 

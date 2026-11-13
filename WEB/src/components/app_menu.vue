@@ -150,6 +150,7 @@ const sections = [
     items: [
       { label: 'Customers', icon: 'o_people', to: '/customers', permissions: [Permissions.UsersRead] },
       { label: 'Customer Groups', icon: 'o_sell', to: '/customer-groups', permissions: [Permissions.UsersRead] },
+      { label: 'Blocked Buyers', icon: 'o_block', to: '/customer-blacklist', permissions: [Permissions.UsersRead] },
       { label: 'Tax Exemptions', icon: 'o_verified', to: '/tax-exemption-requests', permissions: [Permissions.UsersRead] },
       { label: 'Contact Us Enquiries', icon: 'o_verified', to: '/contact-us-enquiries', permissions: [Permissions.UsersRead] }
     ]
@@ -186,6 +187,7 @@ const sections = [
       { label: 'Integrations', icon: 'o_extension', to: '/integrations', permissions: [Permissions.CredentialsRead] },
       { label: 'Currencies', icon: 'o_payments', to: '/currencies', permissions: [Permissions.CurrenciesRead] },
       { label: 'Commerce Mode', icon: 'o_storefront', to: '/settings/commerce', permissions: [Permissions.SettingsRead] },
+      { label: 'Checkout Settings', icon: 'o_shopping_cart_checkout', to: '/settings/checkout', permissions: [Permissions.SettingsRead] },
       { label: 'Admin Alerts', icon: 'o_notification_important', to: '/alerts', permissions: [Permissions.AlertsRead] }
     ]
   },

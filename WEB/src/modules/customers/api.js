@@ -48,6 +48,11 @@ export const customerAdminApi = {
     return api.put(`${CUSTOMERS}/${id}/active`, { customerId: id, isActive }).then(unwrap)
   },
 
+  // Exempt from the restricted-state shipping rule (SR-92). Returns the refreshed detail.
+  setShippingRestrictionExempt (id, isExempt) {
+    return api.put(`${CUSTOMERS}/${id}/shipping-restriction-exempt`, { customerId: id, isExempt }).then(unwrap)
+  },
+
   // Wishlist tab (read-only). params: { page, pageSize } → PaginatedList { items: [{ id, productName, sku, imageUrl }], totalCount, ... }.
   // Active wishlists only, newest first; productName / sku are null when unavailable (shown as "—").
   getWishlist (id, params = {}) { return api.get(`${CUSTOMERS}/${id}/wishlist`, { params }).then(unwrap) },

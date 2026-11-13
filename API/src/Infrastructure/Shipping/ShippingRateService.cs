@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
+using HKPartsEcommerce.Application.Features.ShippingMethods;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
 using HKPartsEcommerce.Infrastructure.Common;
@@ -106,45 +107,64 @@ public class ShippingRateService : IShippingRateService
         var destination = request.Destination;
         var results = new List<ShippingRateOption>();
 
+        var destinationCountry = (destination.CountryCode ?? string.Empty).Trim().ToUpperInvariant();
+
         foreach (var method in methods)
         {
-            var matchedZoneRate = method.ZoneRates.FirstOrDefault(zr => ZoneMatches(zr.ShippingZone, destination));
-
-            // Zone eligibility (AC-SHP-003.6): a method that carries any per-zone rate is only offered
-            // when the destination falls inside one of those zones (hide out-of-zone).
-            if (method.ZoneRates.Count > 0 && matchedZoneRate is null)
+            // AD-04: minimum order amount and ship-to countries, checked before any rate is computed.
+            if (method.MinimumOrderAmount is { } minimum && request.OrderSubtotal < minimum)
+                continue;
+            var countries = ShippingMethodRules.SplitCountries(method.ShipToCountries);
+            if (countries.Count > 0 && !countries.Contains(destinationCountry))
                 continue;
 
-            if (method.MethodType == ShippingMethodType.SizeBased)
-            {
-                var sized = await EvaluateSizeBasedAsync(method, request, ct);
-                if (sized is not null)
-                    results.Add(sized);
-                continue;
-            }
-
-            var rate = method.MethodType switch
-            {
-                ShippingMethodType.FlatRate => FlatRateFor(method, matchedZoneRate?.Rate ?? method.FlatRate, request),
-                ShippingMethodType.FreeShipping =>
-                    request.OrderSubtotal >= (method.FreeShippingThreshold ?? 0m) ? 0m : (decimal?)null,
-                ShippingMethodType.WeightBased => PickTierRate(method.TiersJson, request.WeightKg),
-                ShippingMethodType.PriceBased => PickTierRate(method.TiersJson, request.OrderSubtotal),
-                _ => null,
-            };
-
-            if (rate is null)
+            var option = await EvaluateCustomMethodAsync(method, request, destination, ct);
+            if (option is null)
                 continue;
 
-            results.Add(new ShippingRateOption(
-                MethodId: method.Id.ToString(),
-                Name: method.Name,
-                Carrier: "Custom",
-                EstimatedDeliveryDays: method.TransitDays,
-                Rate: rate.Value));
+            // AD-04: the handling fee is added on top of every custom method's rate, and carried separately
+            // so the order's shipping row can show price and handling apart.
+            var handling = method.HandlingFee ?? 0m;
+            results.Add(handling > 0m
+                ? option with { Rate = Math.Round(option.Rate + handling, 2, MidpointRounding.AwayFromZero), HandlingFee = handling }
+                : option);
         }
 
         return results;
+    }
+
+    private async Task<ShippingRateOption?> EvaluateCustomMethodAsync(
+        ShippingMethod method, CarrierRateRequest request, CarrierAddress destination, CancellationToken ct)
+    {
+        var matchedZoneRate = method.ZoneRates.FirstOrDefault(zr => ZoneMatches(zr.ShippingZone, destination));
+
+        // Zone eligibility (AC-SHP-003.6): a method that carries any per-zone rate is only offered
+        // when the destination falls inside one of those zones (hide out-of-zone).
+        if (method.ZoneRates.Count > 0 && matchedZoneRate is null)
+            return null;
+
+        if (method.MethodType == ShippingMethodType.SizeBased)
+            return await EvaluateSizeBasedAsync(method, request, ct);
+
+        var rate = method.MethodType switch
+        {
+            ShippingMethodType.FlatRate => FlatRateFor(method, matchedZoneRate?.Rate ?? method.FlatRate, request),
+            ShippingMethodType.FreeShipping =>
+                request.OrderSubtotal >= (method.FreeShippingThreshold ?? 0m) ? 0m : (decimal?)null,
+            ShippingMethodType.WeightBased => PickTierRate(method.TiersJson, request.WeightKg),
+            ShippingMethodType.PriceBased => PickTierRate(method.TiersJson, request.OrderSubtotal),
+            _ => null,
+        };
+
+        if (rate is null)
+            return null;
+
+        return new ShippingRateOption(
+            MethodId: method.Id.ToString(),
+            Name: method.Name,
+            Carrier: "Custom",
+            EstimatedDeliveryDays: method.TransitDays,
+            Rate: rate.Value);
     }
 
     /// <summary>
@@ -196,16 +216,28 @@ public class ShippingRateService : IShippingRateService
         {
             if (international && method.InternationalViaUsps)
             {
+                // US-20: the cheapest allowed USPS international service, shown as "International Shipping".
+                // US-23: on a USPS failure use the admin's fallback rate, else withhold — never $0.
+                name = "International Shipping";
                 var usps = await CheapestUspsAsync(request, otherLines, ct);
-                if (usps is null)
+                if (usps is not null)
+                {
+                    otherRate = usps.Rate;
+                }
+                else if (method.InternationalFallbackRate is { } fallback)
                 {
                     _logger.LogWarning(
-                        "Shipping method {Method}: USPS returned no international rate for {Country}; the method is withheld.",
+                        "Shipping method {Method}: USPS returned no international rate for {Country}; charging the fallback {Fallback}.",
+                        method.Name, request.Destination.CountryCode, fallback);
+                    otherRate = fallback;
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Shipping method {Method}: USPS returned no international rate for {Country} and no fallback is set; the method is withheld.",
                         method.Name, request.Destination.CountryCode);
                     return null;
                 }
-                otherRate = usps.Rate;
-                name = $"International Shipping ({usps.Name})";
             }
             else
             {
@@ -234,8 +266,21 @@ public class ShippingRateService : IShippingRateService
         var subtotal = lines.Sum(l => l.LineTotal);
 
         var uspsRequest = request with { WeightKg = weightKg, OrderSubtotal = subtotal, Lines = lines };
-        var rates = await SafeGetRatesAsync(ShippingCarrierType.USPS, uspsRequest, ct);
-        return rates.Where(r => r.Rate > 0m).OrderBy(r => r.Rate).FirstOrDefault();
+        try
+        {
+            // Own scope, like the carrier fan-out: the rater reads its settings through a DbContext.
+            // IUspsRater skips the USPS method's handling fee / minimum / ship-to filters — those belong to
+            // the USPS method, not to the Custom method borrowing its international prices.
+            using var scope = _scopeFactory.CreateScope();
+            var rater = scope.ServiceProvider.GetRequiredService<IUspsRater>();
+            var rates = await rater.GetInternationalRatesAsync(uspsRequest, ct);
+            return rates.Where(r => r.Rate > 0m).OrderBy(r => r.Rate).FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "USPS international rating for the Custom method failed.");
+            return null;
+        }
     }
 
     private static bool IsInternational(CarrierAddress origin, CarrierAddress destination)

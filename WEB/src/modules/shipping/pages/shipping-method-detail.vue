@@ -86,7 +86,13 @@
                 <div class="col-12 col-md-6"><AppTextField v-model="form.flatRate" label="Rate when size is blank / other" type="number" step="0.01" placeholder="e.g. 9.50" :disable="!canWrite" /></div>
                 <div class="col-12 col-md-6"><AppTextField v-model="form.fflFlatRate" label="FFL items flat rate" type="number" step="0.01" placeholder="e.g. 40.00 (blank = price FFL items by size)" :disable="!canWrite" /></div>
               </div>
-              <q-toggle v-model="form.internationalViaUsps" label="Outside the US, charge the cheapest USPS international rate (method hidden when USPS can't quote)" color="primary" :disable="!canWrite" />
+              <q-toggle v-model="form.internationalViaUsps" label="Outside the US, charge the cheapest USPS international rate as &quot;International Shipping&quot;" color="primary" :disable="!canWrite" />
+              <div v-if="form.internationalViaUsps" class="row q-col-gutter-sm">
+                <div class="col-12 col-md-6">
+                  <AppTextField v-model="form.internationalFallbackRate" label="International fallback rate (USD)" type="number" step="0.01" min="0" placeholder="Blank = hide the method" :disable="!canWrite" />
+                  <div class="text-caption text-grey-6 q-mt-xs">Charged when USPS can't quote. Blank hides the method, so checkout says no delivery options rather than shipping free.</div>
+                </div>
+              </div>
             </template>
 
             <AppTextField v-if="form.methodType === 'FreeShipping'" v-model="form.freeShippingThreshold" label="Free over" type="number" step="0.01" placeholder="Order total for free shipping" :disable="!canWrite" />
@@ -114,6 +120,30 @@
             <div class="text-caption text-grey-7">
               Shown to customers at checkout, and used to score this method when shipping selection is automatic.
               Leave blank if unknown.
+            </div>
+
+            <!-- Common method settings (AD-04): the same three every carrier method has. -->
+            <q-separator class="q-my-md" />
+            <div class="row q-col-gutter-sm">
+              <div class="col-12 col-md-4">
+                <AppTextField v-model="form.handlingFee" label="Handling fee (USD)" type="number" step="0.01" min="0" placeholder="0.00" :disable="!canWrite" />
+                <div class="text-caption text-grey-7">Added to this method's price at checkout.</div>
+              </div>
+              <div class="col-12 col-md-4">
+                <AppTextField v-model="form.minimumOrderAmount" label="Minimum order amount (USD)" type="number" step="0.01" min="0" placeholder="No minimum" :disable="!canWrite" />
+                <div class="text-caption text-grey-7">Hidden below this order subtotal.</div>
+              </div>
+              <div class="col-12 col-md-4">
+                <q-select
+                  v-model="form.shipToCountries"
+                  label="Ship-to countries"
+                  outlined dense multiple use-chips use-input new-value-mode="add-unique" hide-dropdown-icon
+                  input-debounce="0"
+                  :disable="!canWrite"
+                  hint="ISO code (e.g. US), Enter. Leave empty for all."
+                  @new-value="(v, done) => done(String(v).trim().toUpperCase(), 'add-unique')"
+                />
+              </div>
             </div>
           </q-tab-panel>
 
@@ -234,9 +264,13 @@ function buildPayload (f) {
     flatRatePerItem: f.methodType === 'FlatRate' && !!f.flatRatePerItem,
     fflFlatRate: f.methodType === 'SizeBased' ? num(f.fflFlatRate) : null,
     internationalViaUsps: f.methodType === 'SizeBased' && !!f.internationalViaUsps,
+    internationalFallbackRate: f.methodType === 'SizeBased' && f.internationalViaUsps ? num(f.internationalFallbackRate) : null,
     freeShippingThreshold: f.methodType === 'FreeShipping' ? num(f.freeShippingThreshold) : null,
     tiersJson: f.tiersJson || null,
     transitDays: num(f.transitDays),
+    handlingFee: num(f.handlingFee),
+    minimumOrderAmount: num(f.minimumOrderAmount),
+    shipToCountries: f.shipToCountries || [],
     isEnabled: f.isEnabled,
     displayOrder: num(f.displayOrder) || 0,
     zoneRates: (f.zoneRates || []).filter((z) => z.rate != null && z.rate !== '').map((z) => ({ shippingZoneId: z.shippingZoneId, rate: Number(z.rate) }))
@@ -254,7 +288,8 @@ const {
   empty: {
     name: '', methodType: 'FlatRate', flatRate: null, freeShippingThreshold: null,
     tiersJson: null, transitDays: null, isEnabled: true, displayOrder: 0, zoneRates: [],
-    flatRatePerItem: false, fflFlatRate: null, internationalViaUsps: false
+    flatRatePerItem: false, fflFlatRate: null, internationalViaUsps: false, internationalFallbackRate: null,
+    handlingFee: null, minimumOrderAmount: null, shipToCountries: []
   },
   rules: { name: { required, maxLength: maxLength(200) } },
   afterLoad: async (e) => {

@@ -36,6 +36,12 @@ public class Customer : AuditableEntity, ISoftDeletable
     public bool IsTaxExempt { get; set; }
     public string? TaxExemptionCertificate { get; set; }
     public string? VatId { get; set; }
+
+    /// <summary>
+    /// Exempt from the restricted-state shipping rule (SR-92): this buyer may receive state-restricted products
+    /// in a restricted state (legacy <c>customer.custom_varchar_1</c> = Yes).
+    /// </summary>
+    public bool IsShippingRestrictionExempt { get; set; }
     public string? WhatsAppPhoneNumber { get; set; }
     public bool WhatsAppOptIn { get; set; }
     public DateTime? WhatsAppOptInAtUtc { get; set; }

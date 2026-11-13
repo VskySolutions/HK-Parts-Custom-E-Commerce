@@ -41,6 +41,28 @@ public class CheckoutController : ApiControllerBase
             PaymentMethod = Domain.Enums.PaymentMethodType.GiftCertificate,
         }), cancellationToken));
 
+    /// <summary>
+    /// Confirm the "No payment required" page (PY-40..42): the order total is 0.00 (e.g. a 100 % coupon).
+    /// Runs the same pre-payment checks as a card payment. 409 TOTAL_CHANGED when the total is no longer 0.00.
+    /// </summary>
+    [HttpPost("pay-none")]
+    public async Task<ActionResult<CheckoutResult>> PayNone(
+        [FromBody] PlaceCheckoutRequest request, CancellationToken cancellationToken)
+        => Ok(await Mediator.Send(new PlaceCheckoutCommand(request with
+        {
+            PayWithGiftCertificate = false,
+            PaymentMethod = Domain.Enums.PaymentMethodType.NoPaymentRequired,
+            PaymentToken = null,
+        }), cancellationToken));
+
+    /// <summary>Release the cart's low-stock checkout lock (CK-23): the storefront countdown ran out.</summary>
+    [HttpPost("lock/release")]
+    public async Task<IActionResult> ReleaseLock([FromBody] CheckoutCartRef request, CancellationToken cancellationToken)
+    {
+        await Mediator.Send(new ReleaseCheckoutLockCommand(request), cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>Submit an inquiry (quote request) — no payment is taken (REQ-INQ-001).</summary>
     [HttpPost("inquiry")]
     public async Task<ActionResult<InquiryResult>> Inquiry(

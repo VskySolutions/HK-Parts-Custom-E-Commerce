@@ -121,7 +121,7 @@
           <div
             v-for="p in items"
             :key="p.id"
-            class="col-6 col-sm-4 col-md-3"
+            class="col-6 col-sm-4 col-md-3" :class="$q.screen.width < 430 ? 'col-xs-12' : ''"
           >
             <StorefrontProductCard :product="p" />
           </div>

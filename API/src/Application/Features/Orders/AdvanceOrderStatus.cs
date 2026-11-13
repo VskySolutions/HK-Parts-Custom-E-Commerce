@@ -74,6 +74,16 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         }
 
         var now = _clock.UtcNow;
+
+        // What the order had committed before this transition decides the restock below (a cancel's reversal
+        // changes PaymentStatus to Voided/Refunded first).
+        var paidBefore = order.PaymentStatus;
+
+        // AN-24: cancelling releases the money first: the gateway voids an unsettled transaction or refunds a
+        // settled one. If it refuses, nothing is cancelled and the admin sees the gateway's reason.
+        if (target == OrderStatus.Cancelled)
+            await ReversePaymentsAsync(order, now, cancellationToken);
+
         order.Status = target;
 
         if (target == OrderStatus.Shipped)
@@ -99,7 +109,8 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         // (COD/bank transfer). A still-unpaid Pending redirect order never decremented, so it's excluded;
         // a refunded order was already restocked by the refund path, so it's excluded to avoid a double.
         if (target == OrderStatus.Cancelled &&
-            order.PaymentStatus is PaymentStatus.Authorized or PaymentStatus.Captured or PaymentStatus.AwaitingPayment)
+            paidBefore is PaymentStatus.Authorized or PaymentStatus.Captured or PaymentStatus.AwaitingPayment
+                or PaymentStatus.HeldForReview)
             await _inventory.RestoreForOrderAsync(order, ct: cancellationToken);
 
         // Gift certificates: give back what this order redeemed, and void the ones it purchased (unused only;
@@ -123,6 +134,46 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         }
 
         return OrderDto.From(order);
+    }
+
+    /// <summary>
+    /// Reverses each open gateway payment of a cancelled order via its gateway's automatic reversal (Authorize.Net:
+    /// void when unsettled, refund when settled). Gateways without one return null and are left for a manual
+    /// refund, as before. Gift-certificate payments are restored by the gift-certificate service instead.
+    /// </summary>
+    private async Task ReversePaymentsAsync(Order order, DateTime now, CancellationToken ct)
+    {
+        var open = await _db.PaymentRecords
+            .Where(p => p.OrderId == order.Id
+                        && p.Method != PaymentMethodType.GiftCertificate
+                        && (p.Status == PaymentStatus.Authorized || p.Status == PaymentStatus.Captured
+                            || p.Status == PaymentStatus.PartiallyRefunded || p.Status == PaymentStatus.HeldForReview))
+            .ToListAsync(ct);
+
+        foreach (var payment in open)
+        {
+            var outstanding = payment.Amount - payment.RefundedAmount;
+            if (outstanding <= 0) continue;
+
+            var result = await _payments.ReverseAsync(payment, ct);
+            if (result is null) continue;
+
+            Payments.PaymentLedger.Record(_db, payment, PaymentTransactionType.Refund, outstanding, result, now, _current.UserId);
+            if (!result.Success)
+            {
+                payment.ErrorMessage = result.ErrorMessage;
+                await _db.SaveChangesAsync(ct);
+                throw new ConflictException($"The order was not cancelled because the payment could not be reversed: {result.ErrorMessage}");
+            }
+
+            payment.RefundedAmount = payment.Amount;
+            payment.RefundedOnUtc = now;
+            payment.AuthorizationExpiresUtc = null;
+            payment.ErrorMessage = null;
+            payment.Status = result.Status == PaymentStatus.Voided ? PaymentStatus.Voided : PaymentStatus.Refunded;
+            if (payment.IsMaster)
+                order.PaymentStatus = payment.Status;
+        }
     }
 
     /// <summary>Template key + variables for the customer notification of a lifecycle transition.</summary>
@@ -172,7 +223,9 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         OrderStatus.Processing => from == OrderStatus.Pending,
         OrderStatus.Shipped => from == OrderStatus.Processing,
         OrderStatus.Delivered => from == OrderStatus.Shipped,
-        OrderStatus.Cancelled => from is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped,
+        // A Payment Review order is released by the gateway status sync, never by hand; it can only be cancelled.
+        OrderStatus.Cancelled => from is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped
+            or OrderStatus.PaymentReview,
         _ => false,
     };
 }

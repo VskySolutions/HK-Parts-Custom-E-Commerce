@@ -114,11 +114,13 @@
             <div v-if="promoHtml" class="storefront-rich-text sf-cat-promo q-mb-md" v-html="promoHtml" />
 
             <!-- Top bar: count + sort + view toggle -->
-            <div class="row items-center q-mb-md q-gutter-sm">
-              <div class="text-body2 text-grey-7 col">
+            <div class="row items-center q-mb-md q-gutter-sm" :class="$q.screen.width < 421 ? 'justify-center' : ''">
+              <!-- Product Count -->
+              <div class="text-body2 text-grey-7" :class="$q.screen.width < 421 ? 'col-12' : 'col'">
                 <span class="text-weight-medium text-dark">{{ totalCount }}</span>
                 {{ totalCount === 1 ? 'product' : 'products' }}
               </div>
+              <!-- View Product Layout Buttons -->
               <q-btn-toggle
                 v-model="view"
                 dense
@@ -130,6 +132,7 @@
                   { value: 'list', icon: 'o_view_list' }
                 ]"
               />
+              <!-- Sort By Filter -->
               <q-select
                 v-model="sort"
                 dense
@@ -161,7 +164,7 @@
             </div>
 
             <!-- List view -->
-            <div v-else class="q-gutter-md">
+            <div v-else class="q-gutter-md q-mt-sm">
               <q-card v-for="p in displayItems" :key="p.id" flat bordered class="row no-wrap sf-list-row">
                 <router-link :to="productTo(p)" class="sf-list-row__media">
                   <img v-if="productImage(p)" :src="$media(productImage(p))" :alt="p.name">

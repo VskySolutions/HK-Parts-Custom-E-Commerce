@@ -42,6 +42,7 @@ public class GetMyOrderQueryHandler : IRequestHandler<GetMyOrderQuery, OrderDto>
             .Include(o => o.Lines)
             .Include(o => o.Payments)
             .Include(o => o.AssignedStore)
+            .Include(o => o.Shippings)
             .AsSplitQuery()
             .FirstOrDefaultAsync(o => o.Id == request.Id && o.CustomerId == customerId, cancellationToken)
             ?? throw new NotFoundException(nameof(Order), request.Id);

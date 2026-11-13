@@ -15,6 +15,10 @@ public class ShippingMethodConfiguration : IEntityTypeConfiguration<ShippingMeth
         b.Property(x => x.FlatRate).HasPrecision(18, 2);
         b.Property(x => x.FreeShippingThreshold).HasPrecision(18, 2);
         b.Property(x => x.FflFlatRate).HasPrecision(18, 2);
+        b.Property(x => x.InternationalFallbackRate).HasPrecision(18, 2);
+        b.Property(x => x.HandlingFee).HasPrecision(18, 2);
+        b.Property(x => x.MinimumOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.ShipToCountries).HasMaxLength(1000);
         b.HasQueryFilter(x => !x.Deleted);
     }
 }

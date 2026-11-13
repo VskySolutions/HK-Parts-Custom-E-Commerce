@@ -9,8 +9,9 @@ using HKPartsEcommerce.Domain.Enums;
 namespace HKPartsEcommerce.Application.Features.Payments;
 
 /// <summary>
-/// Captures a previously authorized payment, in full or part (WO-34, AC-PAY-002). Admin-only. A gateway
-/// failure keeps the record's status unchanged and surfaces the provider error on the returned record.
+/// Captures a previously authorized payment, in full or part (WO-34, AC-PAY-002; Authorize.Net "Charge",
+/// AN-20/21). Admin-only. Never more than the authorized amount. Every attempt is written to the payment's
+/// transaction history; a gateway failure keeps the authorization, records the error and returns 409.
 /// </summary>
 public record CapturePaymentCommand(Guid PaymentId, decimal? Amount = null) : IRequest<PaymentDto>;
 
@@ -33,15 +34,18 @@ public class CapturePaymentCommandHandler : IRequestHandler<CapturePaymentComman
     private readonly IDateTimeProvider _clock;
 
     private readonly GiftCertificates.IGiftCertificateService? _giftCertificates;
+    private readonly ICurrentUserService? _current;
 
     public CapturePaymentCommandHandler(
         IApplicationDbContext db, IPaymentGatewayRouter router, IDateTimeProvider clock,
-        GiftCertificates.IGiftCertificateService? giftCertificates = null)
+        GiftCertificates.IGiftCertificateService? giftCertificates = null,
+        ICurrentUserService? current = null)
     {
         _db = db;
         _router = router;
         _clock = clock;
         _giftCertificates = giftCertificates;
+        _current = current;
     }
 
     public async Task<PaymentDto> Handle(CapturePaymentCommand request, CancellationToken cancellationToken)
@@ -55,15 +59,22 @@ public class CapturePaymentCommandHandler : IRequestHandler<CapturePaymentComman
         if (payment.Status is not (PaymentStatus.Authorized or PaymentStatus.AwaitingPayment))
             throw new ConflictException($"A payment in status '{payment.Status}' cannot be captured.");
 
+        // AN-21: the ceiling is what the gateway authorized (after any gift certificate), never the order total.
+        var authorized = payment.AuthorizedAmount ?? payment.Amount;
         var amount = request.Amount ?? payment.Amount;
-        if (amount > payment.Amount)
-            throw new ConflictException("The capture amount exceeds the authorized amount.");
+        if (amount > authorized)
+            throw new ConflictException(
+                $"The capture amount exceeds the authorized amount of {authorized:0.00} {payment.CurrencyCode}.");
 
         var result = await _router.CaptureAsync(payment, amount, cancellationToken);
+        PaymentLedger.Record(_db, payment, PaymentTransactionType.Capture, amount, result, _clock.UtcNow, _current?.UserId);
 
         if (result.Success)
         {
             payment.Status = PaymentStatus.Captured;
+            payment.AuthorizedAmount ??= payment.Amount;
+            // A lower capture (edited total) settles only that much: refunds are bounded by it from now on.
+            payment.Amount = amount;
             payment.TransactionId = result.TransactionId ?? payment.TransactionId;
             payment.GatewayReference = result.GatewayReference ?? payment.GatewayReference;
             payment.CapturedOnUtc = _clock.UtcNow;
@@ -81,6 +92,10 @@ public class CapturePaymentCommandHandler : IRequestHandler<CapturePaymentComman
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // AN-27 style: a failed capture is an error the admin must see, not a 200 with a quiet message.
+        if (!result.Success)
+            throw new ConflictException(result.ErrorMessage ?? "The gateway did not capture the payment.");
 
         // Marked paid (invoice / PO / COD captured): issue the gift certificates the order bought (idempotent).
         if (result.Success && _giftCertificates is not null)

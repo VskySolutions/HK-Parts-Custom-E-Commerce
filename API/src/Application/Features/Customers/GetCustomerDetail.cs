@@ -42,6 +42,9 @@ public class CustomerDetailDto
     public string? TaxExemptionCertificate { get; set; }
     public string? VatId { get; set; }
 
+    /// <summary>Exempt from the restricted-state shipping rule (SR-92).</summary>
+    public bool IsShippingRestrictionExempt { get; set; }
+
     /// <summary>
     /// Read-only workflow status of the customer's latest tax-exemption request: NotSubmitted,
     /// PendingReview, Approved or Rejected. Review actions live in the tax-exemption-requests queue,
@@ -135,6 +138,7 @@ public class GetCustomerDetailQueryHandler : IRequestHandler<GetCustomerDetailQu
             IsTaxExempt = customer.IsTaxExempt,
             TaxExemptionCertificate = customer.TaxExemptionCertificate,
             VatId = customer.VatId,
+            IsShippingRestrictionExempt = customer.IsShippingRestrictionExempt,
             TaxExemptionStatus = latestRequest is null
                 ? TaxExemptionStatusNames.NotSubmitted
                 : latestRequest.Status.ToString(),

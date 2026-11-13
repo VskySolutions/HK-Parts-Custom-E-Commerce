@@ -31,6 +31,15 @@ public class PaymentController : ApiControllerBase
     public async Task<ActionResult<PaymentDto>> Refund(Guid id, [FromBody] RefundPaymentRequest? body = null)
         => Ok(await Mediator.Send(new RefundPaymentCommand(id, body?.Amount, body?.Reason)));
 
+    /// <summary>
+    /// Re-read the payment's state from its gateway (e.g. an Authorize.Net transaction held for fraud review that
+    /// the merchant has since approved or declined) and apply it to the payment and order.
+    /// </summary>
+    [HttpPost("{id:guid}/sync")]
+    [RequireModule(Modules.Payments)]
+    public async Task<ActionResult<PaymentDto>> Sync(Guid id)
+        => Ok(await Mediator.Send(new SyncPaymentStatusCommand(id)));
+
     /// <summary>List all payment records for an order (newest first).</summary>
     [HttpGet("order/{orderId:guid}")]
     [RequireModule(Modules.Payments)]

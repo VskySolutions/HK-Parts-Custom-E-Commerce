@@ -104,6 +104,40 @@ public class AuthorizeNetCredential : IntegrationCredentialBase
     /// Interface (Account → Settings → Manage Public Client Key); distinct from the Transaction/Signature keys.
     /// </summary>
     public string? PublicClientKey { get; set; }
+
+    // ---- Payment-method settings (authorize-net-payment-requirements.md §2 / §4) ----
+    // Kept on the credential row, so each environment (sandbox / production row) carries its own settings and
+    // switching the active row never points live keys at the sandbox (AN-02).
+
+    /// <summary>"AuthCapture" (authCaptureTransaction) or "AuthOnly" (authOnlyTransaction). Null = AuthCapture (AN-13).</summary>
+    public string? TransactionType { get; set; }
+
+    /// <summary>Create a CIM customer + payment profile from each successful sale (AN-30/31).</summary>
+    public bool CustomerProfilesEnabled { get; set; }
+
+    /// <summary>Log each gateway call (type, amount, result, codes, transaction id, duration). No nonce or keys (AN-55).</summary>
+    public bool LoggingEnabled { get; set; }
+
+    /// <summary>
+    /// Comma-separated card brands accepted, as Authorize.Net reports accountType (Visa, MasterCard,
+    /// AmericanExpress, Discover, JCB, DinersClub). Null/empty = all. Enforced against the returned account type.
+    /// </summary>
+    public string? AcceptedCardTypes { get; set; }
+
+    /// <summary>Name shown to the buyer at checkout (legacy: "Credit Card").</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>Offer the method only when the amount due is at least this (null = no minimum).</summary>
+    public decimal? MinOrderAmount { get; set; }
+
+    /// <summary>Offer the method only when the amount due is at most this (null = no maximum).</summary>
+    public decimal? MaxOrderAmount { get; set; }
+
+    /// <summary>Comma-separated customer-group ids allowed to use the method. Null/empty = all customers.</summary>
+    public string? AllowedCustomerGroupIds { get; set; }
+
+    /// <summary>Order status after an approved payment: "Pending" (default) or "Processing".</summary>
+    public string? DefaultOrderStatus { get; set; }
 }
 
 // ---- Tax providers ---------------------------------------------------------
@@ -140,6 +174,46 @@ public class FedExCredential : IntegrationCredentialBase
     /// like bad credentials, so an absent account number is worth ruling out first.
     /// </summary>
     public string? AccountNumber { get; set; }
+
+    // ---- Rating settings (docs/fedex-shipping-requirements.md §2, §4) ----
+
+    /// <summary>Prefix of every FedEx option at checkout: "&lt;DisplayName&gt; - &lt;service&gt;" (FX-14).</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>"ACCOUNT" (discounted) or "LIST" — the one rate type requested and read (FX-13).</summary>
+    public string? RateMode { get; set; }
+
+    /// <summary>Comma-separated FedEx service types offered (FX-14, FX-19, §3.2).</summary>
+    public string? AllowedServices { get; set; }
+
+    /// <summary>
+    /// Comma-separated service types allowed for a cart holding FFL items (FX-21, [ENH]). Empty = no extra
+    /// filter, pending the business decision.
+    /// </summary>
+    public string? FflAllowedServices { get; set; }
+
+    /// <summary>"USE_SCHEDULED_PICKUP" or "DROPOFF_AT_FEDEX_LOCATION" (FX-50) — it changes the rate.</summary>
+    public string? PickupType { get; set; }
+
+    /// <summary>One package per unit with product dimensions; otherwise one package of the total weight (FX-16).</summary>
+    public bool SendPackageInfo { get; set; }
+
+    /// <summary>Package used when a product has no dimensions (inches). Replaces the legacy fixed 11×11×11.</summary>
+    public decimal? DefaultLengthIn { get; set; }
+    public decimal? DefaultWidthIn { get; set; }
+    public decimal? DefaultHeightIn { get; set; }
+
+    /// <summary>Added to every FedEx price (FX-15). Null = no fee.</summary>
+    public decimal? HandlingFee { get; set; }
+
+    /// <summary>FedEx is not offered below this order subtotal. Null = no minimum.</summary>
+    public decimal? MinimumOrderAmount { get; set; }
+
+    /// <summary>Comma-separated ISO-2 countries FedEx ships to; blank = all.</summary>
+    public string? ShipToCountries { get; set; }
+
+    /// <summary>Log each FedEx request/response (tokens and secrets never included) (FX-56).</summary>
+    public bool LoggingEnabled { get; set; }
 }
 
 /// <summary>DHL Express API credentials + account + endpoint (table <c>Credentials_DHLExpress</c>).</summary>
@@ -164,6 +238,37 @@ public class UspsCredential : IntegrationCredentialBase
     public string? BaseUrl { get; set; }
     public string? ConsumerKey { get; set; }
     [Encrypted] public string? ConsumerSecret { get; set; }
+
+    // ---- Rating settings (docs/usps-shipping-requirements.md §2, §4) ----
+
+    /// <summary>Prefix of every USPS option at checkout: "&lt;DisplayName&gt; - &lt;service&gt;" (US-13, US-17).</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>"RETAIL" or "COMMERCIAL" — sent as the USPS priceType.</summary>
+    public string? PriceType { get; set; }
+
+    /// <summary>Comma-separated USPS REST mail classes offered domestically (US-13, US-16).</summary>
+    public string? AllowedDomesticServices { get; set; }
+
+    /// <summary>Comma-separated USPS REST international mail classes (US-24).</summary>
+    public string? AllowedInternationalServices { get; set; }
+
+    /// <summary>Added to every domestic USPS price (US-14). Null = no fee.</summary>
+    public decimal? HandlingFee { get; set; }
+
+    /// <summary>USPS is not offered below this order subtotal. Null = no minimum.</summary>
+    public decimal? MinimumOrderAmount { get; set; }
+
+    /// <summary>Comma-separated ISO-2 countries the USPS method ships to; blank = all.</summary>
+    public string? ShipToCountries { get; set; }
+
+    /// <summary>Default package used when the cart carries no dimensions (inches). Replaces the fixed 15×15×15.</summary>
+    public decimal? DefaultLengthIn { get; set; }
+    public decimal? DefaultWidthIn { get; set; }
+    public decimal? DefaultHeightIn { get; set; }
+
+    /// <summary>Log each USPS request/response (secrets and tokens never included) (US-56).</summary>
+    public bool LoggingEnabled { get; set; }
 }
 
 /// <summary>UPS OAuth2 client credentials + merchant/account number + endpoint (table <c>Credentials_UPS</c>).</summary>
@@ -174,6 +279,44 @@ public class UpsCredential : IntegrationCredentialBase
     public string? MerchantId { get; set; }
     public string? ClientId { get; set; }
     [Encrypted] public string? ClientSecret { get; set; }
+
+    // ---- Rating settings (docs/ups-shipping-requirements.md §2, §4) ----
+
+    /// <summary>Rating API version segment, e.g. "v2409" (sources disagree on the current one — confirm in the catalog).</summary>
+    public string? ApiVersion { get; set; }
+
+    /// <summary>Prefix of every UPS option at checkout: "&lt;DisplayName&gt; - &lt;service&gt;" (UP-14).</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>Comma-separated UPS service codes offered (UP-14, §3.2).</summary>
+    public string? AllowedServices { get; set; }
+
+    /// <summary>Comma-separated service codes allowed for a cart holding FFL items (UP-22/23). Default 01,13,14.</summary>
+    public string? FflAllowedServices { get; set; }
+
+    /// <summary>Use the negotiated shipment total when UPS returns one (UP-15).</summary>
+    public bool UseNegotiatedRates { get; set; }
+
+    /// <summary>UPS packaging code, e.g. "02" customer-supplied package (UP-13).</summary>
+    public string? PackageType { get; set; }
+
+    /// <summary>One package per unit with its own dimensions and weight; otherwise one package of the total weight (UP-13).</summary>
+    public bool SendPackageInfo { get; set; }
+
+    /// <summary>UPS pickup type code sent with the request, e.g. "01" daily pickup (UP-53).</summary>
+    public string? PickupType { get; set; }
+
+    /// <summary>Added to every UPS price (UP-16). Null = no fee.</summary>
+    public decimal? HandlingFee { get; set; }
+
+    /// <summary>UPS is not offered below this order subtotal. Null = no minimum.</summary>
+    public decimal? MinimumOrderAmount { get; set; }
+
+    /// <summary>Comma-separated ISO-2 countries UPS ships to; blank = all.</summary>
+    public string? ShipToCountries { get; set; }
+
+    /// <summary>Log each UPS request/response (tokens and secrets never included) (UP-57).</summary>
+    public bool LoggingEnabled { get; set; }
 }
 
 /// <summary>
@@ -195,6 +338,16 @@ public class FreightviewCredential : IntegrationCredentialBase
     /// <summary>Dock hours as Freightview expects them, e.g. "8:00 AM" / "5:00 PM".</summary>
     public string? DockOpenTime { get; set; }
     public string? DockCloseTime { get; set; }
+
+    // Common method settings (AD-04), as on the USPS / UPS / FedEx methods.
+    /// <summary>Prefix of every Freightview option at checkout: "&lt;DisplayName&gt; - &lt;carrier&gt; - &lt;service&gt;". Null = no prefix.</summary>
+    public string? DisplayName { get; set; }
+    /// <summary>Added to every Freightview quote. Null = none.</summary>
+    public decimal? HandlingFee { get; set; }
+    /// <summary>Offer freight only when the order subtotal is at least this. Null = no minimum.</summary>
+    public decimal? MinimumOrderAmount { get; set; }
+    /// <summary>Comma-separated ISO country codes freight ships to. Null/empty = all countries.</summary>
+    public string? ShipToCountries { get; set; }
 }
 
 // ---- Communication ---------------------------------------------------------

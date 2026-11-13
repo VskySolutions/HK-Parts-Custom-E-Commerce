@@ -38,7 +38,11 @@ public class ShippingMethodDto
     public bool FlatRatePerItem { get; set; }
     public decimal? FflFlatRate { get; set; }
     public bool InternationalViaUsps { get; set; }
+    public decimal? InternationalFallbackRate { get; set; }
     public int? TransitDays { get; set; }
+    public decimal? HandlingFee { get; set; }
+    public decimal? MinimumOrderAmount { get; set; }
+    public List<string> ShipToCountries { get; set; } = new();
     public bool IsEnabled { get; set; }
     public int DisplayOrder { get; set; }
     public IReadOnlyList<ShippingMethodZoneRateDto> ZoneRates { get; set; } = new List<ShippingMethodZoneRateDto>();
@@ -54,7 +58,11 @@ public class ShippingMethodDto
         FlatRatePerItem = m.FlatRatePerItem,
         FflFlatRate = m.FflFlatRate,
         InternationalViaUsps = m.InternationalViaUsps,
+        InternationalFallbackRate = m.InternationalFallbackRate,
         TransitDays = m.TransitDays,
+        HandlingFee = m.HandlingFee,
+        MinimumOrderAmount = m.MinimumOrderAmount,
+        ShipToCountries = ShippingMethodRules.SplitCountries(m.ShipToCountries),
         IsEnabled = m.IsEnabled,
         DisplayOrder = m.DisplayOrder,
         ZoneRates = m.ZoneRates
@@ -67,6 +75,22 @@ public class ShippingMethodDto
 /// <summary>Validation helpers shared by the create/update shipping-method validators.</summary>
 public static class ShippingMethodRules
 {
+    /// <summary>Upper-cased, de-duplicated "US,CA"; null when no country is listed (= all countries).</summary>
+    public static string? JoinCountries(IEnumerable<string>? codes)
+    {
+        var list = (codes ?? Enumerable.Empty<string>())
+            .Select(c => c.Trim().ToUpperInvariant())
+            .Where(c => c.Length > 0)
+            .Distinct()
+            .ToList();
+        return list.Count == 0 ? null : string.Join(",", list);
+    }
+
+    public static List<string> SplitCountries(string? csv) =>
+        (csv ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(c => c.ToUpperInvariant())
+            .ToList();
+
     /// <summary>Null/blank, or a JSON array — the rate engine ignores a tier list it cannot parse.</summary>
     public static bool BeValidTierJson(string? json)
     {

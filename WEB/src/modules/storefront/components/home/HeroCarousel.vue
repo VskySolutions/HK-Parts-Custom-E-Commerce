@@ -7,7 +7,7 @@
     transition-prev="fade"
     transition-next="fade"
     swipeable
-    arrows
+    :arrows="false"
     navigation
     control-color="white"
     height="clamp(280px, 42vw, 520px)"
@@ -25,9 +25,9 @@
           <div v-if="s.label" class="sf-hero__label">{{ s.label }}</div>
           <div class="sf-hero__title">{{ s.title }}</div>
           <div v-if="s.subtitle" class="sf-hero__subtitle">{{ s.subtitle }}</div>
-          <div class="sf-hero__cta q-gutter-sm q-mt-md">
-            <q-btn v-if="s.primaryTo" unelevated color="red" no-caps :label="s.primaryLabel" :to="s.primaryTo" />
-            <q-btn v-if="s.secondaryTo" outline color="red" no-caps :label="s.secondaryLabel" :to="s.secondaryTo" />
+          <div class="sf-hero__cta q-gutter-sm">
+            <q-btn v-if="s.primaryTo" class="bg-24" unelevated :label="s.primaryLabel" :to="s.primaryTo" />
+            <q-btn v-if="s.secondaryTo" class="bg-24" outline :label="s.secondaryLabel" :to="s.secondaryTo" />
           </div>
         </div>
       </div>
@@ -100,9 +100,16 @@ onMounted(() => {
 .sf-hero__slide { padding: 0; color: var(--sf-heading); opacity: 0.9; background-size: cover; background-position: center; }
 .sf-hero__content { 
   max-width: 380px;
-  background: #000000d9;
+  background:#000000d9;
   padding: 30px;
   color: white !important;
+  @media (max-width: 610px) {
+    padding: 20px !important;
+  }
+  @media (max-width: 440px) {
+    text-align: center;
+    max-width: calc(100vw - 10px);
+  }
   }
 .text-right .sf-hero__content,
 .sf-hero__content.text-right { margin-left: auto; }
@@ -114,6 +121,38 @@ onMounted(() => {
   opacity: 0.85;
   margin-bottom: 10px;
 }
-.sf-hero__title { font-size: clamp(20px, 4.5vw, 24px); font-weight: 600; line-height: 1.05; text-transform: uppercase; margin-bottom: 10px; line-height: 1.1; letter-spacing: 2px; }
-.sf-hero__subtitle { font-size: clamp(18px, 2vw, 20px); margin-top: 12px; opacity: 0.9; }
+.sf-hero__title { 
+  font-size: 24px; 
+  font-weight: 600; 
+  line-height: 1.05; 
+  text-transform: uppercase; 
+  margin-bottom: 10px; 
+  line-height: 1.1; 
+  letter-spacing: 2px;
+  @media (max-width: 610px) {
+    font-size: 16px !important;
+  } 
+}
+.sf-hero__subtitle { 
+  font-size: 20px; 
+  margin-top: 12px; 
+  opacity: 0.9; 
+  @media (max-width: 610px) {
+    font-size: 14px !important;
+    margin-top: 0px !important;
+  } 
+  }
+  .sf-hero__cta{
+    margin-top: 10px;
+    .q-btn{
+      @media (max-width: 610px) {
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1em;
+    }
+    }
+    @media (max-width: 610px) {
+      margin-top: 2px;
+    }
+  }
 </style>

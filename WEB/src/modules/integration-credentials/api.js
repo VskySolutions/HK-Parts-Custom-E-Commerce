@@ -37,6 +37,10 @@ export const integrationCredentialApi = {
   // Quick active/inactive toggle from the grid (activating deactivates the integration's other rows).
   setActive (provider, id, active) {
     return api.post(`${CRED_BASE}/${provider}/${encodeURIComponent(id)}/active`, { active }).then(unwrap)
+  },
+  // Live sample quote with one saved row (providers flagged `testable`, e.g. USPS).
+  test (provider, id) {
+    return api.post(`${CRED_BASE}/${provider}/${encodeURIComponent(id)}/test`).then(unwrap)
   }
 }
 
