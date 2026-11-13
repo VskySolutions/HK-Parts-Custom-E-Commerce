@@ -38,7 +38,12 @@
               <q-badge v-if="customer?.orderCount" color="grey-5" class="q-ml-xs">{{ customer.orderCount }}</q-badge>
             </div>
           </q-tab>
-          <q-tab name="wishlist" :disable="isNew" icon="o_favorite_border" label="Wishlist" />
+          <q-tab name="wishlist" :disable="isNew">
+            <div class="row items-center no-wrap">
+              <q-icon name="o_favorite_border" class="app-customer-tabs__icon" />Wishlist
+              <q-badge v-if="customer?.wishlistItemCount" color="grey-5" class="q-ml-xs">{{ customer.wishlistItemCount }}</q-badge>
+            </div>
+          </q-tab>
           <q-tab name="carts" :disable="isNew" icon="o_remove_shopping_cart" label="Abandoned carts" />
           <q-tab name="addresses" :disable="isNew">
             <div class="row items-center no-wrap">
@@ -220,7 +225,7 @@
                 </AppSection>
               </div>
 
-              <!-- Right: settings that save immediately, then read-only tax status and store credit. -->
+              <!-- Right: settings that save immediately, then read-only tax status. -->
               <div class="col-12 col-md-6">
                 <AppSection title="Account">
                   <div class="row items-center justify-between no-wrap">
@@ -283,28 +288,6 @@
                     <q-icon name="o_info" size="14px" class="q-mr-xs" />Managed in Tax Exemptions
                   </div>
                 </AppSection>
-
-                <AppSection title="Store credit">
-                  <template #actions>
-                    <q-btn v-if="canWrite" color="primary" outline dense no-caps icon="o_add" label="Grant" @click="grantDialog = true" />
-                  </template>
-                  <div class="row items-baseline q-gutter-sm q-mb-sm">
-                    <div class="text-h5 text-primary">{{ formatMoney(storeCredit.balance) }}</div>
-                    <div class="text-caption text-grey-6">{{ storeCredit.currencyCode }} balance</div>
-                  </div>
-                  <q-list v-if="storeCredit.transactions.length" dense separator bordered class="rounded-borders">
-                    <q-item v-for="t in storeCredit.transactions.slice(0, 6)" :key="t.id">
-                      <q-item-section>
-                        <q-item-label>{{ t.reason || t.type }}</q-item-label>
-                        <q-item-label caption>{{ formatDate(t.createdOnUtc) }} · {{ t.type }}</q-item-label>
-                      </q-item-section>
-                      <q-item-section side :class="t.amount < 0 ? 'text-negative' : 'text-positive'">
-                        {{ t.amount < 0 ? '' : '+' }}{{ formatMoney(t.amount) }}
-                      </q-item-section>
-                    </q-item>
-                  </q-list>
-                  <div v-else class="text-grey-6 text-caption">No store-credit activity.</div>
-                </AppSection>
               </div>
             </div>
 
@@ -366,7 +349,12 @@
 
           <!-- ============ WISHLIST ============ -->
           <q-tab-panel name="wishlist">
-            <div class="text-grey-6 text-caption">Wishlist — coming soon.</div>
+            <CustomerWishlistPanel
+              v-if="customer"
+              :key="customer.id"
+              :customer-id="customer.id"
+              @count="(n) => { if (customer) customer.wishlistItemCount = n }"
+            />
           </q-tab-panel>
 
           <!-- ============ ABANDONED CARTS ============ -->
@@ -406,23 +394,6 @@
           </q-tab-panel>
         </q-tab-panels>
       </q-card>
-
-      <!-- Grant store credit -->
-      <q-dialog v-model="grantDialog">
-        <q-card style="min-width: 380px">
-          <q-card-section class="text-subtitle1 text-weight-medium">Grant store credit</q-card-section>
-          <q-separator />
-          <q-card-section class="q-gutter-sm">
-            <AppTextField v-model="grantForm.amount" label="Amount" type="number" step="0.01" placeholder="e.g. 25.00" />
-            <AppTextField v-model="grantForm.reason" label="Reason" placeholder="e.g. Goodwill credit" />
-          </q-card-section>
-          <q-separator />
-          <q-card-actions align="right">
-            <q-btn flat no-caps label="Cancel" v-close-popup />
-            <q-btn color="primary" unelevated no-caps label="Grant" :loading="granting" @click="grant" />
-          </q-card-actions>
-        </q-card>
-      </q-dialog>
     </template>
 
     <AppRecordMeta v-if="!isNew" entity-type="customer" :record-id="customer?.id" />
@@ -433,10 +404,11 @@
 /*
  * Customer detail: tabbed admin view (same pattern as the Product page) —
  *   General · Orders · Wishlist · Abandoned carts · Addresses · Documents.
- * General keeps profile, account toggle, pricing group, tax-exemption status and store credit.
+ * General keeps profile, account toggle, pricing group and tax-exemption status (store credit shows only as a stat tile).
  * Profile is shown as fields (editable for Users.Write) and saved with the bottom Save button, like Add mode;
  * email stays read-only.
- * Wishlist / Abandoned carts are tab placeholders only (no implementation yet).
+ * Wishlist: CustomerWishlistPanel (read-only, server-paged image / name / SKU); badge = item count in active wishlists.
+ * Abandoned carts is a tab placeholder only (no implementation yet).
  * Documents: CustomerDocumentsPanel (private-storage uploads, view/edit/soft-delete); badge = active count.
  * One page for Add + Edit: route /customers/new (no :id) = Add mode, only General enabled with a create form;
  * after "Create customer" it opens /customers/:id (Edit mode) with every tab enabled.
@@ -456,6 +428,7 @@ import AppTextField from 'components/common/AppTextField.vue'
 import AppSelect from 'components/common/AppSelect.vue'
 import AppPasswordField from 'components/common/AppPasswordField.vue'
 import CustomerDocumentsPanel from 'modules/customers/components/CustomerDocumentsPanel.vue'
+import CustomerWishlistPanel from 'modules/customers/components/CustomerWishlistPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -506,10 +479,8 @@ const groups = ref([])
 const groupId = ref(null)
 const groupSaving = ref(false)
 
+// Balance for the "Store credit" stat tile (the Store credit section / Grant action were removed).
 const storeCredit = ref({ balance: 0, currencyCode: 'USD', transactions: [] })
-const grantDialog = ref(false)
-const granting = ref(false)
-const grantForm = reactive({ amount: null, reason: '' })
 
 const fullName = computed(() => customer.value ? `${customer.value.firstName} ${customer.value.lastName}`.trim() : '')
 
@@ -716,19 +687,6 @@ async function onChangeGroup (val) {
   } finally { groupSaving.value = false }
 }
 
-async function grant () {
-  const amount = Number(grantForm.amount)
-  if (!amount || amount <= 0) { notify.warning('Enter an amount greater than zero'); return }
-  granting.value = true
-  try {
-    storeCredit.value = await customerAdminApi.issueStoreCredit(route.params.id, { amount, reason: grantForm.reason || null })
-    notify.success('Store credit granted')
-    grantDialog.value = false
-    grantForm.amount = null
-    grantForm.reason = ''
-  } catch (e) { notify.error(getApiErrorMessage(e)) } finally { granting.value = false }
-}
-
 function openOrder (o) { router.push({ name: 'admin-order-detail', params: { id: o.id } }) }
 
 // Add → Edit switch (same component, new :id): load the record and return to General.
@@ -741,8 +699,8 @@ onMounted(() => { if (!isNew.value) load(); loadGroups() })
 .app-customer-tabs {
   :deep(.q-tab) { min-height: 44px; }
 
-  // One icon size for every tab: the built-in `icon` prop (General, Wishlist, Abandoned carts) and the
-  // inline icons used by tabs that carry a count badge (Orders, Addresses, Documents).
+  // One icon size for every tab: the built-in `icon` prop (General, Abandoned carts) and the
+  // inline icons used by tabs that carry a count badge (Orders, Wishlist, Addresses, Documents).
   $tab-icon-size: 20px;
   :deep(.q-tab__icon),
   :deep(.app-customer-tabs__icon) {

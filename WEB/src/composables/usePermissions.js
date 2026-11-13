@@ -12,6 +12,7 @@ export const Permissions = Object.freeze({
   TenantsWrite: 'Tenants.Write',
   UsersRead: 'Users.Read',
   UsersWrite: 'Users.Write',
+  CustomersBlacklist: 'Customers.Blacklist',
   RolesRead: 'Roles.Read',
   RolesWrite: 'Roles.Write',
   StoresRead: 'Stores.Read',

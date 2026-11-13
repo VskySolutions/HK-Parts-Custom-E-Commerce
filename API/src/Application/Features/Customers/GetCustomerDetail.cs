@@ -66,6 +66,8 @@ public class CustomerDetailDto
     public int OrderCount { get; set; }
     /// <summary>Active (not soft-deleted) documents, for the Documents tab badge.</summary>
     public int ActiveDocumentCount { get; set; }
+    /// <summary>Items in the customer's active (not soft-deleted) wishlist(s), for the Wishlist tab badge.</summary>
+    public int WishlistItemCount { get; set; }
     /// <summary>Lifetime value: the total of orders whose payment was captured (net of fully-refunded ones).</summary>
     public decimal TotalSpent { get; set; }
     public List<CustomerOrderSummaryDto> RecentOrders { get; set; } = new();
@@ -103,6 +105,8 @@ public class GetCustomerDetailQueryHandler : IRequestHandler<GetCustomerDetailQu
 
         var activeDocumentCount = await _db.CustomerDocuments.AsNoTracking()
             .CountAsync(d => d.CustomerId == customer.Id && !d.Deleted, cancellationToken);
+
+        var wishlistItemCount = await CustomerWishlistItems.ForCustomer(_db, customer.Id).CountAsync(cancellationToken);
 
         var orders = await _db.Orders.AsNoTracking()
             .Where(o => o.CustomerId == request.Id)
@@ -144,6 +148,7 @@ public class GetCustomerDetailQueryHandler : IRequestHandler<GetCustomerDetailQu
             Addresses = addresses.Select(AddressDto.From).ToList(),
             OrderCount = orders.Count,
             ActiveDocumentCount = activeDocumentCount,
+            WishlistItemCount = wishlistItemCount,
             TotalSpent = orders
                 .Where(o => o.PaymentStatus is PaymentStatus.Captured or PaymentStatus.PartiallyRefunded)
                 .Sum(o => o.TotalAmount),
