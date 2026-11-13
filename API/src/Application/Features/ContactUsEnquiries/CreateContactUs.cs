@@ -25,7 +25,7 @@ public class CreateContactUsCommandHandler : IRequestHandler<CreateContactUsComm
     public async Task<ContactUsDto> Handle(CreateContactUsCommand request, CancellationToken cancellationToken)
     {
         if (await _db.ContactUsEnquiries.AnyAsync(f => f.Email == request.Email, cancellationToken))
-            throw new ConflictException($"'{request.Email}' already exists. Please try another one.");
+            throw new ConflictException($"Email '{request.Email}' already exists. Please try another one.");
 
         var entity = new ContactUs
         {

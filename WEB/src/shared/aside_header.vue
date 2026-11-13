@@ -1,17 +1,23 @@
 <template>
   <router-link
     :to="{ name: 'shop-home' }"
-    class="aside-header row items-center no-wrap q-px-md q-py-md"
+    class="aside-header row items-center no-wrap q-px-md q-py-md bg-10"
     aria-label="Go to storefront"
   >
-    <q-avatar
+    <!-- <q-avatar
       v-if="tenant.logoUrl"
       size="36px"
       class="q-mr-sm"
       square
     >
       <img :src="$media(tenant.logoUrl)" alt="logo" />
-    </q-avatar>
+    </q-avatar> -->
+    <div
+      v-if="tenant.logoUrl"
+      square
+    >
+      <img :src="$media(tenant.logoUrl)" alt="logo" width="80%" height="80%" />
+    </div>
     <q-icon
       v-else
       name="o_storefront"
@@ -20,11 +26,11 @@
       class="q-mr-sm"
     />
 
-    <div class="column">
+    <!-- <div class="column">
       <div class="text-subtitle1 text-weight-medium ellipsis">
         {{ tenant.brandName }}
       </div>
-    </div>
+    </div> -->
 
     <q-tooltip anchor="bottom middle" self="top middle">Visit the storefront</q-tooltip>
   </router-link>

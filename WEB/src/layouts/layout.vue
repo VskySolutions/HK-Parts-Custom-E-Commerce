@@ -11,10 +11,10 @@
           @click="toggleDrawer"
         />
 
-        <q-btn flat no-caps class="text-weight-medium q-ml-xs" @click="goHome">
+        <!-- <q-btn flat no-caps class="text-weight-medium q-ml-xs" @click="goHome">
           <q-icon name="o_storefront" size="22px" class="q-mr-sm" />
           {{ tenant.brandName }}
-        </q-btn>
+        </q-btn> -->
 
         <q-space />
 
