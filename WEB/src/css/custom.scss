@@ -45,6 +45,11 @@
 .bg-7a{ background-color: #7a7a7a !important; }
 .br-8{ border-radius: 8px !important; }
 .bg-22{ background-color: #222 !important; }
+.bg-ed{ background-color: #ededed !important; }
+.bg-11{ background-color: #111111 !important; }
+.bg-26{ background-color: #262626 !important; }
+.bg-24{ background-color: #ed1c24 !important; }
+.bg-10{ background-color: #101010 !important; }
 
 // .q-tabs{
 //   .row{
@@ -54,3 +59,9 @@
 //     }
 //   }
 // }
+
+.contact-us-page{
+  .q-field--dense .q-field__control, .q-field--dense .q-field__marginal {
+    background-color: #fff !important;
+  }
+}

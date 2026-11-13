@@ -50,6 +50,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<ApplicationLog> ApplicationLogs => Set<ApplicationLog>();
     public DbSet<AuditTrail> AuditTrails => Set<AuditTrail>();
     public DbSet<BackgroundTaskLog> BackgroundTaskLogs => Set<BackgroundTaskLog>();
+    public DbSet<ContactUs> ContactUsEnquiries => Set<ContactUs>();
 
     // Central media library (WO-122)
     public DbSet<Media> Media => Set<Media>();
@@ -107,6 +108,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Address> Addresses => Set<Address>();
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
     public DbSet<CustomerDocument> CustomerDocuments => Set<CustomerDocument>();
+    public DbSet<BlacklistedCustomer> BlacklistedCustomers => Set<BlacklistedCustomer>();
     public DbSet<UserToken> UserTokens => Set<UserToken>();
 
     // Customer groups + group pricing (WO-22). The group is assigned via Customer.CustomerGroupId.

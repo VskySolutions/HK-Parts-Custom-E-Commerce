@@ -155,7 +155,14 @@
     gap: 8px;
   }
 
-  .sf-header__logo-img { max-height: 40px; width: auto; display: block; }
+  .sf-header__logo-img { 
+    max-height: 40px; 
+    width: auto; 
+    display: block;
+    @media (max-width: 345px) {
+      height: 35px;
+    }
+   }
 
   .sf-header__icon {
     // color: var(--sf-heading);

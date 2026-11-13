@@ -484,6 +484,53 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("BackgroundTaskLogs", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.BlacklistedCustomer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InternalNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "CustomerId" }, "IX_BlacklistedCustomers_CustomerId");
+
+                    b.HasIndex(new[] { "CustomerId" }, "UX_BlacklistedCustomers_CustomerId_Active")
+                        .IsUnique()
+                        .HasFilter("[Deleted] = 0");
+
+                    b.ToTable("BlacklistedCustomers", (string)null);
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CMSBanner", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1308,6 +1355,58 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("CheckoutLocks", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ContactUs", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Comments")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<bool>("Deleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ContactUsEnquiries", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.ContentTranslation", b =>
@@ -7480,6 +7579,17 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.HasIndex("WishlistId", "ProductId");
 
                     b.ToTable("WishlistItems", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.BlacklistedCustomer", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.CMSBanner", b =>

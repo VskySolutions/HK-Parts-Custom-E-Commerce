@@ -53,6 +53,16 @@ public class AdminCustomersController : ApiControllerBase
     }
 
     /// <summary>
+    /// Blacklist (block) a customer. Body: { reason, internalNotes }. The customer record is kept untouched but no
+    /// longer appears in the Customers list. Returns the new blacklist record id. 400 invalid, 404 unknown customer,
+    /// 409 already blacklisted or a staff account. Requires <c>Customers.Blacklist</c>.
+    /// </summary>
+    [HttpPost("{id:guid}/blacklist")]
+    [RequirePermission(Permissions.CustomersBlacklist)]
+    public async Task<ActionResult<Guid>> Blacklist(Guid id, [FromBody] BlacklistCustomerCommand command)
+        => Ok(await Mediator.Send(command with { CustomerId = id }));
+
+    /// <summary>
     /// Reset a customer's password (admin). Body: { newPassword, confirmPassword }. The password is validated
     /// against the shared policy, stored hashed, and the customer's sessions are revoked. 204 on success;
     /// 400 invalid/mismatch, 404 unknown customer, 409 staff account. Requires <c>Users.Write</c>.
@@ -64,6 +74,15 @@ public class AdminCustomersController : ApiControllerBase
         await Mediator.Send(command with { CustomerId = id });
         return NoContent();
     }
+
+    /// <summary>
+    /// The customer's wishlist items (active wishlists only), newest first and paged — read-only Wishlist tab.
+    /// 404 if the customer is unknown; an empty page when they have no wishlist or no items.
+    /// </summary>
+    [HttpGet("{id:guid}/wishlist")]
+    public async Task<ActionResult<PaginatedList<CustomerWishlistItemDto>>> GetWishlist(
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        => Ok(await Mediator.Send(new GetCustomerWishlistItemsQuery(id, page, pageSize)));
 
     /// <summary>Get a customer's tax-exemption configuration.</summary>
     [HttpGet("{id:guid}/tax-exemption")]

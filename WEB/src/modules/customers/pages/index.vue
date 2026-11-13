@@ -36,16 +36,20 @@
       <template #body-cell-createdOnUtc="cell"><q-td :props="cell">{{ formatDate(cell.row.createdOnUtc) }}</q-td></template>
       <template #actions="{ row }">
         <q-btn flat round dense icon="o_tune" @click="view(row)"><q-tooltip>View / edit</q-tooltip></q-btn>
+        <q-btn v-if="canBlacklist" flat round dense icon="o_block" color="negative" @click="openBlacklist(row)"><q-tooltip>Blacklist</q-tooltip></q-btn>
         <q-btn v-if="canWrite" flat round dense icon="o_delete" color="negative" :loading="deletingId === row.id" :disable="!!deletingId" @click="onDelete(row)"><q-tooltip>Delete</q-tooltip></q-btn>
       </template>
     </AppDataTable>
+
+    <BlacklistCustomerDialog v-model="blacklistOpen" :customer="blacklistRow" @blocked="onBlocked" />
   </q-page>
 </template>
 
 <script setup>
 /* Admin customer list (WO-117) + "Add customer" button (opens the customer page in create mode): search + advanced filters (single Customer Group, status,
  * email-verified, registration-date range) with server-side paging/sort. The detail page is
- * the only editor — group assignment, activate/deactivate and read-only tax status live there. */
+ * the only editor — group assignment, activate/deactivate and read-only tax status live there.
+ * Actions → Blacklist (Customers.Blacklist) opens BlacklistCustomerDialog; blacklisted customers are excluded server-side. */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getApiErrorMessage } from 'services/api'
@@ -57,12 +61,14 @@ import { formatMoney } from 'modules/orders/api'
 import AppListHeader from 'components/common/AppListHeader.vue'
 import AppDataTable from 'components/common/AppDataTable.vue'
 import AppFieldLabel from 'components/common/AppFieldLabel.vue'
+import BlacklistCustomerDialog from 'modules/customers/components/BlacklistCustomerDialog.vue'
 import { deleteConfirmation } from 'dialogs/delete_confirmation'
 
 const notify = useNotify()
 const router = useRouter()
-const { has } = usePermissions()
+const { has, Permissions } = usePermissions()
 const canWrite = computed(() => has('Users.Write'))
+const canBlacklist = computed(() => has(Permissions.CustomersBlacklist))
 
 // Opens the customer page in create mode (only the General tab is enabled until saved).
 function addCustomer () { router.push({ name: 'admin-customer-create' }) }
@@ -83,11 +89,27 @@ async function onDelete (row) {
   try {
     await customerAdminApi.remove(row.id)
     notify.success(`Customer "${name}" deleted`)
-    // Stay on the current page/sort/filters; step back a page if this was its last row.
-    const p = pagination.value
-    const page = rows.value.length === 1 && p.page > 1 ? p.page - 1 : p.page
-    await fetch({ pagination: { ...p, page } })
+    await refreshCurrentPage()
   } catch (e) { notify.error(getApiErrorMessage(e)) } finally { deletingId.value = null }
+}
+
+// Blacklist (Customers.Blacklist): modal captures the reason; on success the row drops out of the list.
+const blacklistOpen = ref(false)
+const blacklistRow = ref(null)
+function openBlacklist (row) {
+  blacklistRow.value = row
+  blacklistOpen.value = true
+}
+async function onBlocked () {
+  notify.success('Customer has been added to the blacklist')
+  await refreshCurrentPage()
+}
+
+// Re-fetch with the current page/sort/filters; step back a page if the removed row was the last one on it.
+async function refreshCurrentPage () {
+  const p = pagination.value
+  const page = rows.value.length === 1 && p.page > 1 ? p.page - 1 : p.page
+  await fetch({ pagination: { ...p, page } })
 }
 
 const columns = [

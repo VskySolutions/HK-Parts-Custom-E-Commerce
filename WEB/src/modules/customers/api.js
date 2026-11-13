@@ -32,6 +32,11 @@ export const customerAdminApi = {
   // Requires Users.Write server-side. 204 on success; 404 unknown; 409 already deleted / staff account.
   remove (id) { return api.delete(`${CUSTOMERS}/${id}`).then(unwrap) },
 
+  // Blacklist (block) a customer. payload: { reason, internalNotes }. Requires Customers.Blacklist server-side.
+  // Returns the new blacklist record id; the customer then no longer appears in the list.
+  // 400 invalid; 404 unknown; 409 already blacklisted / staff account.
+  blacklist (id, payload) { return api.post(`${CUSTOMERS}/${id}/blacklist`, payload).then(unwrap) },
+
   // Single pricing group (AC-CUS-003.2). getGroup → brief|null; setGroup(null) clears it (base pricing).
   getGroup (id) { return api.get(`${CUSTOMERS}/${id}/group`).then(unwrap) },
   setGroup (id, customerGroupId) {
@@ -47,6 +52,10 @@ export const customerAdminApi = {
   setShippingRestrictionExempt (id, isExempt) {
     return api.put(`${CUSTOMERS}/${id}/shipping-restriction-exempt`, { customerId: id, isExempt }).then(unwrap)
   },
+
+  // Wishlist tab (read-only). params: { page, pageSize } → PaginatedList { items: [{ id, productName, sku, imageUrl }], totalCount, ... }.
+  // Active wishlists only, newest first; productName / sku are null when unavailable (shown as "—").
+  getWishlist (id, params = {}) { return api.get(`${CUSTOMERS}/${id}/wishlist`, { params }).then(unwrap) },
 
   getStoreCredit (id) { return api.get(`${CUSTOMERS}/${id}/store-credit`).then(unwrap) },
   issueStoreCredit (id, payload) { return api.post(`${CUSTOMERS}/${id}/store-credit`, { customerId: id, ...payload }).then(unwrap) }
@@ -94,6 +103,12 @@ export const customerDocumentRules = Object.freeze({
   maxRows: 10,
   noteMax: 2000,
   note: 'Only PDF, DOC, DOCX, JPG, PNG files are allowed. Maximum size 10 MB per file.'
+})
+
+/** Blacklist field limits — mirror BlacklistedCustomer.ReasonMaxLength / InternalNotesMaxLength on the API. */
+export const customerBlacklistRules = Object.freeze({
+  reasonMax: 1000,
+  notesMax: 2000
 })
 
 /** Active pricing groups, for the customer-detail assignment single-select and the list filter. */

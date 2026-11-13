@@ -1,11 +1,11 @@
 <template>
   <section v-if="products.length" class="recently-viewed">
     <div class="text-h6 q-mb-md">{{ title }}</div>
-    <div class="row q-col-gutter-md">
+    <div class="row q-col-gutter-md" :class="$q.screen.width < 431 ? 'justify-center items-center' : ''">
       <div
         v-for="p in products"
         :key="p.id"
-        class="col-6 col-sm-4 col-md-3 col-lg-2"
+        class="col-6 col-sm-4 col-md-3 col-lg-2" :class="$q.screen.width < 431 ? 'col-xs-10' : ''"
       >
         <ProductCard :product="p" />
       </div>

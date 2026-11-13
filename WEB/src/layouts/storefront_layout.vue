@@ -70,7 +70,7 @@
 
       <!-- ===== Main header (stays sticky with the mega-menu) ===== -->
       <div class="sf-header">
-        <div class="sf-container row items-center no-wrap q-py-md q-gutter-xs">
+        <div class="sf-container row items-center no-wrap q-py-md q-gutter-xs" :class="$q.screen.width <= 600 ? 'justify-between' : ''">
           <router-link :to="{ name: 'shop-home' }" class="sf-header__logo" aria-label="Home">
             <img v-if="branding.logoUrl" :src="$media(branding.logoUrl)" :alt="branding.brandName" class="sf-header__logo-img">
             <template v-else>
@@ -80,7 +80,7 @@
           </router-link>
 
           <!-- Search with category prefix + submit -->
-          <div class="sf-search col">
+          <div class="sf-search col" v-if="$q.screen.width >= 601">
             <div class="sf-search__cat gt-sm">
               {{ searchCategoryLabel }}
               <q-icon name="o_expand_more" size="16px" class="q-ml-xs" />
@@ -177,6 +177,18 @@
               round
               dense
               class="sf-header__icon"
+              icon="o_search"
+              aria-label="Search"
+              :class="$q.screen.width > 600 ? 'hidden' : ''"
+              @click="mobileSearchOpen = true"
+            >
+              <q-tooltip>Search</q-tooltip>
+            </q-btn>
+            <q-btn
+              flat
+              round
+              dense
+              class="sf-header__icon"
               icon="o_shopping_cart"
               aria-label="Cart"
               @click="cartDrawer = true"
@@ -184,15 +196,40 @@
               <q-badge v-if="cartCount" color="red" floating>{{ cartCount }}</q-badge>
               <q-tooltip>Cart</q-tooltip>
             </q-btn>
+             <q-btn
+              flat
+              round
+              dense
+              class="sf-header__icon"
+              icon="o_menu"
+              aria-label="Shop by category"
+              :class="$q.screen.width > 600 ? 'hidden' : ''"
+              @click="megaMenuRef?.openMobileDrawer()"
+            >
+              <q-tooltip>Shop by category</q-tooltip>
+            </q-btn>
           </div>
         </div>
       </div>
 
       <!-- ===== Mega-menu (stays sticky at top on scroll) ===== -->
-      <MegaMenu :quick-pages="topBarPages" />
+      <!-- <MegaMenu :quick-pages="topBarPages" /> -->
+      <MegaMenu ref="megaMenuRef" :quick-pages="topBarPages"
+/>
     </q-header>
 
     <CartDrawer v-model="cartDrawer" />
+    <MobileSearchDialog
+      v-if="$q.screen.width <= 600"
+      v-model="mobileSearchOpen"
+      :search-text="searchText"
+      :suggestions="suggestions"
+      :suggest-open="suggestOpen"
+      @update:search-text="searchText = $event"
+      @query-change="onQueryChange"
+      @search="goSearch"
+      @select="selectSuggestion"
+    />
 
     <q-page-container>
       <router-view />
@@ -311,6 +348,7 @@ import CurrencySelector from 'modules/storefront/components/CurrencySelector.vue
 import MegaMenu from 'modules/storefront/components/MegaMenu.vue'
 import CartDrawer from 'modules/storefront/components/CartDrawer.vue'
 import NewsletterForm from 'modules/storefront/components/NewsletterForm.vue'
+import MobileSearchDialog from 'modules/storefront/components/MobileSearchDialog.vue'
 
 const router = useRouter()
 const { compareIds } = useCompare()
@@ -330,6 +368,9 @@ const topCategories = computed(() => categories.value.slice(0, 12))
 
 const cartDrawer = ref(false)
 const catMenu = ref(false)
+
+const mobileSearchOpen = ref(false)
+const megaMenuRef = ref(null)
 
 // Collapse the top info bar on scroll-down (reveal on scroll-up / near top); the main header
 // and mega-menu remain sticky at the top.
@@ -407,12 +448,28 @@ async function onQueryChange (val) {
   }
 }
 
+// function goSearch (q) {
+//   suggestOpen.value = false
+//   const term = (q || '').trim()
+//   if (!term) return
+//   const query = { q: term }
+//   if (searchCategory.value) query.categoryId = searchCategory.value.id
+//   router.push({ name: 'shop-search', query })
+// }
+
 function goSearch (q) {
   suggestOpen.value = false
+  mobileSearchOpen.value = false
+
   const term = (q || '').trim()
   if (!term) return
+
   const query = { q: term }
-  if (searchCategory.value) query.categoryId = searchCategory.value.id
+
+  if (searchCategory.value) {
+    query.categoryId = searchCategory.value.id
+  }
+
   router.push({ name: 'shop-search', query })
 }
 

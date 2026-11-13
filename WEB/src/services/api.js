@@ -238,12 +238,25 @@ export const widgetApi = {
   }
 }
 
+export const contactUsApi = {
+  create (payload) {
+    return api.post('/api/admin/contact-us', payload).then(unwrap)
+  },
+  list (params = {}) { 
+    return api.get('/api/admin/contact-us', { params, paramsSerializer: qsSerializer }).then(unwrap) 
+  },
+  remove (id) {
+    return api.delete(`/api/admin/contact-us/${id}`).then(unwrap)
+  }
+}
+
 export default {
   api,
   anonApi,
   customerApi,
   authApi,
   widgetApi,
+  contactUsApi,
   mediaApi,
   ApiErrorCodes,
   getApiErrorCode,

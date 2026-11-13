@@ -29,6 +29,7 @@ public interface IApplicationDbContext
     DbSet<ApplicationLog> ApplicationLogs { get; }
     DbSet<AuditTrail> AuditTrails { get; }
     DbSet<BackgroundTaskLog> BackgroundTaskLogs { get; }
+    DbSet<ContactUs> ContactUsEnquiries { get; }
 
     // Central media library (WO-122)
     DbSet<Media> Media { get; }
@@ -86,6 +87,7 @@ public interface IApplicationDbContext
     DbSet<Address> Addresses { get; }
     DbSet<CustomerAddress> CustomerAddresses { get; }
     DbSet<CustomerDocument> CustomerDocuments { get; }
+    DbSet<BlacklistedCustomer> BlacklistedCustomers { get; }
     DbSet<UserToken> UserTokens { get; }
 
     // Customer groups + group pricing (WO-22). The group is assigned via Customer.CustomerGroupId.
