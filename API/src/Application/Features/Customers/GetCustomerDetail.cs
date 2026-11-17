@@ -41,6 +41,8 @@ public class CustomerDetailDto
     public bool IsTaxExempt { get; set; }
     public string? TaxExemptionCertificate { get; set; }
     public string? VatId { get; set; }
+    /// <summary>Admin-entered tax-exempt reason (informational; does not drive tax calculation).</summary>
+    public string? TaxExemptReason { get; set; }
 
     /// <summary>Exempt from the restricted-state shipping rule (SR-92).</summary>
     public bool IsShippingRestrictionExempt { get; set; }
@@ -138,6 +140,7 @@ public class GetCustomerDetailQueryHandler : IRequestHandler<GetCustomerDetailQu
             IsTaxExempt = customer.IsTaxExempt,
             TaxExemptionCertificate = customer.TaxExemptionCertificate,
             VatId = customer.VatId,
+            TaxExemptReason = customer.TaxExemptReason,
             IsShippingRestrictionExempt = customer.IsShippingRestrictionExempt,
             TaxExemptionStatus = latestRequest is null
                 ? TaxExemptionStatusNames.NotSubmitted

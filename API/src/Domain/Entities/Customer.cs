@@ -38,6 +38,13 @@ public class Customer : AuditableEntity, ISoftDeletable
     public string? VatId { get; set; }
 
     /// <summary>
+    /// Admin-entered reason the customer is tax exempt. Informational only (for Avalara-style
+    /// integrations); it does not itself change tax calculation — <see cref="IsTaxExempt"/> does.
+    /// Null when not provided.
+    /// </summary>
+    public string? TaxExemptReason { get; set; }
+
+    /// <summary>
     /// Exempt from the restricted-state shipping rule (SR-92): this buyer may receive state-restricted products
     /// in a restricted state (legacy <c>customer.custom_varchar_1</c> = Yes).
     /// </summary>

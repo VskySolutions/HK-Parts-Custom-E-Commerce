@@ -32,7 +32,7 @@ public class AdminCustomersController : ApiControllerBase
         => Ok(await Mediator.Send(new GetCustomerDetailQuery(id)));
 
     /// <summary>
-    /// Update a customer's profile (first/last name, phone) and return the refreshed detail.
+    /// Update a customer's profile (first/last name, phone and custom information) and return the refreshed detail.
     /// Email is read-only and cannot be changed here. Requires <c>Users.Write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]

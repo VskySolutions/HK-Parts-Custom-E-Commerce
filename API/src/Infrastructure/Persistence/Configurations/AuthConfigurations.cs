@@ -76,6 +76,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.Property(x => x.PhoneNumber).HasMaxLength(50);
         b.Property(x => x.TaxExemptionCertificate).HasMaxLength(200);
         b.Property(x => x.VatId).HasMaxLength(64);
+        b.Property(x => x.TaxExemptReason).HasMaxLength(500);
         b.Property(x => x.WhatsAppPhoneNumber).HasMaxLength(50);
         // Custom information: "Long" text + "Allow Restricted Capacity Purchases" (No by default).
         b.Property(x => x.LongText).HasMaxLength(4000);

@@ -1535,13 +1535,13 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<bool>("IsShippingRestrictionExempt")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("IsBlacklisted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<bool>("IsShippingRestrictionExempt")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsTaxExempt")
                         .HasColumnType("bit");
@@ -1561,6 +1561,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("PreferredTimeZone")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxExemptReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("TaxExemptionCertificate")
                         .HasMaxLength(200)

@@ -56,6 +56,26 @@ public class UpdateCustomerValidatorTests
     }
 
     [Fact]
+    public void Rejects_tax_exempt_reason_over_500_and_accepts_500()
+    {
+        Assert.Contains(
+            Validator.Validate(new UpdateCustomerCommand(
+                Guid.NewGuid(), "Ann", null, null, TaxExemptReason: new string('x', 501))).Errors,
+            e => e.PropertyName == "TaxExemptReason");
+        Assert.True(Validator.Validate(new UpdateCustomerCommand(
+            Guid.NewGuid(), "Ann", null, null, TaxExemptReason: new string('x', 500))).IsValid);
+    }
+
+    [Fact]
+    public void Create_validator_rejects_tax_exempt_reason_over_500()
+    {
+        var result = new AdminCreateCustomerCommandValidator().Validate(
+            new AdminCreateCustomerCommand("a@b.co", "Passw0rd!x", "Ann", null, null,
+                TaxExemptReason: new string('x', 501)));
+        Assert.Contains(result.Errors, e => e.PropertyName == "TaxExemptReason");
+    }
+
+    [Fact]
     public void Accepts_blank_optionals()
     {
         Assert.True(Validator.Validate(new UpdateCustomerCommand(Guid.NewGuid(), "Ann", "", "  ")).IsValid);

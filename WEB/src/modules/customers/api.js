@@ -12,11 +12,11 @@ export const customerAdminApi = {
   get (id) { return api.get(`${CUSTOMERS}/${id}`).then(unwrap) },
 
   // Admin creates a customer. payload: { firstName, lastName, email, phoneNumber, password, isActive, emailVerified,
-  //   longText, allowRestrictedCapacityPurchases }.
+  //   longText, allowRestrictedCapacityPurchases, taxExemptReason }.
   // Returns the new customer id (Guid string).
   create (payload) { return api.post(CUSTOMERS, payload).then(unwrap) },
 
-  // Admin edits a customer's profile. payload: { firstName, lastName, phoneNumber, longText, allowRestrictedCapacityPurchases }.
+  // Admin edits a customer's profile. payload: { firstName, lastName, phoneNumber, longText, allowRestrictedCapacityPurchases, taxExemptReason }.
   // Email is read-only (not sent). Requires Users.Write server-side. Returns the refreshed detail.
   update (id, payload) {
     return api.put(`${CUSTOMERS}/${id}`, { customerId: id, ...payload }).then(unwrap)
