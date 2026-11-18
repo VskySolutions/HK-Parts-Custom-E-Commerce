@@ -52,10 +52,13 @@
                       :to="categoryTo(top)"
                     >
                       <q-item-section>{{ top.name }}</q-item-section>
-                      <q-item-section side><span class="text-caption text-grey-6">{{ top.productCount }}</span></q-item-section>
+                      <!-- <q-item-section side><span class="text-caption text-grey-6">{{ top.productCount }}</span></q-item-section> -->
+                      <q-item-section side>
+                        <q-icon name="o_arrow_right" class="text-grey-6" size="17px" />
+                      </q-item-section>
                     </q-item>
                     <template v-if="isBranchActive(top) && top.children && top.children.length">
-                      <q-item
+                      <!-- <q-item
                         v-for="child in top.children"
                         :key="child.id"
                         clickable
@@ -66,7 +69,84 @@
                       >
                         <q-item-section>{{ child.name }}</q-item-section>
                         <q-item-section side><span class="text-caption text-grey-6">{{ child.productCount }}</span></q-item-section>
+                      </q-item> -->
+                      <!-- <div class="q-px-sm" v-for="child in top.children" :key="child.id">
+                        <q-item
+                          clickable
+                          class="q-pl-lg"
+                          :active="isActive(child)"
+                          active-class="text-primary text-weight-medium"
+                          :to="categoryTo(child)"
+                          >
+                          <q-item-section>{{ child.name }}</q-item-section>
+                          <q-item-section side><span class="text-caption text-grey-6">{{ child.productCount }}</span></q-item-section>
+                        </q-item>
+                        <q-item class="q-ml-sm" v-for="s in child.children" :key="s.id" :to="categoryTo(s)">
+                          <q-item-section>{{ s.name }}</q-item-section>
+                          <q-item-section side><span class="text-caption text-grey-6">{{ s.productCount }}</span></q-item-section>
+                        </q-item>
+                      </div> -->
+                      <div class="product-filter-expansion q-px-sm" v-for="child in top.children" :key="child.id">
+                        <!-- Render q-expansion-item if child has nested children -->
+                        <q-expansion-item
+                          v-if="child.children && child.children.length"
+                          :header-inset-level="0.5"
+                          :content-inset-level="1"
+                          expand-separator class="product-filter-expansion"
+                          expand-icon="o_add"
+                        >
+                        <template v-slot:header>
+                          <q-item-section>
+                            <router-link
+                              :to="categoryTo(child)"
+                              class="text-decoration-none"
+                              :class="isActive(child) ? 'text-primary text-weight-medium' : 'text-dark'"
+                              @click.stop
+                            >
+                              {{ child.name }}
+                            </router-link>
+                          </q-item-section>
+                          <q-item-section side>
+                            <!-- <span class="text-caption text-grey-6">{{ child.productCount }}</span> -->
+                          </q-item-section>
+                        </template>
+
+                        <!-- Nested child items -->
+                        <q-item
+                          v-for="s in child.children"
+                          :key="s.id"
+                          clickable
+                          :active="isActive(s)"
+                          active-class="text-primary text-weight-medium"
+                          :to="categoryTo(s)"
+                          class="q-ml-sm"
+                        >
+                          <q-item-section>{{ s.name }}</q-item-section>
+                          <q-item-section side>
+                            <span class="text-caption text-grey-6">{{ s.productCount }}</span>
+                            
+                          </q-item-section>
+                        </q-item>
+                      </q-expansion-item>
+
+                      <!-- Render standard q-item if there are no nested children -->
+                      <q-item
+                        v-else
+                        clickable
+                        class="q-pl-lg"
+                        :active="isActive(child)"
+                        active-class="text-primary text-weight-medium"
+                        :to="categoryTo(child)"
+                      >
+                        <q-item-section>{{ child.name }}</q-item-section>
+                        <!-- <q-item-section side>
+                          <span class="text-caption text-grey-6">{{ child.productCount }}</span>
+                        </q-item-section> -->
+                         <q-item-section side>
+                        <q-icon name="o_arrow_right" class="text-grey-6" />
+                      </q-item-section>
                       </q-item>
+                    </div>
                     </template>
                   </template>
                 </q-list>
@@ -245,6 +325,8 @@ const { addItem } = useCart()
 
 const PAGE_SIZE = 12
 const sortOptions = listingSortOptions
+
+console.log("Category Tree Details:", categoryTree)
 
 const category = ref({})
 

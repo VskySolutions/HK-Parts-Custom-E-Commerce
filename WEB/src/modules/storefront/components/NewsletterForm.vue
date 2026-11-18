@@ -15,7 +15,7 @@
       />
       <q-btn
         type="submit"
-        color="red"
+        class="bg-24"
         unelevated
         no-caps
         :loading="loading"

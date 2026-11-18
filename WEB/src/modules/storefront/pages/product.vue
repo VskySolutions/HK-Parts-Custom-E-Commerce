@@ -66,7 +66,8 @@
             </div>
             <div v-if="restockNote" class="text-caption text-orange-9 q-mb-sm">{{ restockNote }}</div>
 
-            <div v-if="product.shortDescription" class="text-body1 text-grey-8 q-mb-md">{{ product.shortDescription }}</div>
+            <!-- <div v-if="product.shortDescription" class="text-body1 text-grey-8 q-mb-md">{{ product.shortDescription }}</div> -->
+              <div v-if="product.shortDescription" class="storefront-rich-text" v-html="product.shortDescription" />
 
             <q-separator class="q-my-md" />
 

@@ -15,6 +15,7 @@ public class StorefrontProductSummaryDto
     public string? Slug { get; set; }
     public string? ShortDescription { get; set; }
     public decimal? Price { get; set; }
+    public int StockQuantity { get; set; }
     public Guid? ManufacturerId { get; set; }
 
     /// <summary>Product type (Simple/Grouped/WithVariants/…); lets the storefront card route variation products to the detail page for option selection.</summary>
@@ -40,6 +41,7 @@ public class StorefrontProductSummaryDto
         Slug = p.Slug,
         ShortDescription = p.ShortDescription,
         Price = p.Price,
+        StockQuantity = p.StockQuantity,
         ManufacturerId = p.ManufacturerId,
         ProductType = p.ProductType,
         IsInquiryOnly = p.IsInquiryOnly,
