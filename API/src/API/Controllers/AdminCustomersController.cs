@@ -61,7 +61,7 @@ public class AdminCustomersController : ApiControllerBase
         => Ok(await Mediator.Send(new GetCustomerDetailQuery(id)));
 
     /// <summary>
-    /// Update a customer's profile (first/last name, phone) and return the refreshed detail.
+    /// Update a customer's profile (first/last name, phone and custom information) and return the refreshed detail.
     /// Email is read-only and cannot be changed here. Requires <c>Users.Write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
@@ -82,8 +82,9 @@ public class AdminCustomersController : ApiControllerBase
     }
 
     /// <summary>
-    /// Blacklist (block) a customer. Body: { reason, internalNotes }. The customer record is kept untouched but no
-    /// longer appears in the Customers list. Returns the new blacklist record id. 400 invalid, 404 unknown customer,
+    /// Blacklist (block) a customer. Body: { reason, internalNotes }. Sets Customers.IsBlacklisted and appends a
+    /// Blocked row to the blacklist history; the rest of the customer record is untouched, but the customer no
+    /// longer appears in the Customers list. Returns the new history row id. 400 invalid, 404 unknown customer,
     /// 409 already blacklisted or a staff account. Requires <c>Customers.Blacklist</c>.
     /// </summary>
     [HttpPost("{id:guid}/blacklist")]

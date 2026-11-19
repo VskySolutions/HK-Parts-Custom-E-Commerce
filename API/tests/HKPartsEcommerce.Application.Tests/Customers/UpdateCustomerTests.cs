@@ -105,6 +105,33 @@ public class UpdateCustomerTests : CatalogTestBase
     }
 
     [Fact]
+    public async Task Update_adds_changes_and_clears_the_tax_exempt_reason()
+    {
+        var (id, _) = SeedCustomer();
+
+        using (var db = NewContext())
+        {
+            var dto = await Handler(db).Handle(
+                new UpdateCustomerCommand(id, "New", null, null, TaxExemptReason: "  Reseller certificate  "),
+                CancellationToken.None);
+            Assert.Equal("Reseller certificate", dto.TaxExemptReason);
+        }
+
+        using (var db = NewContext())
+            await Handler(db).Handle(
+                new UpdateCustomerCommand(id, "New", null, null, TaxExemptReason: "Government agency"),
+                CancellationToken.None);
+
+        using (var db = NewContext())
+            await Handler(db).Handle(
+                new UpdateCustomerCommand(id, "New", null, null, TaxExemptReason: "   "),
+                CancellationToken.None);
+
+        using var check = NewContext();
+        Assert.Null(check.Customers.Single(x => x.Id == id).TaxExemptReason);
+    }
+
+    [Fact]
     public async Task Update_unknown_customer_throws_not_found()
     {
         using var db = NewContext();

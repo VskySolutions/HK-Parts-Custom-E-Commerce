@@ -15,11 +15,12 @@ import { setActiveTimeZone } from 'src/utils/datetime'
 // Static fallbacks used until (or when) branding is unavailable.
 const DEFAULTS = {
   brandName: 'HK Parts Shop',
+    // tagline: 'Quality products, delivered.',
+  tagline: null,
   logoUrl: null,
   faviconUrl: null,
   supportPhone: null,
   supportEmail: null,
-  tagline: 'Quality products, delivered.',
   social: [],
   accentColor: null,
   primaryColor: null,
@@ -85,11 +86,13 @@ function toModel (dto) {
   const layout = parseJson(dto.layoutOptionsJson, {})
   return {
     brandName: dto.brandName || DEFAULTS.brandName,
+    // tagline: layout.tagline || layout.storefrontTagline || DEFAULTS.tagline,
+    tagline: dto.tagline || null,
+    // tagline: dto.tagline ?? dto.Tagline ?? null,
     logoUrl: dto.logoUrl || null,
     faviconUrl: dto.faviconUrl || null,
     supportPhone: dto.supportPhone || null,
     supportEmail: dto.supportEmail || null,
-    tagline: layout.tagline || layout.storefrontTagline || DEFAULTS.tagline,
     social: normalizeSocial(dto.socialLinksJson),
     accentColor: dto.accentColor || null,
     primaryColor: dto.primaryColor || null,

@@ -17,11 +17,11 @@ export const customerAdminApi = {
   listGuestOrders (email) { return api.get(`${CUSTOMERS}/guests/orders`, { params: { email } }).then(unwrap) },
 
   // Admin creates a customer. payload: { firstName, lastName, email, phoneNumber, password, isActive, emailVerified,
-  //   longText, allowRestrictedCapacityPurchases }.
+  //   longText, allowRestrictedCapacityPurchases, taxExemptReason }.
   // Returns the new customer id (Guid string).
   create (payload) { return api.post(CUSTOMERS, payload).then(unwrap) },
 
-  // Admin edits a customer's profile. payload: { firstName, lastName, phoneNumber, longText, allowRestrictedCapacityPurchases }.
+  // Admin edits a customer's profile. payload: { firstName, lastName, phoneNumber, longText, allowRestrictedCapacityPurchases, taxExemptReason }.
   // Email is read-only (not sent). Requires Users.Write server-side. Returns the refreshed detail.
   update (id, payload) {
     return api.put(`${CUSTOMERS}/${id}`, { customerId: id, ...payload }).then(unwrap)
@@ -38,7 +38,7 @@ export const customerAdminApi = {
   remove (id) { return api.delete(`${CUSTOMERS}/${id}`).then(unwrap) },
 
   // Blacklist (block) a customer. payload: { reason, internalNotes }. Requires Customers.Blacklist server-side.
-  // Returns the new blacklist record id; the customer then no longer appears in the list.
+  // Returns the new blacklist history row id; the customer then no longer appears in the list.
   // 400 invalid; 404 unknown; 409 already blacklisted / staff account.
   blacklist (id, payload) { return api.post(`${CUSTOMERS}/${id}/blacklist`, payload).then(unwrap) },
   // Block several customers. payload: { customerIds, allMatching, filter, reason, internalNotes } — the ticked ids,

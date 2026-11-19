@@ -12,6 +12,7 @@ public class TenantBrandingConfiguration : IEntityTypeConfiguration<TenantBrandi
         b.HasKey(x => x.Id);
         b.Property(x => x.BrandName).HasMaxLength(200).IsRequired();
         b.Property(x => x.Domain).HasMaxLength(255);
+        b.Property(x => x.Tagline).HasMaxLength(255);
         b.Property(x => x.LogoUrl).HasMaxLength(500);
         b.Property(x => x.FaviconUrl).HasMaxLength(500);
         b.Property(x => x.PrimaryColor).HasMaxLength(32);

@@ -83,6 +83,15 @@
                       <div class="col-12 col-sm-6">
                         <AppTextField v-model="form.phoneNumber" label="Phone number" />
                       </div>
+                      <div class="col-12">
+                        <AppTextField
+                          v-model="form.taxExemptReason"
+                          label="Tax Exempt Reason"
+                          maxlength="500"
+                          hint="For Avalara integrations: If reason provided, customer will be treated as tax exempt"
+                          :rules="[taxExemptReasonRule]"
+                        />
+                      </div>
                     </div>
                   </AppSection>
                   <AppSection title="Custom information">
@@ -183,6 +192,16 @@
                     </div>
                     <div class="col-12 col-sm-6">
                       <AppTextField v-model="editForm.phoneNumber" label="Phone number" maxlength="50" :disable="!canWrite || saving" />
+                    </div>
+                    <div class="col-12">
+                      <AppTextField
+                        v-model="editForm.taxExemptReason"
+                        label="Tax Exempt Reason"
+                        maxlength="500"
+                        hint="For Avalara integrations: If reason provided, customer will be treated as tax exempt"
+                        :rules="[taxExemptReasonRule]"
+                        :disable="!canWrite || saving"
+                      />
                     </div>
                   </div>
                 </AppSection>
@@ -464,7 +483,8 @@ const form = reactive({
   emailVerified: true,
   customerGroupId: null,
   longText: '',
-  allowRestrictedCapacityPurchases: false
+  allowRestrictedCapacityPurchases: false,
+  taxExemptReason: ''
 })
 
 const customer = ref(null)
@@ -473,7 +493,7 @@ const activeSaving = ref(false)
 
 // Profile fields (General tab), seeded from the loaded record. Email is read-only, so it is not part of the form.
 const saving = ref(false)
-const editForm = reactive({ firstName: '', lastName: '', phoneNumber: '', longText: '', allowRestrictedCapacityPurchases: false })
+const editForm = reactive({ firstName: '', lastName: '', phoneNumber: '', longText: '', allowRestrictedCapacityPurchases: false, taxExemptReason: '' })
 
 // ---------- Custom information ----------
 // "Allow Restricted Capacity Purchases" reuses the No / Yes choices of the existing product attribute
@@ -483,6 +503,9 @@ const yesNoOptions = [
   { label: 'Yes', value: true }
 ]
 const LONG_TEXT_MAX = 4000 // matches Customers.LongText nvarchar(4000)
+const TAX_EXEMPT_REASON_MAX = 500 // matches Customers.TaxExemptReason nvarchar(500)
+const taxExemptReasonRule = (v) =>
+  !v || v.length <= TAX_EXEMPT_REASON_MAX || `Tax exempt reason must be ${TAX_EXEMPT_REASON_MAX} characters or fewer.`
 // Mirrors UpdateCustomerCommandValidator.PhonePattern on the API.
 const PHONE_PATTERN = /^\+?[0-9\s.()-]{5,50}$/
 
@@ -593,7 +616,8 @@ async function createCustomer () {
       isActive: form.isActive,
       emailVerified: form.emailVerified,
       longText: form.longText.trim() || null,
-      allowRestrictedCapacityPurchases: !!form.allowRestrictedCapacityPurchases
+      allowRestrictedCapacityPurchases: !!form.allowRestrictedCapacityPurchases,
+      taxExemptReason: form.taxExemptReason.trim() || null
     })
     const id = res?.id || res
     if (form.customerGroupId) {
@@ -613,6 +637,7 @@ function fillEditForm () {
   editForm.phoneNumber = c.phoneNumber || ''
   editForm.longText = c.longText || ''
   editForm.allowRestrictedCapacityPurchases = !!c.allowRestrictedCapacityPurchases
+  editForm.taxExemptReason = c.taxExemptReason || ''
 }
 
 async function saveProfile () {
@@ -628,7 +653,8 @@ async function saveProfile () {
       lastName: editForm.lastName.trim(),
       phoneNumber: phone || null,
       longText: editForm.longText.trim() || null,
-      allowRestrictedCapacityPurchases: !!editForm.allowRestrictedCapacityPurchases
+      allowRestrictedCapacityPurchases: !!editForm.allowRestrictedCapacityPurchases,
+      taxExemptReason: editForm.taxExemptReason.trim() || null
     })
     fillEditForm()
     notify.success('Customer updated')

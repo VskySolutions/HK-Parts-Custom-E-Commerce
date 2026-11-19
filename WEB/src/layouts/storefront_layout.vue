@@ -70,7 +70,7 @@
 
       <!-- ===== Main header (stays sticky with the mega-menu) ===== -->
       <div class="sf-header">
-        <div class="sf-container row items-center no-wrap q-py-md q-gutter-xs" :class="$q.screen.width <= 600 ? 'justify-between' : ''">
+        <div class="sf-container row items-center justify-between no-wrap q-py-md" :class="$q.screen.width <= 600 ? 'justify-between' : ''">
           <router-link :to="{ name: 'shop-home' }" class="sf-header__logo" aria-label="Home">
             <img v-if="branding.logoUrl" :src="$media(branding.logoUrl)" :alt="branding.brandName" class="sf-header__logo-img">
             <template v-else>
@@ -80,82 +80,85 @@
           </router-link>
 
           <!-- Search with category prefix + submit -->
-          <div class="sf-search col" v-if="$q.screen.width >= 601">
-            <div class="sf-search__cat gt-sm">
-              {{ searchCategoryLabel }}
-              <q-icon name="o_expand_more" size="16px" class="q-ml-xs" />
-              <q-menu v-model="catMenu" fit>
-                <q-list style="min-width: 180px">
-                  <q-item clickable v-close-popup @click="searchCategory = null">
-                    <q-item-section>All categories</q-item-section>
-                  </q-item>
-                  <q-item
-                    v-for="cat in topCategories"
-                    :key="cat.id"
-                    clickable
-                    v-close-popup
-                    @click="searchCategory = cat"
-                  >
-                    <q-item-section>{{ cat.name }}</q-item-section>
-                  </q-item>
-                </q-list>
-              </q-menu>
-            </div>
-            <q-input
-              v-model="searchText"
-              dense
-              borderless
-              class="sf-search__input q-px-sm"
-              placeholder="Search products…"
-              debounce="300"
-              @update:model-value="onQueryChange"
-              @keyup.enter="onEnter"
-            >
-              <q-menu
-                v-model="suggestOpen"
-                fit
-                no-focus
-                no-refocus
-                no-parent-event
-                anchor="bottom left"
-                self="top left"
+          <transition name="search-drop">
+            <div class="sf-search col" v-if="$q.screen.width >= 769 && showSearch === true">
+              <!-- gt-sm Removed from below div -->
+              <div class="sf-search__cat gt-sm">
+                {{ searchCategoryLabel }}
+                <q-icon name="o_expand_more" size="16px" class="q-ml-xs" />
+                <q-menu v-model="catMenu" fit>
+                  <q-list style="min-width: 180px">
+                    <q-item clickable v-close-popup @click="searchCategory = null">
+                      <q-item-section>All categories</q-item-section>
+                    </q-item>
+                    <q-item
+                      v-for="cat in topCategories"
+                      :key="cat.id"
+                      clickable
+                      v-close-popup
+                      @click="searchCategory = cat"
+                    >
+                      <q-item-section>{{ cat.name }}</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </div>
+              <q-input
+                v-model="searchText"
+                dense
+                borderless
+                class="sf-search__input q-px-sm"
+                placeholder="Search products…"
+                debounce="300"
+                @update:model-value="onQueryChange"
+                @keyup.enter="onEnter"
               >
-                <q-list style="min-width: 240px">
-                  <template v-if="suggestions.products.length">
-                    <q-item-label header class="q-py-xs">Products</q-item-label>
-                    <q-item
-                      v-for="(name, i) in suggestions.products"
-                      :key="'p-' + i"
-                      v-close-popup
-                      clickable
-                      dense
-                      @click="selectSuggestion(name)"
-                    >
-                      <q-item-section avatar><q-icon name="o_inventory_2" size="18px" color="grey-6" /></q-item-section>
-                      <q-item-section>{{ name }}</q-item-section>
-                    </q-item>
-                  </template>
-                  <template v-if="suggestions.categories.length">
-                    <q-item-label header class="q-py-xs">Categories</q-item-label>
-                    <q-item
-                      v-for="(name, i) in suggestions.categories"
-                      :key="'c-' + i"
-                      v-close-popup
-                      clickable
-                      dense
-                      @click="selectSuggestion(name)"
-                    >
-                      <q-item-section avatar><q-icon name="o_category" size="18px" color="grey-6" /></q-item-section>
-                      <q-item-section>{{ name }}</q-item-section>
-                    </q-item>
-                  </template>
-                </q-list>
-              </q-menu>
-            </q-input>
-            <button class="sf-search__btn" aria-label="Search" @click="onEnter">
-              <q-icon name="o_search" size="20px" />
-            </button>
+                <q-menu
+                  v-model="suggestOpen"
+                  fit
+                  no-focus
+                  no-refocus
+                  no-parent-event
+                  anchor="bottom left"
+                  self="top left"
+                >
+                  <q-list style="min-width: 240px">
+                    <template v-if="suggestions.products.length">
+                      <q-item-label header class="q-py-xs">Products</q-item-label>
+                      <q-item
+                        v-for="(name, i) in suggestions.products"
+                        :key="'p-' + i"
+                        v-close-popup
+                        clickable
+                        dense
+                        @click="selectSuggestion(name)"
+                      >
+                        <q-item-section avatar><q-icon name="o_inventory_2" size="18px" color="grey-6" /></q-item-section>
+                        <q-item-section>{{ name }}</q-item-section>
+                      </q-item>
+                    </template>
+                    <template v-if="suggestions.categories.length">
+                      <q-item-label header class="q-py-xs">Categories</q-item-label>
+                      <q-item
+                        v-for="(name, i) in suggestions.categories"
+                        :key="'c-' + i"
+                        v-close-popup
+                        clickable
+                        dense
+                        @click="selectSuggestion(name)"
+                      >
+                        <q-item-section avatar><q-icon name="o_category" size="18px" color="grey-6" /></q-item-section>
+                        <q-item-section>{{ name }}</q-item-section>
+                      </q-item>
+                    </template>
+                  </q-list>
+                </q-menu>
+              </q-input>
+              <!-- <button class="sf-search__btn" aria-label="Search" @click="onEnter">
+                <q-icon name="o_search" size="20px" />
+              </button> -->
           </div>
+          </transition>
 
           <!-- Icon group -->
           <div class="row items-center no-wrap q-gutter-sm">
@@ -172,6 +175,18 @@
               <q-tooltip>Wishlist</q-tooltip>
             </q-btn>
             -->
+             <q-btn
+                v-if="$q.screen.width > 768"
+                flat
+                round
+                dense
+                class="sf-header__icon"
+                icon="o_search"
+                aria-label="Search"
+                @click="showSearch = !showSearch"
+              >
+              <q-tooltip>Search</q-tooltip>
+            </q-btn>
             <q-btn
               flat
               round
@@ -179,7 +194,7 @@
               class="sf-header__icon"
               icon="o_search"
               aria-label="Search"
-              :class="$q.screen.width > 600 ? 'hidden' : ''"
+              :class="$q.screen.width > 768 ? 'hidden' : ''"
               @click="mobileSearchOpen = true"
             >
               <q-tooltip>Search</q-tooltip>
@@ -196,6 +211,17 @@
               <q-badge v-if="cartCount" color="red" floating>{{ cartCount }}</q-badge>
               <q-tooltip>Cart</q-tooltip>
             </q-btn>
+            <q-btn
+              flat
+              round
+              dense
+              class="sf-header__icon"
+              icon="o_contact_support"
+              aria-label="Contact Us"
+              @click="$router.push('/shop/page/contact-us')"
+            >
+              <q-tooltip>Contact Us</q-tooltip>
+            </q-btn>
              <q-btn
               flat
               round
@@ -203,7 +229,7 @@
               class="sf-header__icon"
               icon="o_menu"
               aria-label="Shop by category"
-              :class="$q.screen.width > 600 ? 'hidden' : ''"
+              :class="$q.screen.width > 1023 ? 'hidden' : ''"
               @click="megaMenuRef?.openMobileDrawer()"
             >
               <q-tooltip>Shop by category</q-tooltip>
@@ -220,7 +246,7 @@
 
     <CartDrawer v-model="cartDrawer" />
     <MobileSearchDialog
-      v-if="$q.screen.width <= 600"
+      v-if="$q.screen.width <= 769"
       v-model="mobileSearchOpen"
       :search-text="searchText"
       :suggestions="suggestions"
@@ -248,7 +274,7 @@
                 <span class="sf-heading text-h6 text-weight-bold">{{ branding.brandName }}</span>
               </template>
             </div>
-            <p class="text-body2">{{ branding.tagline }}</p>
+            <div class="text-body2" v-html="branding.tagline" />
             <div class="row q-gutter-sm q-mt-md">
               <a
                 v-for="s in branding.social"
@@ -369,8 +395,11 @@ const topCategories = computed(() => categories.value.slice(0, 12))
 const cartDrawer = ref(false)
 const catMenu = ref(false)
 
+console.log("Branding Data:", branding);
+
 const mobileSearchOpen = ref(false)
 const megaMenuRef = ref(null)
+const showSearch = ref(false);
 
 // Collapse the top info bar on scroll-down (reveal on scroll-up / near top); the main header
 // and mega-menu remain sticky at the top.

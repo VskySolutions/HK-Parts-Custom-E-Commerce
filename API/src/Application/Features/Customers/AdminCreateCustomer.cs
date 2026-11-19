@@ -25,7 +25,8 @@ public record AdminCreateCustomerCommand(
     bool IsActive = true,
     bool EmailVerified = true,
     string? LongText = null,
-    bool AllowRestrictedCapacityPurchases = false) : IRequest<Guid>;
+    bool AllowRestrictedCapacityPurchases = false,
+    string? TaxExemptReason = null) : IRequest<Guid>;
 
 public class AdminCreateCustomerCommandValidator : AbstractValidator<AdminCreateCustomerCommand>
 {
@@ -37,6 +38,8 @@ public class AdminCreateCustomerCommandValidator : AbstractValidator<AdminCreate
         RuleFor(x => x.LastName).MaximumLength(200);
         RuleFor(x => x.PhoneNumber).MaximumLength(50);
         RuleFor(x => x.LongText).MaximumLength(4000);
+        RuleFor(x => x.TaxExemptReason).MaximumLength(500)
+            .WithMessage("Tax exempt reason must be 500 characters or fewer.");
     }
 }
 
@@ -95,6 +98,7 @@ public class AdminCreateCustomerCommandHandler : IRequestHandler<AdminCreateCust
                 PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
                 LongText = string.IsNullOrWhiteSpace(request.LongText) ? null : request.LongText.Trim(),
                 AllowRestrictedCapacityPurchases = request.AllowRestrictedCapacityPurchases,
+                TaxExemptReason = string.IsNullOrWhiteSpace(request.TaxExemptReason) ? null : request.TaxExemptReason.Trim(),
             },
         };
         if (customerRoleId is Guid roleId)
@@ -131,7 +135,7 @@ public class AdminCreateCustomerCommandHandler : IRequestHandler<AdminCreateCust
         }
 
         // Admin endpoints (detail, group, store credit...) look customers up by Customer.Id, which is
-        // different from User.Id — return the profile id so the page can open the new record.
+        // different from User.Id â€” return the profile id so the page can open the new record.
         return user.Customer!.Id;
     }
 

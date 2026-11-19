@@ -47,6 +47,7 @@ public class GetCategoryPageQueryHandler : IRequestHandler<GetCategoryPageQuery,
             .AsSplitQuery()
             .Published()
             .Where(p => p.ProductCategories.Any(pc => pc.CategoryId == category.Id))
+            .Include(p => p.InventoryLevels)
             .WithSummaryImages()
             .ApplyStorefrontSort(request.Sort);
 

@@ -7,6 +7,7 @@ public class BrandingDto
 {
     public string BrandName { get; set; } = string.Empty;
     public string? Domain { get; set; }
+    public string? Tagline { get; set; }
 
     /// <summary>Central Media asset ids for the logo/favicon (preferred going forward; null for un-migrated records).</summary>
     public Guid? LogoMediaId { get; set; }
@@ -48,6 +49,7 @@ public class BrandingDto
     {
         BrandName = b.BrandName,
         Domain = b.Domain,
+        Tagline = b.Tagline,
         LogoMediaId = b.LogoMediaId,
         FaviconMediaId = b.FaviconMediaId,
         LogoUrl = b.LogoMedia?.Url ?? b.LogoUrl,

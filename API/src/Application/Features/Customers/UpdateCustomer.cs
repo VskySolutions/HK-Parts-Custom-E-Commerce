@@ -8,9 +8,10 @@ using HKPartsEcommerce.Domain.Entities;
 namespace HKPartsEcommerce.Application.Features.Customers;
 
 /// <summary>
-/// Admin edits an existing customer's profile: first/last name and phone number.
+/// Admin edits an existing customer's profile: first/last name, phone number and the admin-maintained
+/// custom information (long text, restricted-capacity flag, tax exempt reason).
 /// Email is the sign-in identity and is intentionally <b>not</b> part of this command — it is read-only
-/// for admins. Everything else on the customer (activation, pricing group, tax exemption, WhatsApp
+/// for admins. Everything else on the customer (activation, pricing group, tax exemption state, WhatsApp
 /// number/opt-in, addresses, store credit) is left untouched. Returns the refreshed admin detail.
 /// </summary>
 public record UpdateCustomerCommand(
@@ -19,7 +20,8 @@ public record UpdateCustomerCommand(
     string? LastName,
     string? PhoneNumber,
     string? LongText = null,
-    bool? AllowRestrictedCapacityPurchases = null) : IRequest<CustomerDetailDto>;
+    bool? AllowRestrictedCapacityPurchases = null,
+    string? TaxExemptReason = null) : IRequest<CustomerDetailDto>;
 
 public class UpdateCustomerCommandValidator : AbstractValidator<UpdateCustomerCommand>
 {
@@ -36,6 +38,8 @@ public class UpdateCustomerCommandValidator : AbstractValidator<UpdateCustomerCo
             .Matches(PhonePattern).WithMessage("Phone number may contain only digits, spaces and + - . ( ).")
             .When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber));
         RuleFor(x => x.LongText).MaximumLength(4000);
+        RuleFor(x => x.TaxExemptReason).MaximumLength(500)
+            .WithMessage("Tax exempt reason must be 500 characters or fewer.");
     }
 }
 
@@ -62,6 +66,7 @@ public class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustomerComman
         customer.PhoneNumber = Normalize(request.PhoneNumber);
         // Custom information. LongText follows the form (blank clears it); the flag is only changed when sent.
         customer.LongText = Normalize(request.LongText);
+        customer.TaxExemptReason = Normalize(request.TaxExemptReason);
         if (request.AllowRestrictedCapacityPurchases is bool allow)
             customer.AllowRestrictedCapacityPurchases = allow;
 

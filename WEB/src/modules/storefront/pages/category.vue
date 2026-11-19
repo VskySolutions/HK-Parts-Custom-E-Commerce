@@ -52,10 +52,13 @@
                       :to="categoryTo(top)"
                     >
                       <q-item-section>{{ top.name }}</q-item-section>
-                      <q-item-section side><span class="text-caption text-grey-6">{{ top.productCount }}</span></q-item-section>
+                      <!-- <q-item-section side><span class="text-caption text-grey-6">{{ top.productCount }}</span></q-item-section> -->
+                      <q-item-section side>
+                        <q-icon name="o_arrow_right" class="text-grey-6" size="17px" />
+                      </q-item-section>
                     </q-item>
                     <template v-if="isBranchActive(top) && top.children && top.children.length">
-                      <q-item
+                      <!-- <q-item
                         v-for="child in top.children"
                         :key="child.id"
                         clickable
@@ -66,7 +69,84 @@
                       >
                         <q-item-section>{{ child.name }}</q-item-section>
                         <q-item-section side><span class="text-caption text-grey-6">{{ child.productCount }}</span></q-item-section>
+                      </q-item> -->
+                      <!-- <div class="q-px-sm" v-for="child in top.children" :key="child.id">
+                        <q-item
+                          clickable
+                          class="q-pl-lg"
+                          :active="isActive(child)"
+                          active-class="text-primary text-weight-medium"
+                          :to="categoryTo(child)"
+                          >
+                          <q-item-section>{{ child.name }}</q-item-section>
+                          <q-item-section side><span class="text-caption text-grey-6">{{ child.productCount }}</span></q-item-section>
+                        </q-item>
+                        <q-item class="q-ml-sm" v-for="s in child.children" :key="s.id" :to="categoryTo(s)">
+                          <q-item-section>{{ s.name }}</q-item-section>
+                          <q-item-section side><span class="text-caption text-grey-6">{{ s.productCount }}</span></q-item-section>
+                        </q-item>
+                      </div> -->
+                      <div class="product-filter-expansion q-px-sm" v-for="child in top.children" :key="child.id">
+                        <!-- Render q-expansion-item if child has nested children -->
+                        <q-expansion-item
+                          v-if="child.children && child.children.length"
+                          :header-inset-level="0.5"
+                          :content-inset-level="1"
+                          expand-separator class="product-filter-expansion"
+                          expand-icon="o_add"
+                        >
+                        <template v-slot:header>
+                          <q-item-section>
+                            <router-link
+                              :to="categoryTo(child)"
+                              class="text-decoration-none"
+                              :class="isActive(child) ? 'text-primary text-weight-medium' : 'text-dark'"
+                              @click.stop
+                            >
+                              {{ child.name }}
+                            </router-link>
+                          </q-item-section>
+                          <q-item-section side>
+                            <!-- <span class="text-caption text-grey-6">{{ child.productCount }}</span> -->
+                          </q-item-section>
+                        </template>
+
+                        <!-- Nested child items -->
+                        <q-item
+                          v-for="s in child.children"
+                          :key="s.id"
+                          clickable
+                          :active="isActive(s)"
+                          active-class="text-primary text-weight-medium"
+                          :to="categoryTo(s)"
+                          class="q-ml-sm"
+                        >
+                          <q-item-section>{{ s.name }}</q-item-section>
+                          <q-item-section side>
+                            <!-- <span class="text-caption text-grey-6">{{ s.productCount }}</span> -->
+                             <q-icon name="o_arrow_right" class="text-grey-6" size="17px" />
+                          </q-item-section>
+                        </q-item>
+                      </q-expansion-item>
+
+                      <!-- Render standard q-item if there are no nested children -->
+                      <q-item
+                        v-else
+                        clickable
+                        class="q-pl-lg"
+                        :active="isActive(child)"
+                        active-class="text-primary text-weight-medium"
+                        :to="categoryTo(child)"
+                      >
+                        <q-item-section>{{ child.name }}</q-item-section>
+                        <!-- <q-item-section side>
+                          <span class="text-caption text-grey-6">{{ child.productCount }}</span>
+                        </q-item-section> -->
+                         <q-item-section side>
+                        <q-icon name="o_arrow_right" class="text-grey-6" />
+                      </q-item-section>
                       </q-item>
+                    </div>
                     </template>
                   </template>
                 </q-list>
@@ -96,11 +176,14 @@
                   :facets="facetGroups"
                   :model-value="selectedOptionIds"
                   show-price
+                  show-stock
                   :min-price="minPrice"
                   :max-price="maxPrice"
+                  :in-stock-only="inStockOnly"
                   @update:model-value="onFiltersChange"
                   @update:min-price="onPriceChange('min', $event)"
                   @update:max-price="onPriceChange('max', $event)"
+                  @update:in-stock-only="onStockChange"
                   @clear="clearFilters"
                 />
               </q-card>
@@ -177,6 +260,7 @@
                     <span class="sf-card__price-now">{{ formatPrice(p.price) }}</span>
                     <button class="sf-btn sf-btn--primary" @click="quickAdd(p)">Add to Cart</button>
                   </div>
+                  <q-badge v-if="p.stockQuantity === 0" label="Out of stock" class="q-pb-xs bg-24 text-white" />
                 </q-card-section>
               </q-card>
             </div>
@@ -246,6 +330,8 @@ const { addItem } = useCart()
 const PAGE_SIZE = 12
 const sortOptions = listingSortOptions
 
+console.log("Category Tree Details:", categoryTree)
+
 const category = ref({})
 
 // <head> SEO from the central SEO record, falling back to the category's name / description.
@@ -263,6 +349,7 @@ const view = ref('grid4')
 const selectedOptionIds = ref([])
 const minPrice = ref(null)
 const maxPrice = ref(null)
+const inStockOnly = ref(false)
 const baseFacets = ref([])
 const searchFacets = ref([])
 const loading = ref(false)
@@ -297,6 +384,7 @@ const ymalConfigured = computed(() =>
   Array.isArray(categoryConfig.value && categoryConfig.value.ymalProducts) ? categoryConfig.value.ymalProducts : []
 )
 const ymalDisplay = computed(() => (ymalConfigured.value.length ? ymalConfigured.value : ymal.value))
+console.log("You May Also Like", ymalConfigured.value.length + ymalConfigured.value)
 
 const facetGroups = computed(() => {
   if (!searchFacets.value.length) return baseFacets.value
@@ -384,7 +472,7 @@ async function loadCategoryConfig () {
 
 // Re-query the faceted search when any spec option / price filter is active.
 async function runQuery () {
-  const hasFilters = selectedOptionIds.value.length || minPrice.value != null || maxPrice.value != null
+  const hasFilters = selectedOptionIds.value.length || minPrice.value != null || maxPrice.value != null || inStockOnly.value
   if (!hasFilters) {
     await loadCategory()
     return
@@ -396,6 +484,7 @@ async function runQuery () {
       specificationOptionIds: selectedOptionIds.value,
       minPrice: minPrice.value ?? undefined,
       maxPrice: maxPrice.value ?? undefined,
+      inStockOnly: inStockOnly.value,
       sort: sort.value || undefined,
       page: page.value,
       pageSize: PAGE_SIZE
@@ -423,6 +512,11 @@ function onPriceChange (which, val) {
   page.value = 1
   runQuery()
 }
+function onStockChange (value) {
+  inStockOnly.value = value
+  page.value = 1
+  runQuery()
+}
 function removeOption (optionId) {
   selectedOptionIds.value = selectedOptionIds.value.filter((id) => id !== optionId)
   page.value = 1
@@ -432,6 +526,7 @@ function clearFilters () {
   selectedOptionIds.value = []
   minPrice.value = null
   maxPrice.value = null
+  inStockOnly.value = false
   page.value = 1
   loadCategory()
 }
@@ -471,6 +566,7 @@ watch(
     selectedOptionIds.value = []
     minPrice.value = null
     maxPrice.value = null
+    inStockOnly.value = false
     searchFacets.value = []
     categoryConfig.value = null
     configCategoryId.value = null

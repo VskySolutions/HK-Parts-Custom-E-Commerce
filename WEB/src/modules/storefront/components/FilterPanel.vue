@@ -44,6 +44,16 @@
         </div>
       </div>
     </template>
+    <template v-if="showStock">
+      <div class="text-caption text-grey-7 q-mb-xs">Show</div>
+      <q-checkbox
+        :model-value="inStockOnly"
+        label="In Stock Only"
+        dense
+        class="q-mb-md"
+        @update:model-value="(value) => emit('update:inStockOnly', value)"
+      />
+    </template>
 
     <!-- Manufacturer (only when the caller supplies a list) -->
     <template v-if="manufacturers.length">
@@ -118,8 +128,10 @@ const props = defineProps({
   // selected specification option ids
   modelValue: { type: Array, default: () => [] },
   showPrice: { type: Boolean, default: false },
+  showStock: { type: Boolean, default: false },
   minPrice: { type: [Number, String, null], default: null },
   maxPrice: { type: [Number, String, null], default: null },
+  inStockOnly: { type: Boolean, default: false },
   manufacturers: { type: Array, default: () => [] },
   manufacturerId: { type: [String, null], default: null }
 })
@@ -128,6 +140,7 @@ const emit = defineEmits([
   'update:modelValue',
   'update:minPrice',
   'update:maxPrice',
+  'update:inStockOnly',
   'update:manufacturerId',
   'clear'
 ])
@@ -139,7 +152,8 @@ const hasActiveFilters = computed(
     selected.value.length > 0 ||
     props.minPrice != null ||
     props.maxPrice != null ||
-    props.manufacturerId != null
+    props.manufacturerId != null ||
+    props.inStockOnly
 )
 
 function toggleOption (optionId) {
@@ -160,6 +174,7 @@ function clearAll () {
   emit('update:minPrice', null)
   emit('update:maxPrice', null)
   emit('update:manufacturerId', null)
+  emit('update:inStockOnly', false)
   emit('clear')
 }
 </script>

@@ -38,6 +38,7 @@ public class GetRecentlyViewedQueryHandler : IRequestHandler<GetRecentlyViewedQu
             .AsNoTracking()
             .Published()
             .Where(p => distinctIds.Contains(p.Id))
+            .Include(p => p.InventoryLevels)
             .WithSummaryImages()
             .ToListAsync(cancellationToken);
 

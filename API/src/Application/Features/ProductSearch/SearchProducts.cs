@@ -20,7 +20,8 @@ public record SearchProductsQuery(
     Guid? CategoryId,
     string? Sort,
     int Page = 1,
-    int PageSize = 20) : IRequest<SearchResultsDto>;
+    int PageSize = 20,
+    bool InStockOnly = false) : IRequest<SearchResultsDto>;
 
 public class SearchProductsQueryHandler : IRequestHandler<SearchProductsQuery, SearchResultsDto>
 {
@@ -47,6 +48,13 @@ public class SearchProductsQueryHandler : IRequestHandler<SearchProductsQuery, S
         IQueryable<Product> baseQuery = _db.Products
             .AsNoTracking()
             .Where(p => p.IsPublished);
+
+        // Only products having total available stock greater than zero.
+        if (request.InStockOnly)
+        {
+            baseQuery = baseQuery.Where(p =>
+                p.InventoryLevels.Sum(l => (int?)l.StockQuantity) > 0);
+        }
 
         // Keyword match across name, short/full description, or any assigned tag name.
         if (!string.IsNullOrWhiteSpace(request.Query))

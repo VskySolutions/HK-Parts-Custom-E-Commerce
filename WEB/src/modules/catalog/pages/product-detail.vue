@@ -138,12 +138,19 @@
               </div>
             </div>
 
-            <AppTextField
+            <!-- <AppTextField
               v-model="form.shortDescription"
               label="Short description"
               type="textarea"
               autogrow
               placeholder="A brief one- or two-line summary shown on product cards and search results"
+              :disable="!canWrite"
+            /> -->
+            <AppRichText
+              v-model="form.shortDescription"
+              label="Short description"
+              placeholder="A brief one- or two-line summary shown on product cards and search results"
+              hint="Rich text shown on the product page"
               :disable="!canWrite"
             />
             <AppRichText

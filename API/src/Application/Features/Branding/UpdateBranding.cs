@@ -10,6 +10,7 @@ namespace HKPartsEcommerce.Application.Features.Branding;
 public record UpdateBrandingCommand(
     string BrandName,
     string? Domain,
+    string? Tagline,
     Guid? LogoMediaId,
     Guid? FaviconMediaId,
     string? LogoUrl,
@@ -44,6 +45,7 @@ public class UpdateBrandingCommandValidator : AbstractValidator<UpdateBrandingCo
     {
         RuleFor(x => x.BrandName).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Domain).MaximumLength(255);
+        RuleFor(x => x.Tagline).MaximumLength(255);
         RuleFor(x => x.LogoUrl).MaximumLength(500);
         RuleFor(x => x.FaviconUrl).MaximumLength(500);
         RuleFor(x => x.PrimaryColor).MaximumLength(32);
@@ -87,6 +89,7 @@ public class UpdateBrandingCommandHandler : IRequestHandler<UpdateBrandingComman
 
         entity.BrandName = request.BrandName;
         entity.Domain = request.Domain;
+        entity.Tagline = request.Tagline;
         entity.LogoMediaId = request.LogoMediaId;
         entity.FaviconMediaId = request.FaviconMediaId;
         // Going forward the assets live in Media; clear the legacy URL once a Media asset is chosen.

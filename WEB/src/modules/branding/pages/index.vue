@@ -37,6 +37,13 @@
         <q-tab-panel name="identity" class="q-gutter-y-sm">
           <AppTextField v-model="form.brandName" label="Brand name" required :v="v$.brandName" maxlength="200" :disable="!canWrite" />
           <AppTextField v-model="form.domain" label="Domain" :v="v$.domain" placeholder="store.example.com" maxlength="255" :disable="!canWrite" />
+          <!-- <AppTextField v-model="form.tagline" label="Tagline" :v="v$.tagline" placeholder="Enter tagline" maxlength="255" :disable="!canWrite" /> -->
+           <AppRichText
+              v-model="form.tagline"
+              label="Tagline"
+              placeholder="Describe the tagline"
+              :disable="!canWrite"
+            />
           <AppTextField v-model="form.fontFamily" label="Font family" placeholder="Poppins, Roboto, sans-serif" :disable="!canWrite" />
           <AppSelect v-model="form.defaultLanguage" label="Default language" :options="languageOptions" clearable :disable="!canWrite" />
           <AppSelect
@@ -175,6 +182,7 @@ import AppTextField from 'components/common/AppTextField.vue'
 import AppSelect from 'components/common/AppSelect.vue'
 import AppFileUpload from 'components/common/AppFileUpload.vue'
 import ColorField from 'modules/branding/components/ColorField.vue'
+import AppRichText from 'components/common/AppRichText.vue'
 
 const tenant = useTenantStore()
 const notify = useNotify()
@@ -203,7 +211,7 @@ const saveStatus = computed(() => {
 
 const SOCIAL_KEYS = ['facebook', 'instagram', 'twitter', 'linkedin', 'youtube']
 const EMPTY = {
-  brandName: '', domain: '', fontFamily: '', defaultLanguage: null, displayTimeZone: 'UTC',
+  brandName: '', domain: '', tagline: '', fontFamily: '', defaultLanguage: null, displayTimeZone: 'UTC',
   primaryColor: '', secondaryColor: '', accentColor: '',
   bodyBackgroundColor: '', textColor: '', headingColor: '',
   heading1Color: '', heading2Color: '', heading3Color: '', heading4Color: '', heading5Color: '', heading6Color: '',
@@ -219,6 +227,7 @@ const layoutOptionsJson = ref(null)
 const rules = {
   brandName: { required, maxLength: maxLength(200) },
   domain: { maxLength: maxLength(255) },
+  tagline: { maxLength: maxLength(255) },
   primaryColor: { hexColor, maxLength: maxLength(32) },
   secondaryColor: { hexColor, maxLength: maxLength(32) },
   accentColor: { hexColor, maxLength: maxLength(32) },
@@ -293,7 +302,7 @@ function parseSocial (json) {
 function hydrate (b) {
   hydrating = true
   Object.assign(form, EMPTY, {
-    brandName: b.brandName || '', domain: b.domain || '', fontFamily: b.fontFamily || '',
+    brandName: b.brandName || '', domain: b.domain || '', tagline: b.tagline || '', fontFamily: b.fontFamily || '',
     defaultLanguage: b.defaultLanguage || null,
     displayTimeZone: b.displayTimeZone || 'UTC',
     primaryColor: b.primaryColor || '', secondaryColor: b.secondaryColor || '', accentColor: b.accentColor || '',
@@ -337,6 +346,7 @@ function buildPayload () {
   return {
     brandName: form.brandName.trim(),
     domain: toNull(form.domain),
+    tagline: toNull(form.tagline),
     logoMediaId: form.logoMediaId || null,
     faviconMediaId: form.faviconMediaId || null,
     logoUrl: form.logoMediaId ? null : toNull(form.logoUrl),
