@@ -60,7 +60,10 @@ public class BulkBlacklistCustomersCommandHandler : IRequestHandler<BulkBlacklis
 
     public BulkBlacklistCustomersCommandHandler(IApplicationDbContext db) => _db = db;
 
-    public async Task<BulkBlacklistCustomersResult> Handle(BulkBlacklistCustomersCommand request, CancellationToken ct)
+    public Task<BulkBlacklistCustomersResult> Handle(BulkBlacklistCustomersCommand request, CancellationToken cancellationToken)
+        => BlacklistTransactionRunner.RunAsync(_db, ct => BlockAsync(request, ct), cancellationToken);
+
+    private async Task<BulkBlacklistCustomersResult> BlockAsync(BulkBlacklistCustomersCommand request, CancellationToken ct)
     {
         // The list's own definition: genuine customers, not already blocked. Staff never appear there, and a
         // user holding any non-Customer role is excluded too (same rule as the single block).
@@ -105,12 +108,19 @@ public class BulkBlacklistCustomersCommandHandler : IRequestHandler<BulkBlacklis
         var byCustomer = existing
             .GroupBy(e => e.CustomerId!.Value)
             .ToDictionary(g => g.Key, g => g.First());
+        var customerIds = targets.Select(t => t.Id).ToList();
+        var customers = await _db.Customers
+            .Where(c => customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, ct);
 
         foreach (var t in targets)
         {
+            // Current state = the flag; the BlacklistedCustomers row is the Blocked history event.
+            customers[t.Id].IsBlacklisted = true;
             _db.BlacklistedCustomers.Add(new BlacklistedCustomer
             {
                 CustomerId = t.Id,
+                Action = BlacklistAction.Blocked,
                 Reason = reason,
                 InternalNotes = notes,
             });
@@ -134,8 +144,8 @@ public class BulkBlacklistCustomersCommandHandler : IRequestHandler<BulkBlacklis
         }
         catch (DbUpdateException)
         {
-            // Lost a race with a concurrent block of one of these customers (filtered unique index): nothing was
-            // saved, so ask the admin to retry — the retry skips whoever is now blocked.
+            // Lost a race with a concurrent change to one of these customers (serializable transaction): nothing
+            // was saved, so ask the admin to retry — the retry skips whoever is now blocked.
             throw new Common.Exceptions.ConflictException(
                 "Some of these customers were blocked by someone else in the meantime. Refresh the list and try again.");
         }

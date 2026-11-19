@@ -24,15 +24,15 @@ public static class CustomerListFilters
 {
     /// <summary>
     /// Genuine customers only (a User carrying the Customer system role — staff also get a Customer profile at
-    /// creation, so the role is what excludes them), minus blacklisted customers (NOT EXISTS an active blacklist
-    /// row; soft-deleted rows are hidden by the global filter).
+    /// creation, so the role is what excludes them), minus blacklisted customers (the current-state
+    /// <see cref="Customer.IsBlacklisted"/> flag).
     /// </summary>
     public static IQueryable<Customer> ListedCustomers(IApplicationDbContext db)
     {
         var customerRole = nameof(RoleType.Customer);
         return db.Customers.AsNoTracking()
             .Where(c => c.User != null && c.User.UserRoles.Any(ur => ur.Role!.Name == customerRole))
-            .Where(c => !db.BlacklistedCustomers.Any(b => b.CustomerId == c.Id));
+            .Where(c => !c.IsBlacklisted);
     }
 
     public static IQueryable<Customer> Apply(IQueryable<Customer> query, CustomerListFilter? f)

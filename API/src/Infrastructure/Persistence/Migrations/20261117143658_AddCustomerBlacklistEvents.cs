@@ -48,26 +48,48 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
             // Backfill the history from what is already recorded. SubjectKey = lower email, else customer:{id},
             // else name:{first last} — the same rule as CustomerBlacklistHistory.SubjectKey.
             // 1) Customers blocked from the Customers list: every BlacklistedCustomers row (soft-deleted ones too)
-            //    is one block; a soft-deleted row is also the unblock, at DeletedOnUtc.
+            //    is one block; a soft-deleted row is also the unblock, at DeletedOnUtc. If
+            //    BlacklistCustomerFlagHistory (dated earlier, merged later) already turned the table into an
+            //    append-only history, each row is one event instead (Action 1 Blocked / 2 Unblocked). Dynamic SQL so
+            //    each branch only compiles against the columns that exist.
             migrationBuilder.Sql(@"
+IF COL_LENGTH(N'BlacklistedCustomers', N'Deleted') IS NOT NULL
+    EXEC(N'
 WITH src AS (
     SELECT b.Id, b.CustomerId, b.Reason, b.CreatedById, b.CreatedOnUtc, b.UpdatedById, b.Deleted, b.DeletedOnUtc,
-           NULLIF(LTRIM(RTRIM(LEFT(c.FirstName, 100))), '') AS FirstName,
-           NULLIF(LTRIM(RTRIM(LEFT(c.LastName, 100))), '') AS LastName,
-           NULLIF(LOWER(LTRIM(RTRIM(u.Email))), '') AS Email,
+           NULLIF(LTRIM(RTRIM(LEFT(c.FirstName, 100))), '''') AS FirstName,
+           NULLIF(LTRIM(RTRIM(LEFT(c.LastName, 100))), '''') AS LastName,
+           NULLIF(LOWER(LTRIM(RTRIM(u.Email))), '''') AS Email,
            (SELECT TOP 1 e.Id FROM CustomerBlacklist e WHERE e.CustomerId = b.CustomerId) AS EntryId
     FROM BlacklistedCustomers b
     JOIN Customers c ON c.Id = b.CustomerId
     LEFT JOIN Users u ON u.Id = c.UserId
 )
 INSERT INTO CustomerBlacklistEvents (Id, SubjectKey, BlacklistEntryId, CustomerId, FirstName, LastName, Email, Action, Reason, AtUtc, CreatedById, CreatedOnUtc, UpdatedById, UpdatedOnUtc)
-SELECT NEWID(), LEFT(COALESCE(Email, 'customer:' + LOWER(CAST(CustomerId AS nvarchar(36)))), 300),
+SELECT NEWID(), LEFT(COALESCE(Email, ''customer:'' + LOWER(CAST(CustomerId AS nvarchar(36)))), 300),
        EntryId, CustomerId, FirstName, LastName, Email, 0, LEFT(Reason, 1000), CreatedOnUtc, CreatedById, CreatedOnUtc, CreatedById, CreatedOnUtc
 FROM src
 UNION ALL
-SELECT NEWID(), LEFT(COALESCE(Email, 'customer:' + LOWER(CAST(CustomerId AS nvarchar(36)))), 300),
+SELECT NEWID(), LEFT(COALESCE(Email, ''customer:'' + LOWER(CAST(CustomerId AS nvarchar(36)))), 300),
        EntryId, CustomerId, FirstName, LastName, Email, 1, LEFT(Reason, 1000), DeletedOnUtc, UpdatedById, DeletedOnUtc, UpdatedById, DeletedOnUtc
-FROM src WHERE Deleted = 1 AND DeletedOnUtc IS NOT NULL;");
+FROM src WHERE Deleted = 1 AND DeletedOnUtc IS NOT NULL;');
+ELSE
+    EXEC(N'
+WITH src AS (
+    SELECT b.CustomerId, b.Reason, b.Action, b.CreatedById, b.CreatedOnUtc,
+           NULLIF(LTRIM(RTRIM(LEFT(c.FirstName, 100))), '''') AS FirstName,
+           NULLIF(LTRIM(RTRIM(LEFT(c.LastName, 100))), '''') AS LastName,
+           NULLIF(LOWER(LTRIM(RTRIM(u.Email))), '''') AS Email,
+           (SELECT TOP 1 e.Id FROM CustomerBlacklist e WHERE e.CustomerId = b.CustomerId) AS EntryId
+    FROM BlacklistedCustomers b
+    JOIN Customers c ON c.Id = b.CustomerId
+    LEFT JOIN Users u ON u.Id = c.UserId
+)
+INSERT INTO CustomerBlacklistEvents (Id, SubjectKey, BlacklistEntryId, CustomerId, FirstName, LastName, Email, Action, Reason, AtUtc, CreatedById, CreatedOnUtc, UpdatedById, UpdatedOnUtc)
+SELECT NEWID(), LEFT(COALESCE(Email, ''customer:'' + LOWER(CAST(CustomerId AS nvarchar(36)))), 300),
+       EntryId, CustomerId, FirstName, LastName, Email, CASE WHEN Action = 2 THEN 1 ELSE 0 END, LEFT(Reason, 1000),
+       CreatedOnUtc, CreatedById, CreatedOnUtc, CreatedById, CreatedOnUtc
+FROM src;');");
 
             // 2) Entries added by hand (no customer link): the block at creation; an Inactive entry was unblocked
             //    at its last update.

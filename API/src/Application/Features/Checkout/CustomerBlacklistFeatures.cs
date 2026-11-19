@@ -226,25 +226,25 @@ public class SaveCustomerBlacklistEntryCommandHandler : IRequestHandler<SaveCust
 }
 
 /// <summary>
-/// Keeps a customer-linked blacklist entry and the customer's <see cref="BlacklistedCustomer"/> row (which hides
-/// them from the Customers list) in step: blocked ⇒ one active row; unblocked ⇒ the active row is soft-deleted.
-/// Changes are staged only; the caller saves.
+/// Keeps a customer-linked blacklist entry and the customer's <see cref="Customer.IsBlacklisted"/> flag (which hides
+/// them from the Customers list) in step. When the flag changes, a <see cref="BlacklistedCustomer"/> history row
+/// (Blocked / Unblocked) is appended. Changes are staged only; the caller saves.
 /// </summary>
 internal static class CustomerBlacklistSync
 {
     public static async Task ApplyAsync(IApplicationDbContext db, Guid customerId, bool blocked, string? reason, CancellationToken ct)
     {
-        var active = await db.BlacklistedCustomers.FirstOrDefaultAsync(b => b.CustomerId == customerId, ct);
-        if (blocked && active is null)
-            db.BlacklistedCustomers.Add(new BlacklistedCustomer
-            {
-                CustomerId = customerId,
-                Reason = string.IsNullOrWhiteSpace(reason) ? "Blocked" : reason.Trim(),
-            });
-        else if (blocked && active is not null && !string.IsNullOrWhiteSpace(reason))
-            active.Reason = reason.Trim();
-        else if (!blocked && active is not null)
-            db.BlacklistedCustomers.Remove(active); // soft delete (ISoftDeletable): the customer reappears in the list
+        var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == customerId, ct);
+        if (customer is null || customer.IsBlacklisted == blocked)
+            return;
+
+        customer.IsBlacklisted = blocked;
+        db.BlacklistedCustomers.Add(new BlacklistedCustomer
+        {
+            CustomerId = customerId,
+            Action = blocked ? BlacklistAction.Blocked : BlacklistAction.Unblocked,
+            Reason = blocked ? (string.IsNullOrWhiteSpace(reason) ? "Blocked" : reason.Trim()) : null,
+        });
     }
 }
 
