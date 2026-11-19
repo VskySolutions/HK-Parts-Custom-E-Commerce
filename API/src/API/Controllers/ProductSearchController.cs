@@ -23,9 +23,10 @@ public class ProductSearchController : ApiControllerBase
         [FromQuery] Guid? categoryId,
         [FromQuery] string? sort,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20)
+        [FromQuery] int pageSize = 20,
+        [FromQuery] bool inStockOnly = false)
         => Ok(await Mediator.Send(new SearchProductsQuery(
-            query, specificationOptionIds, minPrice, maxPrice, manufacturerId, categoryId, sort, page, pageSize)));
+            query, specificationOptionIds, minPrice, maxPrice, manufacturerId, categoryId, sort, page, pageSize, inStockOnly)));
 
     /// <summary>Autocomplete suggestions: matching published product names and enabled category names.</summary>
     [HttpGet("autocomplete")]

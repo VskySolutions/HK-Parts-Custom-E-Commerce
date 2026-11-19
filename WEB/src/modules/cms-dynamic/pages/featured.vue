@@ -75,7 +75,7 @@
               </q-item-section>
 
               <q-item-section side>
-                <q-btn flat round dense icon="o_star_border" color="negative" :disable="!canWrite || savingProducts" @click="removeProduct(p)">
+                <q-btn flat round dense icon="o_delete" color="negative" :disable="!canWrite || savingProducts" @click="removeProduct(p)">
                   <q-tooltip>Remove from featured</q-tooltip>
                 </q-btn>
               </q-item-section>

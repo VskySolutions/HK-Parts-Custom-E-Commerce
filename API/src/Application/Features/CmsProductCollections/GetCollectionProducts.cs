@@ -43,6 +43,8 @@ public class GetCollectionProductsQueryHandler : IRequestHandler<GetCollectionPr
             .Where(i => i.CollectionId == request.Id && i.Product != null && i.Product.IsPublished)
             .OrderBy(i => i.DisplayOrder)
             .Include(i => i.Product)
+                .ThenInclude(p => p!.InventoryLevels)
+            .Include(i => i.Product)
                 .ThenInclude(p => p!.Pictures.Where(pic => pic.ProductVariantId == null))
                     .ThenInclude(pic => pic.Media)
             .ToListAsync(cancellationToken);

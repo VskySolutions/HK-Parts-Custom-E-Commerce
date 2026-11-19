@@ -46,12 +46,12 @@
     <div class="sf-card__body">
       <span v-if="brandName" class="sf-card__brand">{{ brandName }}</span>
       <router-link :to="detailTo" class="sf-card__title">{{ product.name }}</router-link>
-
       <StarRating v-if="rating != null" :value="rating" :count="reviewCount" class="q-my-xs" />
 
-      <div class="sf-card__price">
+      <div class="sf-card__price flex justify-between">
         <span class="sf-card__price-now">{{ formatPrice(product.price) }}</span>
         <span v-if="oldPrice" class="sf-card__price-old">{{ formatPrice(oldPrice) }}</span>
+        <q-badge v-if="outOfStock === 0" label="Out of stock" class="q-pb-xs bg-24 text-white" />
       </div>
 
       <div v-if="restockNote" class="text-caption text-orange-9">{{ restockNote }}</div>
@@ -185,6 +185,9 @@ const restockNote = computed(() => {
   }
   return null
 })
+
+// Get product stock quantity and show product is out of stock or not.
+const outOfStock = ref(props.product.stockQuantity);
 
 function normalizeBadge (b) {
   if (typeof b === 'string') {

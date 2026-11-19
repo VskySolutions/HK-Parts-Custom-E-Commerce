@@ -176,11 +176,14 @@
                   :facets="facetGroups"
                   :model-value="selectedOptionIds"
                   show-price
+                  show-stock
                   :min-price="minPrice"
                   :max-price="maxPrice"
+                  :in-stock-only="inStockOnly"
                   @update:model-value="onFiltersChange"
                   @update:min-price="onPriceChange('min', $event)"
                   @update:max-price="onPriceChange('max', $event)"
+                  @update:in-stock-only="onStockChange"
                   @clear="clearFilters"
                 />
               </q-card>
@@ -345,6 +348,7 @@ const view = ref('grid4')
 const selectedOptionIds = ref([])
 const minPrice = ref(null)
 const maxPrice = ref(null)
+const inStockOnly = ref(false)
 const baseFacets = ref([])
 const searchFacets = ref([])
 const loading = ref(false)
@@ -379,6 +383,7 @@ const ymalConfigured = computed(() =>
   Array.isArray(categoryConfig.value && categoryConfig.value.ymalProducts) ? categoryConfig.value.ymalProducts : []
 )
 const ymalDisplay = computed(() => (ymalConfigured.value.length ? ymalConfigured.value : ymal.value))
+console.log("You May Also Like", ymalConfigured.value.length + ymalConfigured.value)
 
 const facetGroups = computed(() => {
   if (!searchFacets.value.length) return baseFacets.value
@@ -466,7 +471,7 @@ async function loadCategoryConfig () {
 
 // Re-query the faceted search when any spec option / price filter is active.
 async function runQuery () {
-  const hasFilters = selectedOptionIds.value.length || minPrice.value != null || maxPrice.value != null
+  const hasFilters = selectedOptionIds.value.length || minPrice.value != null || maxPrice.value != null || inStockOnly.value
   if (!hasFilters) {
     await loadCategory()
     return
@@ -478,6 +483,7 @@ async function runQuery () {
       specificationOptionIds: selectedOptionIds.value,
       minPrice: minPrice.value ?? undefined,
       maxPrice: maxPrice.value ?? undefined,
+      inStockOnly: inStockOnly.value,
       sort: sort.value || undefined,
       page: page.value,
       pageSize: PAGE_SIZE
@@ -505,6 +511,11 @@ function onPriceChange (which, val) {
   page.value = 1
   runQuery()
 }
+function onStockChange (value) {
+  inStockOnly.value = value
+  page.value = 1
+  runQuery()
+}
 function removeOption (optionId) {
   selectedOptionIds.value = selectedOptionIds.value.filter((id) => id !== optionId)
   page.value = 1
@@ -514,6 +525,7 @@ function clearFilters () {
   selectedOptionIds.value = []
   minPrice.value = null
   maxPrice.value = null
+  inStockOnly.value = false
   page.value = 1
   loadCategory()
 }
@@ -553,6 +565,7 @@ watch(
     selectedOptionIds.value = []
     minPrice.value = null
     maxPrice.value = null
+    inStockOnly.value = false
     searchFacets.value = []
     categoryConfig.value = null
     configCategoryId.value = null

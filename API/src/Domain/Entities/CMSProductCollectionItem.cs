@@ -1,4 +1,5 @@
 using HKPartsEcommerce.Domain.Common;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HKPartsEcommerce.Domain.Entities;
 
@@ -12,5 +13,10 @@ public class CMSProductCollectionItem : BaseEntity
     public Guid ProductId { get; set; }
     public Product? Product { get; set; }
 
+    //[NotMapped]
+    //public string StockQuantity = Product.StockQuantity;
+
+    [NotMapped]
+    public int StockQuantity => Product?.InventoryLevels?.Sum(l => l.StockQuantity) ?? 0;
     public int DisplayOrder { get; set; }
 }

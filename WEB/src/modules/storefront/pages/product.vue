@@ -43,7 +43,7 @@
             <h1 class="text-h4 text-weight-bold q-mb-xs" style="line-height: 1.2">{{ heading || product.name }}</h1>
 
             <!-- Rating bar (no rating data yet — invites the first review) -->
-            <div class="row items-center q-gutter-sm q-mb-md" style="display: none !important;">
+            <div class="row items-center q-gutter-sm q-mb-md">
               <StarRating v-if="rating != null" :value="rating" :count="reviewCount" />
               <a v-else class="text-caption text-primary cursor-pointer" @click="tab = 'reviews'">Be the first to review</a>
             </div>
@@ -138,9 +138,9 @@
             </button>
 
             <div class="row q-gutter-sm q-mb-lg">
-              <!-- Wishlist hidden
+              <!-- Wishlist hidden -->
               <q-btn outline color="pink-6" icon="o_favorite_border" label="Wishlist" no-caps :loading="addingToWishlist" @click="onAddToWishlist" />
-              -->
+             
               <q-btn outline color="dark" :icon="inCompare ? 'o_compare_arrows' : 'o_compare'" :label="inCompare ? 'In compare' : 'Compare'" no-caps @click="onToggleCompare" />
             </div>
 
@@ -160,7 +160,7 @@
             </q-list>
 
             <!-- Share -->
-            <div class="row items-center q-gutter-sm q-mt-md" style="display: none !important;">
+            <div class="row items-center q-gutter-sm q-mt-md">
               <span class="text-caption text-grey-7">Share:</span>
               <q-btn round dense flat size="sm" icon="fab fa-facebook-f" type="a" :href="shareUrl('facebook')" target="_blank" />
               <q-btn round dense flat size="sm" icon="fab fa-x-twitter" type="a" :href="shareUrl('twitter')" target="_blank" />
@@ -175,7 +175,7 @@
           <q-tabs v-model="tab" dense no-caps align="left" active-color="primary" indicator-color="primary" class="text-grey-7 sf-tabs">
             <q-tab name="description" label="Description" />
             <q-tab v-if="product.attachments && product.attachments.length" name="attachments" :label="'Attachments (' + product.attachments.length + ')'" />
-            <q-tab name="reviews" :label="`Reviews${reviewCount != null ? ' (' + reviewCount + ')' : ''}`" style="display: none !important;" />
+            <q-tab name="reviews" :label="`Reviews${reviewCount != null ? ' (' + reviewCount + ')' : ''}`" />
             <q-tab name="qa" label="Q&A" />
           </q-tabs>
           <q-separator />
@@ -202,7 +202,7 @@
             </q-tab-panel>
 
             <!-- Reviews (WO-14) -->
-            <q-tab-panel name="reviews" class="q-px-none" style="display: none !important;">
+            <q-tab-panel name="reviews" class="q-px-none">
               <ReviewsSection :product-id="product.id" @summary="onReviewSummary" />
             </q-tab-panel>
 
