@@ -27,7 +27,30 @@
       </div>
     </AppFilterDrawer>
 
-    <AppDataTable page-key="admin-customers" row-key="id" title="All customers" :rows="rows" :columns="columns" :loading="loading" :pagination="pagination" show-actions @request="onRequest" @refresh="reload">
+    <!-- Bulk selection bar: the header checkbox ticks this page; "Select all" widens it to every matching customer. -->
+    <q-banner v-if="canBlacklist && (selected.length || allMatching)" dense class="bg-blue-1 text-blue-10 rounded-borders q-mb-md">
+      <div class="row items-center q-gutter-x-sm">
+        <span v-if="allMatching" class="text-weight-medium">All {{ totalCount }} customers matching the current filters are selected.</span>
+        <template v-else>
+          <span class="text-weight-medium">{{ selected.length }} customer{{ selected.length === 1 ? '' : 's' }} selected.</span>
+          <q-btn
+            v-if="totalCount > selected.length"
+            flat dense no-caps color="primary"
+            :label="`Select all ${totalCount} customers`"
+            @click="selectAllMatching"
+          />
+        </template>
+        <q-btn flat dense no-caps color="grey-8" label="Clear selection" @click="clearSelection" />
+        <q-space />
+        <q-btn
+          unelevated no-caps color="negative" icon="o_block"
+          :label="`Block ${bulkCount} customer${bulkCount === 1 ? '' : 's'}`"
+          @click="openBulkBlacklist"
+        />
+      </div>
+    </q-banner>
+
+    <AppDataTable v-model:selected="selected" page-key="admin-customers" row-key="id" title="All customers" :rows="rows" :columns="columns" :loading="loading" :pagination="pagination" :selectable="canBlacklist" show-actions @request="onRequest" @refresh="reload">
       <template #body-cell-name="cell"><q-td :props="cell"><a class="text-primary cursor-pointer text-weight-medium" @click="view(cell.row)">{{ cell.row.firstName }} {{ cell.row.lastName }}</a></q-td></template>
       <template #body-cell-customerGroupName="cell"><q-td :props="cell"><q-badge v-if="cell.row.customerGroupName" color="indigo" outline :label="cell.row.customerGroupName" /><span v-else class="text-grey-6">—</span></q-td></template>
       <template #body-cell-totalSpent="cell"><q-td :props="cell" class="text-right">{{ formatMoney(cell.row.totalSpent) }}</q-td></template>
@@ -42,6 +65,7 @@
     </AppDataTable>
 
     <BlacklistCustomerDialog v-model="blacklistOpen" :customer="blacklistRow" @blocked="onBlocked" />
+    <BlacklistCustomerDialog v-model="bulkBlacklistOpen" :bulk="bulkPayload" @blocked="onBulkBlocked" />
   </q-page>
 </template>
 
@@ -50,7 +74,7 @@
  * email-verified, registration-date range) with server-side paging/sort. The detail page is
  * the only editor — group assignment, activate/deactivate and read-only tax status live there.
  * Actions → Blacklist (Customers.Blacklist) opens BlacklistCustomerDialog; blacklisted customers are excluded server-side. */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getApiErrorMessage } from 'services/api'
 import { useNotify } from 'composables/useNotify'
@@ -100,10 +124,46 @@ function openBlacklist (row) {
   blacklistRow.value = row
   blacklistOpen.value = true
 }
-async function onBlocked () {
+async function onBlocked (row) {
   notify.success('Customer has been added to the blacklist')
+  selected.value = selected.value.filter((r) => r.id !== row?.id)
   await refreshCurrentPage()
 }
+
+// Bulk block: ticked rows (kept across pages), or — after "Select all" — every customer matching the filters.
+const selected = ref([])
+const allMatching = ref(false)
+const totalCount = computed(() => pagination.value.rowsNumber || 0)
+const bulkCount = computed(() => (allMatching.value ? totalCount.value : selected.value.length))
+const bulkBlacklistOpen = ref(false)
+const bulkPayload = ref(null)
+function clearSelection () {
+  selected.value = []
+  allMatching.value = false
+}
+function selectAllMatching () {
+  selected.value = [...rows.value]
+  allMatching.value = true
+}
+function openBulkBlacklist () {
+  bulkPayload.value = {
+    count: bulkCount.value,
+    allMatching: allMatching.value,
+    customerIds: allMatching.value ? null : selected.value.map((r) => r.id),
+    filter: allMatching.value ? currentFilter() : null
+  }
+  bulkBlacklistOpen.value = true
+}
+async function onBulkBlocked (result) {
+  const blocked = result?.blocked ?? 0
+  const skipped = result?.skipped ?? 0
+  notify.success(`${blocked} customer${blocked === 1 ? '' : 's'} added to the blacklist` +
+    (skipped ? ` (${skipped} skipped: already blocked or not a customer account)` : ''))
+  clearSelection()
+  await fetch({ pagination: { ...pagination.value, page: 1 } })
+}
+// Unticking a row while "all matching" is on drops back to an explicit selection.
+watch(selected, () => { if (allMatching.value && selected.value.length < rows.value.length) allMatching.value = false })
 
 // Re-fetch with the current page/sort/filters; step back a page if the removed row was the last one on it.
 async function refreshCurrentPage () {
@@ -171,6 +231,19 @@ function clearFilters () {
   reload()
 }
 
+// The search + Advanced filters, as the list endpoint and the bulk "all matching" block both take them.
+function currentFilter () {
+  return {
+    search: search.value || undefined,
+    emailVerified: verifiedFilter.value === null ? undefined : verifiedFilter.value,
+    isActive: activeFilter.value === null ? undefined : activeFilter.value,
+    customerGroupId: (groupFilter.value && groupFilter.value !== NO_GROUP) ? groupFilter.value : undefined,
+    hasCustomerGroup: groupFilter.value === NO_GROUP ? false : undefined,
+    registeredFromUtc: regFrom.value || undefined,
+    registeredToUtc: regTo.value || undefined
+  }
+}
+
 async function fetch (props) {
   const p = props?.pagination || pagination.value
   loading.value = true
@@ -178,13 +251,7 @@ async function fetch (props) {
     const r = await customerAdminApi.list({
       page: p.page,
       pageSize: p.rowsPerPage,
-      search: search.value || undefined,
-      emailVerified: verifiedFilter.value === null ? undefined : verifiedFilter.value,
-      isActive: activeFilter.value === null ? undefined : activeFilter.value,
-      customerGroupId: (groupFilter.value && groupFilter.value !== NO_GROUP) ? groupFilter.value : undefined,
-      hasCustomerGroup: groupFilter.value === NO_GROUP ? false : undefined,
-      registeredFromUtc: regFrom.value || undefined,
-      registeredToUtc: regTo.value || undefined,
+      ...currentFilter(),
       sortBy: p.sortBy || undefined,
       sortDescending: !!p.descending
     })
@@ -193,7 +260,8 @@ async function fetch (props) {
   } catch (e) { rows.value = []; notify.error(getApiErrorMessage(e)) } finally { loading.value = false }
 }
 function onRequest (props) { fetch(props) }
-function reload () { fetch({ pagination: { ...pagination.value, page: 1 } }) }
+// A new search / filter changes which customers "selected" means, so it starts a fresh selection.
+function reload () { clearSelection(); fetch({ pagination: { ...pagination.value, page: 1 } }) }
 
 async function loadGroupOptions () {
   try {

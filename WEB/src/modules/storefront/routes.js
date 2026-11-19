@@ -37,6 +37,14 @@ export default [
       },
       // Legacy storefront root — bookmarks and old links land on the real one.
       { path: 'shop', redirect: { name: 'shop-home' } },
+      // Public FFL dealer finder (FFL-100); the legacy /ffl-search URL lands here too.
+      {
+        path: 'shop/ffl-search',
+        name: 'shop-ffl-search',
+        meta: { title: 'FFL Dealers Search' },
+        component: () => import('modules/storefront/pages/ffl-search.vue')
+      },
+      { path: 'ffl-search', redirect: { name: 'shop-ffl-search' } },
       {
         // (.*): migrated slugs contain '/' (hk-parts/ump-parts), so the param may span segments.
         path: 'shop/category/:idOrSlug(.*)',
@@ -158,6 +166,25 @@ export default [
             name: 'shop-account-orders',
             meta: { title: 'My orders' },
             component: () => import('modules/storefront/pages/account/orders.vue')
+          },
+          // ---- Returns (RMA) — docs/order-return-requirements.bak.md section 6 ----
+          {
+            path: 'returns',
+            name: 'shop-account-returns',
+            meta: { title: 'My returns' },
+            component: () => import('modules/storefront/pages/account/returns.vue')
+          },
+          {
+            path: 'returns/new/:orderId',
+            name: 'shop-account-return-new',
+            meta: { title: 'Return items' },
+            component: () => import('modules/storefront/pages/account/return-request.vue')
+          },
+          {
+            path: 'returns/:id',
+            name: 'shop-account-return-detail',
+            meta: { title: 'Return' },
+            component: () => import('modules/storefront/pages/account/return-detail.vue')
           },
           {
             path: 'inquiries',

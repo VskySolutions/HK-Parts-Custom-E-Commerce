@@ -101,6 +101,17 @@ public sealed class StripeTaxCredentialConfig : IntegrationCredentialConfig<Stri
         => b.Property(x => x.PublishableKey).HasMaxLength(300);
 }
 
+public sealed class AvalaraCredentialConfig : IntegrationCredentialConfig<AvalaraCredential>
+{
+    protected override string TableName => "Credentials_Avalara";
+    protected override void ConfigureFields(EntityTypeBuilder<AvalaraCredential> b)
+    {
+        b.Property(x => x.BaseUrl).HasMaxLength(500);
+        b.Property(x => x.AccountId).HasMaxLength(100);
+        b.Property(x => x.CompanyCode).HasMaxLength(100);
+    }
+}
+
 // ---- Shipping carriers -----------------------------------------------------
 
 public sealed class FedExCredentialConfig : IntegrationCredentialConfig<FedExCredential>
@@ -110,6 +121,8 @@ public sealed class FedExCredentialConfig : IntegrationCredentialConfig<FedExCre
     {
         b.Property(x => x.ApiKey).HasMaxLength(300);
         b.Property(x => x.AccountNumber).HasMaxLength(50);
+        b.Property(x => x.MeterNumber).HasMaxLength(50);
+        // Password is [Encrypted] (ciphertext is longer than the plain value): left as nvarchar(max) like ApiSecret.
         b.Property(x => x.DisplayName).HasMaxLength(100);
         b.Property(x => x.RateMode).HasMaxLength(20);
         b.Property(x => x.AllowedServices).HasMaxLength(1000);

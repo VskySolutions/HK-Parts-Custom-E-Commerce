@@ -50,6 +50,17 @@ public class AdminCustomerBlacklistController : ApiControllerBase
         return NoContent();
     }
 
+    /// <summary>Block / unblock history: one row per person with how many times they were blocked and unblocked.</summary>
+    [HttpGet("history")]
+    public async Task<ActionResult<PaginatedList<CustomerBlacklistHistorySummaryDto>>> History(
+        [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken ct = default)
+        => Ok(await Mediator.Send(new ListCustomerBlacklistHistoryQuery(search, page, pageSize), ct));
+
+    /// <summary>Every block / unblock (date, reason, changed by) of one person from the history list.</summary>
+    [HttpGet("history/events")]
+    public async Task<ActionResult<List<CustomerBlacklistHistoryEventDto>>> HistoryEvents([FromQuery] string subjectKey, CancellationToken ct)
+        => Ok(await Mediator.Send(new ListCustomerBlacklistHistoryEventsQuery(subjectKey), ct));
+
     [HttpGet("hits")]
     public async Task<ActionResult<PaginatedList<CustomerBlacklistHitDto>>> Hits(
         [FromQuery] Guid? entryId, [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken ct = default)

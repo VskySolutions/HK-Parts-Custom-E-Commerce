@@ -130,11 +130,25 @@ public class ListCustomerBlacklistQueryHandler : IRequestHandler<ListCustomerBla
             query.OrderByDescending(x => x.CreatedOnUtc), request.Page, Math.Clamp(request.PageSize, 1, 200), ct);
 
         var ids = page.Items.Select(x => x.Id).ToList();
-        var hits = await _db.CustomerBlacklistHits.AsNoTracking()
+
+        // An entry is reused when a customer is unblocked and blocked again, so its hits span every block
+        // period. Count only the refused attempts since the current block began (the latest "Blocked" event);
+        // entries with no such event (created before the history existed) count all their hits.
+        var blockedSince = await _db.CustomerBlacklistEvents.AsNoTracking()
+            .Where(e => e.BlacklistEntryId != null && ids.Contains(e.BlacklistEntryId.Value)
+                        && e.Action == CustomerBlacklistAction.Blocked)
+            .GroupBy(e => e.BlacklistEntryId!.Value)
+            .Select(g => new { Id = g.Key, Since = g.Max(e => e.AtUtc) })
+            .ToDictionaryAsync(x => x.Id, x => x.Since, ct);
+
+        var hitRows = await _db.CustomerBlacklistHits.AsNoTracking()
             .Where(h => ids.Contains(h.BlacklistEntryId))
+            .Select(h => new { h.BlacklistEntryId, h.AtUtc })
+            .ToListAsync(ct);
+        var hits = hitRows
+            .Where(h => !blockedSince.TryGetValue(h.BlacklistEntryId, out var since) || h.AtUtc >= since)
             .GroupBy(h => h.BlacklistEntryId)
-            .Select(g => new { Id = g.Key, Count = g.Count(), Last = g.Max(h => h.AtUtc) })
-            .ToDictionaryAsync(x => x.Id, ct);
+            .ToDictionary(g => g.Key, g => (Count: g.Count(), Last: g.Max(h => h.AtUtc)));
 
         var items = page.Items
             .Select(x => hits.TryGetValue(x.Id, out var h)
@@ -179,10 +193,12 @@ public class SaveCustomerBlacklistEntryCommandHandler : IRequestHandler<SaveCust
     public async Task<CustomerBlacklistEntryDto> Handle(SaveCustomerBlacklistEntryCommand r, CancellationToken ct)
     {
         CustomerBlacklistEntry entry;
+        CustomerBlacklistStatus? previous = null;
         if (r.Id is Guid id)
         {
             entry = await _db.CustomerBlacklistEntries.FirstOrDefaultAsync(x => x.Id == id, ct)
                     ?? throw new NotFoundException(nameof(CustomerBlacklistEntry), id);
+            previous = entry.Status;
         }
         else
         {
@@ -195,11 +211,41 @@ public class SaveCustomerBlacklistEntryCommandHandler : IRequestHandler<SaveCust
         entry.Email = Clean(r.Email)?.ToLowerInvariant();
         entry.Reason = Clean(r.Reason);
         entry.Status = r.Status;
+        if (entry.CustomerId is Guid customerId)
+            await CustomerBlacklistSync.ApplyAsync(_db, customerId, entry.Status == CustomerBlacklistStatus.Blocked, entry.Reason, ct);
+
+        // History: a new blocked entry, or a status change on an existing one.
+        if (previous != entry.Status && (previous is not null || entry.Status == CustomerBlacklistStatus.Blocked))
+            CustomerBlacklistHistory.Record(_db, entry,
+                entry.Status == CustomerBlacklistStatus.Blocked ? CustomerBlacklistAction.Blocked : CustomerBlacklistAction.Unblocked);
         await _db.SaveChangesAsync(ct);
         return CustomerBlacklistEntryDto.From(entry);
     }
 
     private static string? Clean(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+}
+
+/// <summary>
+/// Keeps a customer-linked blacklist entry and the customer's <see cref="BlacklistedCustomer"/> row (which hides
+/// them from the Customers list) in step: blocked ⇒ one active row; unblocked ⇒ the active row is soft-deleted.
+/// Changes are staged only; the caller saves.
+/// </summary>
+internal static class CustomerBlacklistSync
+{
+    public static async Task ApplyAsync(IApplicationDbContext db, Guid customerId, bool blocked, string? reason, CancellationToken ct)
+    {
+        var active = await db.BlacklistedCustomers.FirstOrDefaultAsync(b => b.CustomerId == customerId, ct);
+        if (blocked && active is null)
+            db.BlacklistedCustomers.Add(new BlacklistedCustomer
+            {
+                CustomerId = customerId,
+                Reason = string.IsNullOrWhiteSpace(reason) ? "Blocked" : reason.Trim(),
+            });
+        else if (blocked && active is not null && !string.IsNullOrWhiteSpace(reason))
+            active.Reason = reason.Trim();
+        else if (!blocked && active is not null)
+            db.BlacklistedCustomers.Remove(active); // soft delete (ISoftDeletable): the customer reappears in the list
+    }
 }
 
 public record DeleteCustomerBlacklistEntryCommand(Guid Id) : IRequest;
@@ -214,6 +260,10 @@ public class DeleteCustomerBlacklistEntryCommandHandler : IRequestHandler<Delete
     {
         var entry = await _db.CustomerBlacklistEntries.FirstOrDefaultAsync(x => x.Id == request.Id, ct)
                     ?? throw new NotFoundException(nameof(CustomerBlacklistEntry), request.Id);
+        if (entry.CustomerId is Guid customerId)
+            await CustomerBlacklistSync.ApplyAsync(_db, customerId, blocked: false, reason: null, ct);
+        if (entry.Status == CustomerBlacklistStatus.Blocked)
+            CustomerBlacklistHistory.Record(_db, entry, CustomerBlacklistAction.Unblocked);
         _db.CustomerBlacklistEntries.Remove(entry);
         await _db.SaveChangesAsync(ct);
     }

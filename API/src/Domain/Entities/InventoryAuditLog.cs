@@ -37,6 +37,8 @@ public class InventoryAuditLog : AuditableEntity
     public InventoryScanSource Source { get; set; } = InventoryScanSource.Camera;
     /// <summary>Whether <see cref="ScannedCode"/> matched a SKU or a barcode (GTIN); null when unknown.</summary>
     public InventoryMatchType? MatchedBy { get; set; }
+    /// <summary>The return whose receiving step restocked these units (<see cref="InventoryAuditAction.ReturnRestock"/>).</summary>
+    public Guid? RmaId { get; set; }
     /// <summary>Caller IP (from the connection, never the request body).</summary>
     public string? ClientIp { get; set; }
     /// <summary>Caller User-Agent, truncated to 300 characters.</summary>

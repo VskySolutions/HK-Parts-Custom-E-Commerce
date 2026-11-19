@@ -37,6 +37,12 @@ public class Shipment : AuditableEntity, ISoftDeletable
     /// <summary>eBay shipping-fulfillment id once tracking was reported to eBay (null = not yet sent).</summary>
     public string? EbayFulfillmentId { get; set; }
 
+    /// <summary>Where the shipment came from: null = admin, "shipstation" = a ShipStation ship notice (SS-42).</summary>
+    public string? Source { get; set; }
+
+    /// <summary>What the label cost, when the source reports it (ShipStation ShippingCost, SS-42).</summary>
+    public decimal? ShippingCost { get; set; }
+
     public bool Deleted { get; set; }
     public DateTime? DeletedOnUtc { get; set; }
 

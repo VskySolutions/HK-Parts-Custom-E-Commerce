@@ -57,7 +57,8 @@ public record UpdateProductCommand(
     int PackagePieces = 1,
     string? PackageType = null,
     string? FreightClass = null,
-    bool IsHazardous = false) : IRequest<ProductDto>;
+    bool IsHazardous = false,
+    bool IsReturnable = true) : IRequest<ProductDto>;
 
 public class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
 {
@@ -162,6 +163,7 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
         entity.PackageType = request.PackageType;
         entity.FreightClass = request.FreightClass;
         entity.IsHazardous = request.IsHazardous;
+        entity.IsReturnable = request.IsReturnable;
 
         await _db.SaveChangesAsync(cancellationToken);
         return ProductDto.From(entity);

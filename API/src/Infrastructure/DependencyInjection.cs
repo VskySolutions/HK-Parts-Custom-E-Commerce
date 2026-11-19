@@ -171,6 +171,15 @@ public static class DependencyInjection
         services.AddScoped<HKPartsEcommerce.Application.Features.GiftCertificates.IGiftCertificateService, HKPartsEcommerce.Application.Features.GiftCertificates.GiftCertificateService>();
         services.AddScoped<HKPartsEcommerce.Application.Features.GiftCertificates.IGiftCertificateMailer, HKPartsEcommerce.Infrastructure.Email.GiftCertificateMailer>();
         services.AddSingleton<GiftCertificateApplyRateLimiter>();
+        // FFL dealer directory: ZIP geocoding (Geocodio, 5 s budget) + search rate limit (FFL-32/130/132).
+        services.AddScoped<IZipGeocoder, HKPartsEcommerce.Infrastructure.Ffl.GeocodioZipGeocoder>();
+        services.AddSingleton<FflSearchRateLimiter>();
+
+        // ShipStation Custom Store endpoint (SS-53) + checkout address verification (§4, §6.2).
+        services.AddSingleton<ShipStationRateLimiter>();
+        services.AddScoped<HKPartsEcommerce.Infrastructure.AddressVerification.IAddressVerificationProvider, HKPartsEcommerce.Infrastructure.AddressVerification.UspsAddressProvider>();
+        services.AddScoped<HKPartsEcommerce.Infrastructure.AddressVerification.IAddressVerificationProvider, HKPartsEcommerce.Infrastructure.AddressVerification.AvalaraAddressProvider>();
+        services.AddScoped<IAddressVerificationService, HKPartsEcommerce.Infrastructure.AddressVerification.AddressVerificationService>();
         // Loyalty reward points ledger: earn on order, redeem at checkout, claw back on refund (WO-27).
         services.AddScoped<IRewardPointsService, RewardPointsService>();
         // Recurring orders / subscriptions (WO-49).
@@ -243,6 +252,7 @@ public static class DependencyInjection
         services.AddSingleton<IScheduledTask, ExpiredAuthorizationWorker>();
         services.AddSingleton<IScheduledTask, DatabaseCleanupWorker>();
         services.AddSingleton<IScheduledTask, AbandonedOrderCleanupWorker>();
+        services.AddSingleton<IScheduledTask, ReturnExpiryWorker>();
         services.AddSingleton<IScheduledTask, HKPartsEcommerce.Infrastructure.BackgroundTasks.Workers.WebhookDispatchWorker>();
         services.AddSingleton<IScheduledTask, HKPartsEcommerce.Infrastructure.BackgroundTasks.Workers.EmailDispatchWorker>();
         services.AddSingleton<IScheduledTask, SubscriptionOrderWorker>();

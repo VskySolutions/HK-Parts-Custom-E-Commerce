@@ -104,6 +104,7 @@ const sections = [
       { label: 'Stores', icon: 'o_store', to: '/stores', permissions: [Permissions.StoresRead] },
       { label: 'Inventory', icon: 'o_warehouse', to: '/catalog/inventory', permissions: [Permissions.CatalogRead] },
       { label: 'Shipping', icon: 'o_local_shipping', to: '/shipping', permissions: [Permissions.StoresRead] },
+      { label: 'FFL Dealers', icon: 'o_verified_user', to: '/shipping/ffl-dealers', permissions: [Permissions.StoresRead] },
       { label: 'Tax', icon: 'o_receipt', to: '/tax', permissions: [Permissions.SettingsRead] },
       { label: 'Orders', icon: 'o_receipt_long', to: '/orders', permissions: [Permissions.OrdersRead] },
       { label: 'Returns', icon: 'o_assignment_return', to: '/returns', permissions: [Permissions.OrdersRead] },
@@ -148,9 +149,10 @@ const sections = [
   {
     header: 'Customer Management',
     items: [
-      { label: 'Customers', icon: 'o_people', to: '/customers', permissions: [Permissions.UsersRead] },
+      { label: 'Active Customers', icon: 'o_people', to: '/customers', permissions: [Permissions.UsersRead] },
       { label: 'Customer Groups', icon: 'o_sell', to: '/customer-groups', permissions: [Permissions.UsersRead] },
-      { label: 'Blocked Buyers', icon: 'o_block', to: '/customer-blacklist', permissions: [Permissions.UsersRead] },
+      { label: 'Guest Customers', icon: 'o_person_outline', to: '/guest-customers', permissions: [Permissions.UsersRead] },
+      { label: 'Blocklisted Customers', icon: 'o_block', to: '/customer-blacklist', permissions: [Permissions.UsersRead] },
       { label: 'Tax Exemptions', icon: 'o_verified', to: '/tax-exemption-requests', permissions: [Permissions.UsersRead] },
       { label: 'Contact Us Enquiries', icon: 'o_verified', to: '/contact-us-enquiries', permissions: [Permissions.UsersRead] }
     ]

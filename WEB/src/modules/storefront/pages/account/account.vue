@@ -20,6 +20,7 @@
       <q-route-tab name="profile" label="Profile" icon="o_person" :to="{ name: 'shop-account-profile' }" />
       <q-route-tab name="addresses" label="Addresses" icon="o_location_on" :to="{ name: 'shop-account-addresses' }" />
       <q-route-tab v-if="!isInquiryOnly" name="orders" label="Orders" icon="o_receipt_long" :to="{ name: 'shop-account-orders' }" />
+      <q-route-tab v-if="!isInquiryOnly" name="returns" label="Returns" icon="o_assignment_return" :to="{ name: 'shop-account-returns' }" />
       <q-route-tab name="inquiries" label="My requests" icon="o_contact_support" :to="{ name: 'shop-account-inquiries' }" />
       <q-route-tab v-if="!isInquiryOnly" name="tax-exemption" label="Tax exemption" icon="o_receipt_long" :to="{ name: 'shop-account-tax-exemption' }" />
       <q-route-tab v-if="!isInquiryOnly" name="subscriptions" label="Subscriptions" icon="o_autorenew" :to="{ name: 'shop-account-subscriptions' }" />

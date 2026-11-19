@@ -19,7 +19,25 @@ public class AuthController : ApiControllerBase
     [HttpPost("refresh")]
     [AllowAnonymous]
     public async Task<ActionResult<AuthResponse>> Refresh([FromBody] RefreshTokenCommand command)
-        => Ok(await Mediator.Send(command));
+    {
+        var result = await Mediator.Send(command);
+        if (result.Succeeded)
+            return Ok(result.Response);
+
+        // Same 401 body the exception middleware produces, without throwing: a stale session is routine.
+        var correlationId = HttpContext.Items["CorrelationId"] as string ?? HttpContext.TraceIdentifier;
+        return new ObjectResult(new Dictionary<string, object?>
+        {
+            ["type"] = $"https://httpstatuses.io/{StatusCodes.Status401Unauthorized}",
+            ["title"] = result.Error,
+            ["status"] = StatusCodes.Status401Unauthorized,
+            ["correlationId"] = correlationId,
+        })
+        {
+            StatusCode = StatusCodes.Status401Unauthorized,
+            ContentTypes = { "application/problem+json" },
+        };
+    }
 
     /// <summary>Invalidate all active refresh tokens for the current session.</summary>
     [HttpPost("logout")]

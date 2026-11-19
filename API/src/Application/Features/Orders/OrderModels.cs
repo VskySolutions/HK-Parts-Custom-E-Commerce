@@ -32,11 +32,17 @@ public class OrderDto
     public string? Landmark { get; set; }
     public string? City { get; set; }
     public string? StateProvince { get; set; }
+
+    /// <summary>The bill-to address confirmed at checkout; null for older orders, inquiries and imports, or when not Include()d.</summary>
+    public OrderAddressDto? BillingAddress { get; set; }
     public Guid? AssignedStoreId { get; set; }
     /// <summary>Name of the fulfilling store — only populated when <c>AssignedStore</c> is Include()d.</summary>
     public string? AssignedStoreName { get; set; }
     /// <summary>True when fulfilled by pickup-in-store rather than carrier delivery.</summary>
     public bool IsPickup { get; set; }
+
+    /// <summary>The order has an FFL shipment to a licensed dealer (FFL-90/91).</summary>
+    public bool HasFflItems { get; set; }
     public DateTime PlacedOnUtc { get; set; }
     public DateTime? RoutedOnUtc { get; set; }
     public DateTime? ShippedOnUtc { get; set; }
@@ -115,9 +121,11 @@ public class OrderDto
         Landmark = o.Landmark,
         City = o.City,
         StateProvince = o.StateProvince,
+        BillingAddress = o.BillingAddress is null ? null : OrderAddressDto.From(o.BillingAddress),
         AssignedStoreId = o.AssignedStoreId,
         AssignedStoreName = o.AssignedStore?.Name,
         IsPickup = o.IsPickup,
+        HasFflItems = o.HasFflItems,
         PlacedOnUtc = o.PlacedOnUtc,
         RoutedOnUtc = o.RoutedOnUtc,
         ShippedOnUtc = o.ShippedOnUtc,
@@ -174,7 +182,20 @@ public class OrderShippingDto
     public bool ContainsFflItems { get; set; }
     public string? FflDealerName { get; set; }
     public string? FflNumber { get; set; }
+    public string? FflDealerKey { get; set; }
+    public string? FflDealerStreet { get; set; }
+    public string? FflDealerCity { get; set; }
+    public string? FflDealerState { get; set; }
+    public string? FflDealerZip { get; set; }
+    public string? FflDealerPhone { get; set; }
+    public string? FflSource { get; set; }
     public int RulesVersion { get; set; }
+
+    /// <summary>How the ship-to was verified at placement (AV-15): null/NotChecked, Valid, Suggested, Unavailable…</summary>
+    public string? AddressVerifyStatus { get; set; }
+
+    /// <summary>The buyer kept their own address over the provider's suggestion.</summary>
+    public bool AddressOverridden { get; set; }
 
     public static OrderShippingDto From(OrderShipping s) => new()
     {
@@ -199,7 +220,16 @@ public class OrderShippingDto
         ContainsFflItems = s.ContainsFflItems,
         FflDealerName = s.FflDealerName,
         FflNumber = s.FflNumber,
+        FflDealerKey = s.FflDealerKey,
+        FflDealerStreet = s.FflDealerStreet,
+        FflDealerCity = s.FflDealerCity,
+        FflDealerState = s.FflDealerState,
+        FflDealerZip = s.FflDealerZip,
+        FflDealerPhone = s.FflDealerPhone,
+        FflSource = s.FflSource?.ToString(),
         RulesVersion = s.RulesVersion,
+        AddressVerifyStatus = s.AddressVerifyStatus?.ToString(),
+        AddressOverridden = s.AddressOverridden,
     };
 }
 
@@ -230,6 +260,9 @@ public class OrderLineItemDto
 
     public decimal LineTotal { get; set; }
 
+    /// <summary>The line ships to the FFL dealer.</summary>
+    public bool IsFfl { get; set; }
+
     /// <summary>The values the buyer typed into the product's CustomInput attributes, as snapshotted at placement.</summary>
     public List<CustomAttributeSelection> CustomAttributes { get; set; } = new();
 
@@ -245,6 +278,7 @@ public class OrderLineItemDto
         OriginalUnitPrice = l.OriginalUnitPrice,
         DiscountAmount = l.DiscountAmount,
         LineTotal = l.LineTotal,
+        IsFfl = l.IsFfl,
         CustomAttributes = Common.Models.CustomAttributes.Parse(l.CustomAttributesJson),
     };
 }
@@ -263,8 +297,12 @@ public class OrderSummaryDto
     /// <summary>Number of distinct line items on the order.</summary>
     public int ItemCount { get; set; }
 
+    /// <summary>FFL-90: shown as "FFL Required" in the order list.</summary>
+    public bool HasFflItems { get; set; }
+
     public static OrderSummaryDto From(Order o) => new()
     {
+        HasFflItems = o.HasFflItems,
         Id = o.Id,
         OrderNumber = o.OrderNumber,
         EbayOrderId = o.EbayOrderId,
@@ -273,5 +311,34 @@ public class OrderSummaryDto
         PlacedOnUtc = o.PlacedOnUtc,
         TotalAmount = o.TotalAmount,
         ItemCount = o.Lines.Count,
+    };
+}
+
+/// <summary>A postal address attached to an order (the checkout bill-to).</summary>
+public class OrderAddressDto
+{
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? AddressLine1 { get; set; }
+    public string? AddressLine2 { get; set; }
+    public string? Landmark { get; set; }
+    public string? City { get; set; }
+    public string? StateProvince { get; set; }
+    public string? PostalCode { get; set; }
+    public string? CountryCode { get; set; }
+    public string? PhoneNumber { get; set; }
+
+    public static OrderAddressDto From(Address a) => new()
+    {
+        FirstName = a.FirstName,
+        LastName = a.LastName,
+        AddressLine1 = a.AddressLine1,
+        AddressLine2 = a.AddressLine2,
+        Landmark = a.Landmark,
+        City = a.City,
+        StateProvince = a.StateProvince,
+        PostalCode = a.PostalCode,
+        CountryCode = a.CountryCode,
+        PhoneNumber = a.PhoneNumber,
     };
 }

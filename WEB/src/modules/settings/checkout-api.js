@@ -35,6 +35,14 @@ export const blacklistApi = {
   },
   hits (params) {
     return api.get('/api/admin/blacklist/hits', { params }).then(unwrap)
+  },
+  // Block / unblock history: one row per person with times blocked / unblocked. params: { search, page, pageSize }.
+  history (params) {
+    return api.get('/api/admin/blacklist/history', { params }).then(unwrap)
+  },
+  // Every block / unblock of one person (subjectKey from a history row), newest first.
+  historyEvents (subjectKey) {
+    return api.get('/api/admin/blacklist/history/events', { params: { subjectKey } }).then(unwrap)
   }
 }
 

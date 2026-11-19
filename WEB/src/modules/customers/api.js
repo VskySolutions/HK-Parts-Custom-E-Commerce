@@ -11,6 +11,11 @@ export const customerAdminApi = {
   list (params = {}) { return api.get(CUSTOMERS, { params, paramsSerializer: qsSerializer }).then(unwrap) },
   get (id) { return api.get(`${CUSTOMERS}/${id}`).then(unwrap) },
 
+  // Guest customers: buyers who ordered without registering, one row per contact email. params: { page, pageSize, search }.
+  listGuests (params = {}) { return api.get(`${CUSTOMERS}/guests`, { params }).then(unwrap) },
+  // A guest's orders, newest first.
+  listGuestOrders (email) { return api.get(`${CUSTOMERS}/guests/orders`, { params: { email } }).then(unwrap) },
+
   // Admin creates a customer. payload: { firstName, lastName, email, phoneNumber, password, isActive, emailVerified,
   //   longText, allowRestrictedCapacityPurchases }.
   // Returns the new customer id (Guid string).
@@ -36,6 +41,9 @@ export const customerAdminApi = {
   // Returns the new blacklist record id; the customer then no longer appears in the list.
   // 400 invalid; 404 unknown; 409 already blacklisted / staff account.
   blacklist (id, payload) { return api.post(`${CUSTOMERS}/${id}/blacklist`, payload).then(unwrap) },
+  // Block several customers. payload: { customerIds, allMatching, filter, reason, internalNotes } — the ticked ids,
+  // or every customer the list shows for `filter` when allMatching. Returns { blocked, skipped }.
+  bulkBlacklist (payload) { return api.post(`${CUSTOMERS}/blacklist/bulk`, payload).then(unwrap) },
 
   // Single pricing group (AC-CUS-003.2). getGroup → brief|null; setGroup(null) clears it (base pricing).
   getGroup (id) { return api.get(`${CUSTOMERS}/${id}/group`).then(unwrap) },
@@ -46,6 +54,11 @@ export const customerAdminApi = {
   // Activate / deactivate the customer's login (User.IsActive). Returns the refreshed detail.
   setActive (id, isActive) {
     return api.put(`${CUSTOMERS}/${id}/active`, { customerId: id, isActive }).then(unwrap)
+  },
+
+  // Mark the customer's email verified / unverified (User.EmailVerified). Returns the refreshed detail.
+  setEmailVerified (id, emailVerified) {
+    return api.put(`${CUSTOMERS}/${id}/email-verified`, { customerId: id, emailVerified }).then(unwrap)
   },
 
   // Exempt from the restricted-state shipping rule (SR-92). Returns the refreshed detail.

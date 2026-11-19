@@ -509,7 +509,7 @@ public class FedExCarrierClient : ICarrierClient, IFedExRater
         /// </summary>
         public static FedExSettings? From(FedExCredential c)
         {
-            if (string.IsNullOrWhiteSpace(c.BaseUrl) || string.IsNullOrWhiteSpace(c.ApiKey) ||
+            if (string.IsNullOrWhiteSpace(c.ApiKey) ||
                 string.IsNullOrWhiteSpace(c.ApiSecret) || string.IsNullOrWhiteSpace(c.AccountNumber))
                 return null;
 
@@ -526,7 +526,7 @@ public class FedExCarrierClient : ICarrierClient, IFedExRater
                 : null;
 
             return new FedExSettings(
-                c.BaseUrl.Trim().TrimEnd('/'),
+                FedExCodes.ResolveBaseUrl(c.BaseUrl, c.IsProduction),
                 c.ApiKey.Trim(),
                 c.ApiSecret,
                 c.AccountNumber.Trim(),

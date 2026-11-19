@@ -22,6 +22,8 @@
           <q-tab name="methods" label="Methods" icon="o_local_shipping" :disable="!!methodsBlocked">
             <q-tooltip v-if="methodsBlocked">{{ methodsBlocked }}</q-tooltip>
           </q-tab>
+          <q-tab name="shipstation" label="ShipStation" icon="o_sync_alt" />
+          <q-tab name="verification" label="Verification" icon="o_fact_check" />
           <q-tab name="zones" label="Zones" icon="o_map" />
           <q-tab name="rules" label="Rules" icon="o_rule" />
         </q-tabs>
@@ -63,13 +65,23 @@ import ShippingMethodsPanel from 'modules/shipping/components/ShippingMethodsPan
 import ShippingZonesPanel from 'modules/shipping/components/ShippingZonesPanel.vue'
 import ShippingConfigPanel from 'modules/shipping/components/ShippingConfigPanel.vue'
 import ShippingRulesPanel from 'modules/shipping/components/ShippingRulesPanel.vue'
+import ShipStationPanel from 'modules/shipping/components/ShipStationPanel.vue'
+import AddressVerificationPanel from 'modules/shipping/components/AddressVerificationPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { has } = usePermissions()
 const canWrite = computed(() => has('Stores.Write'))
 
-const TABS = { config: ShippingConfigPanel, methods: ShippingMethodsPanel, zones: ShippingZonesPanel, rules: ShippingRulesPanel }
+const TABS = {
+  config: ShippingConfigPanel,
+  methods: ShippingMethodsPanel,
+  // ShipStation + Address Verification sit next to Methods (docs/shipstation-verification-requirements.md §1).
+  shipstation: ShipStationPanel,
+  verification: AddressVerificationPanel,
+  zones: ShippingZonesPanel,
+  rules: ShippingRulesPanel
+}
 
 const tab = ref(TABS[route.query.tab] ? route.query.tab : 'config')
 const search = ref('')

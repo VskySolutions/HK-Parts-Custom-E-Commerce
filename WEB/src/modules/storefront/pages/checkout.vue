@@ -1,20 +1,4 @@
-watch(lockExpired, async (expired) => {
-  if (!expired || placing.value) return
-  lockExpiresMs.value = null
-const nowMs = ref(Date.now())
-// Kept apart from the quote: clearing the quote (an address edit) must not look like the lock ran out.
-const lockExpiresMs = ref(null)
-function trackLock (at) {
-  if (!at) { lockExpiresMs.value = null; return }
-  // The API sends UTC; add the zone when the serializer left it off.
-  const iso = /(Z|[+-]dd:dd)$/.test(at) ? at : at + 'Z'
-  lockExpiresMs.value = new Date(iso).getTime()
-}
-const lockSecondsLeft = computed(() => {
-  if (!lockExpiresMs.value || orderResult.value) return 0
-  return Math.max(0, Math.floor((lockExpiresMs.value - nowMs.value) / 1000))
-})
-const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value && lockExpiresMs.value <= nowMs.value)<template>
+<template>
   <q-page class="q-pa-md storefront-container">
     <div class="text-h5 text-weight-bold q-mb-md">Checkout</div>
 
@@ -150,11 +134,38 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
     <div v-else-if="items.length" class="row q-col-gutter-lg">
       <!-- Left: address, shipping, payment -->
       <div class="col-12 col-md-7">
-        <q-form ref="formRef" greedy>
+        <!-- Step-by-step progress: one panel at a time; finished steps can be reopened. -->
+        <div v-if="!isInquiry" class="sf-wizard row items-center no-wrap q-mb-md">
+          <template v-for="(s, i) in wizardSteps" :key="s.key">
+            <q-icon v-if="i > 0" name="o_chevron_right" size="18px" color="grey-5" class="q-mx-xs" />
+            <q-btn
+              flat
+              dense
+              no-caps
+              :disable="!canReachStep(i) || placing"
+              :color="s.key === wizardStep ? 'primary' : 'grey-8'"
+              :class="{ 'text-weight-bold': s.key === wizardStep }"
+              class="sf-wizard__step"
+              @click="goToStep(s.key)"
+            >
+              <span class="sf-step q-mr-xs" :class="{ 'sf-step--done': i < wizardIndex }">
+                <q-icon v-if="i < wizardIndex" name="o_check" size="14px" />
+                <template v-else>{{ i + 1 }}</template>
+              </span>
+              {{ s.label }}
+            </q-btn>
+          </template>
+        </div>
+
+        <q-form v-show="isInquiry || wizardStep === 'contact'" ref="formRef" greedy>
           <!-- Contact + delivery address -->
-          <q-card flat bordered class="q-mb-lg">
+          <q-card ref="contactCardRef" flat bordered class="q-mb-lg">
             <q-card-section>
-              <div class="text-subtitle1 text-weight-bold q-mb-md">
+              <div class="text-subtitle1 text-weight-bold q-mb-md row items-center no-wrap">
+                <span v-if="steps.contact" class="sf-step" :class="{ 'sf-step--done': stepDone.contact }">
+                  <q-icon v-if="stepDone.contact" name="o_check" size="14px" />
+                  <template v-else>{{ steps.contact }}</template>
+                </span>
                 {{ contactSectionTitle }}
               </div>
 
@@ -200,8 +211,22 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                 </q-item>
               </div>
 
+              <!-- Mixed FFL + non-FFL cart: the firearms go to the dealer chosen later, everything else ships to
+                   the buyer, so a personal shipping address is still required here. -->
+              <q-banner v-if="fflMixed" dense class="bg-blue-1 text-blue-9 rounded-borders q-mb-md">
+                <template #avatar><q-icon name="o_home" color="blue-9" /></template>
+                Non-FFL items from your order may be shipped directly to your home. Please provide your personal
+                shipping address to directly receive any items that do not require transfer through a licensed dealer.
+              </q-banner>
+              <div
+                v-if="fflMixed && isAuthed && savedAddresses.length"
+                class="text-body2 text-weight-medium q-mb-sm"
+              >
+                Select a shipping address from your address book or enter a new address:
+              </div>
+
               <!-- Signed-in: pick a saved address or add a new one (delivery only) -->
-              <div v-if="!isPickup && isAuthed && savedAddresses.length" class="column q-gutter-sm q-mb-md">
+              <div v-if="!isPickup && !fflOnly && isAuthed && savedAddresses.length" class="column q-gutter-sm q-mb-md">
                 <q-item
                   v-for="a in savedAddresses"
                   :key="a.id"
@@ -254,12 +279,33 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                 </q-item>
               </div>
 
+              <!-- A saved address that lacks a required detail (e.g. no phone): the form is hidden, so offer to
+                   complete it here rather than leaving "calculate shipping" mysteriously unavailable. -->
+              <q-banner
+                v-if="!isPickup && isAuthed && !showContactForm && missingFields.length"
+                dense
+                class="bg-orange-1 text-orange-10 rounded-borders q-mb-sm"
+              >
+                <template #avatar><q-icon name="o_warning" color="orange-10" /></template>
+                This address is missing {{ joinList(missingFields) }}.
+                <template #action>
+                  <q-btn flat dense no-caps color="primary" label="Complete address" @click="editSelectedAddress" />
+                </template>
+              </q-banner>
+
               <!-- Contact recap when a saved address is in use -->
-              <div v-if="!isPickup && isAuthed && !showAddressForm" class="text-caption text-grey-7 q-mb-sm">
+              <div v-if="!isPickup && isAuthed && !showContactForm" class="text-caption text-grey-7 q-mb-sm">
                 Order updates go to <strong>{{ profileEmail }}</strong>
               </div>
 
-              <!-- Manual entry: guest, no saved addresses, "new address" chosen — or any pickup order -->
+              <!-- FFL-only cart: everything ships to the FFL dealer chosen below, so no delivery address is asked
+                   for here — the dealer's premise address becomes the ship-to. -->
+              <q-banner v-if="fflOnly" dense class="bg-blue-1 text-blue-9 rounded-borders q-mb-md">
+                <template #avatar><q-icon name="o_storefront" color="blue-9" /></template>
+                Your order ships to the FFL dealer you choose below, so no delivery address is needed.
+              </q-banner>
+
+              <!-- Manual entry: guest, no saved addresses, "new address" chosen — or any pickup / FFL-only order -->
               <template v-if="showContactForm">
                 <div class="row q-col-gutter-x-md q-mb-sm">
                   <div class="col-12 col-sm-6">
@@ -285,11 +331,13 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                 </div>
                 <!-- Pickup and contact-only inquiries need just who is asking; delivery takes the names
                      from the address form. -->
-                <div v-if="isPickup || contactOnly" class="row q-col-gutter-x-md">
+                <div v-if="isPickup || contactOnly || fflOnly" class="row q-col-gutter-x-md">
                   <div class="col-12 col-sm-6">
                     <AppTextField
                       label="First name"
                       required
+                      lazy-rules
+                      :rules="[(v) => !!(v || '').trim() || 'First name is required']"
                       :model-value="addr.firstName"
                       @update:model-value="addr.firstName = $event"
                     />
@@ -298,6 +346,8 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                     <AppTextField
                       label="Last name"
                       required
+                      lazy-rules
+                      :rules="[(v) => !!(v || '').trim() || 'Last name is required']"
                       :model-value="addr.lastName"
                       @update:model-value="addr.lastName = $event"
                     />
@@ -311,7 +361,7 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                   :show-phone="false"
                 />
                 <q-toggle
-                  v-if="!isPickup && !contactOnly && isAuthed"
+                  v-if="!isPickup && !contactOnly && !fflOnly && isAuthed"
                   v-model="saveNewAddress"
                   label="Save this address to my account"
                   dense
@@ -324,12 +374,95 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
                   unelevated
                   color="primary"
                   no-caps
-                  :label="quoteLabel"
+                  :label="contactContinueLabel"
                   :icon="isPickup ? 'o_storefront' : 'o_local_shipping'"
-                  :loading="quoting"
-                  :disable="!canQuote || quoting"
-                  @click="runQuote"
+                  :icon-right="'o_arrow_forward'"
+                  :loading="quoting || verifyingAddress"
+                  :disable="quoting || verifyingAddress || !items.length"
+                  @click="onContactContinue"
                 />
+                <!-- Shown after a click with incomplete details: the fields are also flagged inline. -->
+                <div v-if="quoteAttempted && quoteMissingText" class="text-caption text-negative q-mt-sm row items-start no-wrap">
+                  <q-icon name="o_error_outline" size="16px" class="q-mr-xs" style="margin-top: 1px" />
+                  <span>{{ quoteMissingText }}</span>
+                </div>
+                <!-- Address verification refused the delivery address (invalid / P.O. box / provider down + block). -->
+                <q-banner v-if="addressError" dense class="bg-red-1 text-red-9 rounded-borders q-mt-md">
+                  <template #avatar><q-icon name="o_wrong_location" color="red-9" /></template>
+                  <div>{{ addressError.message }}</div>
+                  <ul v-if="addressError.messages?.length" class="q-my-xs q-pl-md text-caption">
+                    <li v-for="(m, i) in addressError.messages" :key="i">{{ m }}</li>
+                  </ul>
+                </q-banner>
+              </div>
+            </q-card-section>
+          </q-card>
+        </q-form>
+
+        <!-- Billing address: shown for every order (delivery, pickup, FFL, gift certificate, zero total). Delivery
+             orders default to "same as delivery address"; pickup and FFL-only orders have no buyer ship-to, so the
+             billing address is entered here. Its own form, so "calculate shipping" doesn't flag it early. -->
+        <q-form v-if="!isInquiry" v-show="wizardStep === 'billing'" ref="billingFormRef" greedy>
+          <q-card ref="billingCardRef" flat bordered class="q-mb-lg">
+            <q-card-section>
+              <div class="text-subtitle1 text-weight-bold q-mb-md row items-center no-wrap">
+                <span v-if="steps.billing" class="sf-step" :class="{ 'sf-step--done': stepDone.billing }">
+                  <q-icon v-if="stepDone.billing" name="o_check" size="14px" />
+                  <template v-else>{{ steps.billing }}</template>
+                </span>
+                Billing address
+              </div>
+
+              <q-checkbox
+                v-if="billingCanMatchShipping"
+                v-model="billingSameAsShipping"
+                dense
+                label="Same as delivery address"
+                class="q-mb-sm"
+              />
+
+              <template v-if="billingUsesShipping">
+                <div v-if="shippingAddressText" class="sf-billing-recap rounded-borders text-body2">
+                  <div class="text-weight-medium">{{ shippingNameText }}</div>
+                  <div>{{ shippingAddressText }}</div>
+                  <div v-if="addr.phoneNumber" class="text-grey-7">{{ addr.phoneNumber }}</div>
+                </div>
+                <div v-else class="text-caption text-grey-7">
+                  Your billing address will be the delivery address you enter above.
+                </div>
+              </template>
+
+              <template v-else>
+                <div v-if="isPickup" class="text-caption text-grey-7 q-mb-sm">
+                  Enter the address your payment method is billed to.
+                </div>
+                <div v-else-if="fflVisible" class="text-caption text-grey-7 q-mb-sm">
+                  Orders with FFL items must be billed to a United States address.
+                </div>
+                <q-select
+                  v-if="isAuthed && savedBillingOptions.length"
+                  :model-value="billingSavedId"
+                  outlined
+                  dense
+                  emit-value
+                  map-options
+                  clearable
+                  label="Use a saved address"
+                  :options="savedBillingOptions"
+                  class="q-mb-md"
+                  @update:model-value="applySavedBilling"
+                />
+                <AppAddressForm
+                  v-model="billing"
+                  required
+                  :show-company="false"
+                  :show-phone="false"
+                />
+              </template>
+
+              <div v-if="billingAttempted && billingMissing.length" class="text-caption text-negative q-mt-sm row items-start no-wrap">
+                <q-icon name="o_error_outline" size="16px" class="q-mr-xs" style="margin-top: 1px" />
+                <span>Please add your billing {{ joinList(billingMissing) }}.</span>
               </div>
             </q-card-section>
           </q-card>
@@ -386,15 +519,35 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
           </q-card-section>
         </q-card>
 
+        <!-- FFL Shipping Information: firearms ship to a licensed dealer chosen here (FFL-21). Shown whenever the
+             cart holds FFL items, before or after a quote, so the dealer can be picked first. -->
+        <FflDealerPanel
+          v-if="!isInquiry && !isPickup"
+          v-show="wizardStep === 'ffl'"
+          ref="fflPanelRef"
+          :session-id="sessionId"
+          :billing-zip="billingZip"
+          :disabled="placing"
+          :required-error="fflRequiredError"
+          :reload-key="fflReloadKey"
+          :step="steps.ffl"
+          :step-done="stepDone.ffl"
+          @state="onFflState"
+          @selected="onFflSelected"
+        />
+
         <!-- Address hint before a quote is available -->
         <q-banner
-          v-if="!isInquiry && !quote && !quoting && !quoteError"
+          v-if="!isInquiry && !quote && !quoting && !quoteError && wizardStep === 'contact'"
           dense
           class="bg-blue-1 text-blue-9 rounded-borders q-mb-lg"
         >
           <template #avatar><q-icon name="o_info" color="blue-9" /></template>
           <template v-if="isPickup">
             Choose a store and confirm your contact details, then <strong>Calculate total</strong> to see live totals.
+          </template>
+          <template v-else-if="fflOnly">
+            Confirm your contact details, then <strong>Save &amp; continue</strong>. You'll add your billing address and choose your FFL dealer next.
           </template>
           <template v-else>
             Complete your delivery address, then <strong>Save &amp; calculate shipping</strong> to see options and live totals.
@@ -406,6 +559,34 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
           {{ quoteError }}
         </q-banner>
 
+        <!-- "We suggest: …" (address verification AV-13): the provider corrected the delivery address. -->
+        <q-dialog v-model="suggestionOpen" persistent>
+          <q-card style="width: 520px; max-width: 92vw">
+            <q-card-section class="text-h6">Check your delivery address</q-card-section>
+            <q-card-section class="q-pt-none">
+              <div class="text-body2 q-mb-md">We found a standardised version of the address you entered.</div>
+              <div class="row q-col-gutter-md">
+                <div class="col-12 col-sm-6">
+                  <div class="text-caption text-grey-7">You entered</div>
+                  <div class="address-choice">{{ formatVerifiedAddress(enteredAddressForDialog) }}</div>
+                </div>
+                <div class="col-12 col-sm-6">
+                  <div class="text-caption text-primary text-weight-medium">We suggest</div>
+                  <div class="address-choice address-choice--suggested">{{ formatVerifiedAddress(addressSuggestion) }}</div>
+                </div>
+              </div>
+              <ul v-if="addressSuggestionNotes.length" class="q-mt-sm q-mb-none q-pl-md text-caption text-grey-8">
+                <li v-for="(m, i) in addressSuggestionNotes" :key="i">{{ m }}</li>
+              </ul>
+            </q-card-section>
+            <q-card-actions align="right" class="q-px-md q-pb-md">
+              <q-btn flat no-caps color="grey-8" label="Edit address" :disable="acceptingAddress" @click="suggestionOpen = false" />
+              <q-btn outline no-caps color="primary" label="Keep mine" :loading="acceptingAddress === 'mine'" :disable="!!acceptingAddress" @click="acceptAddress(true)" />
+              <q-btn unelevated no-caps color="primary" label="Use suggested" :loading="acceptingAddress === 'suggested'" :disable="!!acceptingAddress" @click="acceptAddress(false)" />
+            </q-card-actions>
+          </q-card>
+        </q-dialog>
+
         <!-- Low-stock checkout lock (CK-20): an item is held for this buyer until the countdown ends. -->
         <q-banner v-if="lockSecondsLeft > 0" dense class="bg-amber-1 text-amber-10 rounded-borders q-mb-lg">
           <template #avatar><q-icon name="o_timer" color="amber-10" /></template>
@@ -414,7 +595,7 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
 
         <!-- Not routable to any store -->
         <q-banner
-          v-if="quote && !isRoutable"
+          v-if="quote && !isRoutable && wizardStep === 'contact'"
           dense
           class="bg-orange-1 text-orange-9 rounded-borders q-mb-lg"
         >
@@ -424,7 +605,7 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
 
         <!-- Guest ordering not permitted — offer express account creation (AC-CHK-003.2 / AC-STR-001.5) -->
         <q-card
-          v-if="quote && isRoutable && !guestOrderingAllowed"
+          v-if="quote && isRoutable && !guestOrderingAllowed && wizardStep === 'contact'"
           flat
           bordered
           class="q-mb-lg bg-amber-1"
@@ -456,10 +637,18 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
           </q-card-section>
         </q-card>
 
+        <!-- Last step: shipping method + payment (kept mounted while hidden so card fields keep their state). -->
+        <div v-show="isInquiry || wizardStep === 'shipping'">
         <!-- Shipping method — never shown for an inquiry: nothing is being shipped or rated yet. -->
-        <q-card v-if="canCollectDetails && !isInquiry" flat bordered class="q-mb-lg">
+        <q-card v-if="canCollectDetails && !isInquiry" ref="shippingCardRef" flat bordered class="q-mb-lg">
           <q-card-section>
-            <div class="text-subtitle1 text-weight-bold q-mb-sm">{{ isPickup ? 'Collection' : 'Shipping method' }}</div>
+            <div class="text-subtitle1 text-weight-bold q-mb-sm row items-center no-wrap">
+              <span v-if="steps.shipping" class="sf-step" :class="{ 'sf-step--done': stepDone.shipping }">
+                <q-icon v-if="stepDone.shipping" name="o_check" size="14px" />
+                <template v-else>{{ steps.shipping }}</template>
+              </span>
+              {{ isPickup ? 'Collection' : 'Shipping method' }}
+            </div>
             <!-- Per-state notice from the checkout settings (SH-23), e.g. Washington. -->
             <q-banner v-if="quote && quote.stateNotice" dense class="bg-red-1 text-red-9 rounded-borders q-mb-sm">
               <template #avatar><q-icon name="o_warning" color="red-9" /></template>
@@ -478,6 +667,79 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
               />
             </div>
             <q-inner-loading :showing="quoting" color="primary" />
+
+            <!-- FFL shipment (FFL-70..76): the firearms ship to the selected dealer, rated to the dealer's address. -->
+            <template v-if="fflQuote">
+              <div class="text-body2 text-weight-bold q-mb-xs">
+                <q-icon name="o_storefront" class="q-mr-xs" />FFL items: ship to your FFL dealer
+              </div>
+              <div v-if="fflQuote.dealer" class="text-caption text-grey-7 q-mb-xs">
+                {{ fflQuote.dealer.name }}, {{ fflQuote.dealer.street }}, {{ fflQuote.dealer.city }}, {{ fflQuote.dealer.state }} {{ fflQuote.dealer.zip }}
+              </div>
+              <q-banner v-if="fflQuote.dealerRequired" dense class="bg-orange-1 text-orange-10 rounded-borders q-mb-sm">
+                <template #avatar><q-icon name="o_info" color="orange-10" /></template>
+                {{ fflQuote.dealerMessage || 'Please select an FFL dealer.' }}
+                <template #action>
+                  <q-btn flat dense no-caps color="primary" label="Choose a dealer" @click="scrollToFflPanel" />
+                </template>
+              </q-banner>
+              <q-list v-else-if="fflQuote.shippingOptions.length" separator class="q-mb-sm">
+                <q-item v-for="opt in fflQuote.shippingOptions" :key="'ffl-' + opt.methodId" tag="label" clickable>
+                  <q-item-section avatar>
+                    <q-radio
+                      :model-value="selectedFflMethodId"
+                      :val="opt.methodId"
+                      color="primary"
+                      @update:model-value="onFflShippingChange"
+                    />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>
+                      {{ opt.name }}
+                      <q-badge v-if="opt.isRecommended" color="primary" class="q-ml-sm" label="Recommended" />
+                    </q-item-label>
+                    <q-item-label caption>
+                      {{ opt.carrier }}
+                      <span v-if="opt.estimatedDeliveryDays != null"> · {{ deliveryText(opt) }}</span>
+                    </q-item-label>
+                  </q-item-section>
+                  <q-item-section side>
+                    <span class="text-weight-medium text-dark">{{ format(opt.rate) }}</span>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <div v-else class="text-body2 text-negative q-mb-sm">
+                No delivery options are available to your selected FFL dealer. Please choose another dealer or contact us.
+              </div>
+              <div v-if="fflQuote.addOns && fflQuote.shippingOptions.length" class="q-mb-sm">
+                <q-checkbox
+                  v-if="fflQuote.addOns.signatureAvailable"
+                  :model-value="fflRequireSignature"
+                  dense
+                  class="q-mb-xs full-width"
+                  :disable="quoting"
+                  @update:model-value="onFflAddOnChange('signature', $event)"
+                >
+                  Require signature on delivery <span class="text-grey-7">(+{{ format(fflQuote.addOns.signatureFee) }})</span>
+                </q-checkbox>
+                <q-checkbox
+                  v-if="fflQuote.addOns.insuranceAvailable"
+                  :model-value="fflInsure"
+                  dense
+                  class="full-width"
+                  :disable="quoting"
+                  @update:model-value="onFflAddOnChange('insurance', $event)"
+                >
+                  Shipping insurance <span class="text-grey-7">(+{{ format(fflQuote.addOns.insuranceFee) }}, declared value {{ format(fflQuote.addOns.declaredValue) }})</span>
+                </q-checkbox>
+              </div>
+              <template v-if="fflQuote.hasNonFflItems">
+                <q-separator class="q-my-sm" />
+                <div class="text-body2 text-weight-bold q-mb-xs">
+                  <q-icon name="o_home" class="q-mr-xs" />Non-FFL items: ship to your address
+                </div>
+              </template>
+            </template>
 
             <q-list v-if="shippingOptions.length" separator>
               <q-item
@@ -612,9 +874,15 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
         </q-card>
 
         <!-- Payment method (AC-PAY-001.4/5) — absent for an inquiry; no money changes hands. -->
-        <q-card v-if="canCollectDetails && !isInquiry && !payWithGiftCertificate && !noPaymentRequired" flat bordered class="q-mb-lg">
+        <q-card v-if="canCollectDetails && !isInquiry && !payWithGiftCertificate && !noPaymentRequired" ref="paymentCardRef" flat bordered class="q-mb-lg">
           <q-card-section>
-            <div class="text-subtitle1 text-weight-bold q-mb-sm">Payment method</div>
+            <div class="text-subtitle1 text-weight-bold q-mb-sm row items-center no-wrap">
+              <span v-if="steps.payment" class="sf-step" :class="{ 'sf-step--done': stepDone.payment }">
+                <q-icon v-if="stepDone.payment" name="o_check" size="14px" />
+                <template v-else>{{ steps.payment }}</template>
+              </span>
+              Payment method
+            </div>
 
             <div v-if="paymentMethods.length" class="column q-gutter-sm">
               <q-item
@@ -822,6 +1090,23 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
             </div>
           </q-card-section>
         </q-card>
+        </div>
+
+        <!-- Step navigation: Back to the previous panel; Continue on the Billing and FFL steps (the contact step
+             has its own "Save & calculate shipping" button, the last step places the order from the summary). -->
+        <div v-if="!isInquiry && !isFirstWizardStep" class="row items-center justify-between q-mb-lg">
+          <q-btn flat no-caps color="primary" icon="o_arrow_back" label="Back" :disable="placing || continuing" @click="goBack" />
+          <q-btn
+            v-if="wizardStep === 'billing' || wizardStep === 'ffl'"
+            unelevated
+            no-caps
+            color="primary"
+            icon-right="o_arrow_forward"
+            label="Continue"
+            :loading="continuing || quoting"
+            @click="goNext"
+          />
+        </div>
       </div>
 
       <!-- Right: order summary -->
@@ -1075,7 +1360,7 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
             <template v-else>
 
             <!-- Terms and conditions (SH-40): required by the checkout settings; enforced again by the server. -->
-            <div v-if="quote && termsRequired" class="q-mt-md">
+            <div v-if="quote && termsRequired" ref="termsRef" class="q-mt-md">
               <q-checkbox v-model="termsAccepted" dense>
                 <span class="text-body2">
                   {{ quote.termsText }}<template v-if="quote.termsUrl">
@@ -1105,12 +1390,7 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
               :disable="!canPlace"
               @click="placeOrder"
             />
-            <div v-if="quote && paymentDetailsIncomplete" class="text-caption text-grey-7 q-mt-xs text-center">
-              {{ authNetInstrument === 'ach' ? 'Enter valid bank account details to place your order.' : 'Enter valid card details to place your order.' }}
-            </div>
-            <div v-else-if="quote && termsRequired && !termsAccepted" class="text-caption text-grey-7 q-mt-xs text-center">
-              Accept the terms and conditions to place your order.
-            </div>
+            <!-- Only when this store requires an account and the buyer is not signed in. -->
             <q-btn
               v-else
               unelevated
@@ -1120,6 +1400,23 @@ const lockExpired = computed(() => !!lockExpiresMs.value && !orderResult.value &
               label="Sign in to continue"
               :to="loginTo"
             />
+
+            <!-- What still stands between the buyer and Place order; each step jumps to its section. -->
+            <div v-if="placeBlockers.length && !placing" class="sf-checklist rounded-borders q-mt-md">
+              <div class="text-caption text-weight-bold text-grey-8 q-mb-xs">To place your order:</div>
+              <div
+                v-for="b in placeBlockers"
+                :key="b.key"
+                class="sf-checklist__item row items-start no-wrap"
+                role="button"
+                tabindex="0"
+                @click="scrollToSection(b.target)"
+                @keydown.enter.prevent="scrollToSection(b.target)"
+              >
+                <q-icon name="o_arrow_circle_right" size="16px" color="primary" class="q-mr-sm q-mt-xs" />
+                <span class="text-body2 sf-checklist__text">{{ b.text }}</span>
+              </div>
+            </div>
 
             <q-btn
               flat
@@ -1158,8 +1455,9 @@ import AppTextField from 'components/common/AppTextField.vue'
 import AppPhoneInput from 'components/common/AppPhoneInput.vue'
 import SummaryHint from 'modules/storefront/components/SummaryHint.vue'
 import ApplyGiftCertificate from 'modules/storefront/components/ApplyGiftCertificate.vue'
+import FflDealerPanel from 'modules/storefront/components/FflDealerPanel.vue'
 import { isPossiblePhoneNumber } from 'libphonenumber-js'
-import { emptyAddress } from 'composables/useAddress'
+import { emptyAddress, useAddress } from 'composables/useAddress'
 import { checkoutApi } from 'modules/storefront/api'
 import {
   cardNumberError, expiryError, cvcError, accountNameError, routingNumberError, accountNumberError, authNetDetailsValid
@@ -1186,6 +1484,10 @@ const router = useRouter()
 const route = useRoute()
 const customerAuth = useCustomerAuthStore()
 
+// The checkout is a step-by-step flow, one panel at a time: 'contact' → 'billing' → 'ffl' (FFL carts only) →
+// 'shipping' (shipping method + payment). Declared up here because watchers below read it at setup.
+const wizardStep = ref('contact')
+
 // ---- Address form (standard AppAddressForm; email kept separate as the order contact) ----------
 const formRef = ref(null)
 const email = ref('')
@@ -1199,7 +1501,8 @@ const pickupStores = ref([])
 const fulfilment = ref('deliver')
 const pickupStoreId = ref(null)
 const isPickup = computed(() => fulfilment.value === 'pickup')
-const pickupOffered = computed(() => pickupStores.value.length > 0)
+// An FFL-only cart must ship to the buyer's FFL dealer, so collecting in store is not offered for it.
+const pickupOffered = computed(() => pickupStores.value.length > 0 && !fflShipsToDealer.value)
 const fulfilmentOptions = [
   { label: 'Deliver to me', value: 'deliver', icon: 'o_local_shipping' },
   { label: 'Pick up in store', value: 'pickup', icon: 'o_storefront' }
@@ -1232,7 +1535,7 @@ const showAddressForm = computed(() =>
 )
 // Contact is always collected inline under pickup: there is no saved "pickup address" to select from, and
 // the store still needs to know who is collecting.
-const showContactForm = computed(() => isPickup.value || showAddressForm.value)
+const showContactForm = computed(() => isPickup.value || fflOnly.value || showAddressForm.value)
 
 function fillFromAddress (a) {
   addr.value = {
@@ -1272,6 +1575,12 @@ async function loadAccountAddresses () {
     profile.value = prof
     if (prof && prof.email) { email.value = prof.email; profileEmail.value = prof.email }
     const shipping = Array.isArray(book && book.shipping) ? book.shipping : []
+    const billingBook = Array.isArray(book && book.billing) ? book.billing : []
+    savedBillingBook.value = [
+      ...[...billingBook].sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault)),
+      ...shipping
+    ]
+    if (!billingUsesShipping.value) seedBilling()
     savedAddresses.value = shipping
     if (shipping.length) selectSaved(shipping.find((a) => a.isDefault) || shipping[0])
     else selectNew()
@@ -1306,7 +1615,8 @@ function saveCurrentAddress () {
 // duplicates; a no-op for guests, when the "save" toggle is off, or when a saved address is already chosen.
 async function maybeSaveNewAddress () {
   // Pickup collects no address — without this it would post the empty form to the buyer's address book.
-  if (isPickup.value) return
+  // An FFL-only order ships to the dealer, whose address must not land in the buyer's own address book.
+  if (isPickup.value || fflOnly.value) return
   if (!isAuthed.value || !saveNewAddress.value || selectedAddressId.value !== 'new') return
   try {
     const created = await saveCurrentAddress()
@@ -1353,6 +1663,96 @@ async function setSavedAddressDefault (a) {
   }
 }
 
+// ---- Billing address (shown for every order) ----------------------------------------------------
+// A delivery order defaults to "same as delivery address" (a recap is shown). Pickup and FFL-only orders have
+// no buyer ship-to, so the billing address is always entered; signed-in buyers can pick a saved one.
+const billingFormRef = ref(null)
+const billingCardRef = ref(null)
+const billing = ref(emptyAddress())
+const billingSameAsShipping = ref(true)
+const billingAttempted = ref(false)
+const billingSavedId = ref(null)
+const savedBillingBook = ref([]) // address-book billing addresses first, then shipping ones
+const billingCanMatchShipping = computed(() => !isPickup.value && !fflOnly.value)
+const billingUsesShipping = computed(() => billingCanMatchShipping.value && billingSameAsShipping.value)
+const savedBillingOptions = computed(() => savedBillingBook.value.map((a) => ({
+  value: a.id,
+  label: `${[a.firstName, a.lastName].filter(Boolean).join(' ')} — ${formatAddr(a)}`
+})))
+const shippingNameText = computed(() => [addr.value.firstName, addr.value.lastName].filter(Boolean).join(' '))
+const shippingAddressText = computed(() => ((addr.value.addressLine1 || '').trim() ? formatAddr(addr.value) : ''))
+// The FFL dealer search starts from the billing ZIP (FFL-22).
+const billingZip = computed(() => ((billingUsesShipping.value ? addr.value.postalCode : billing.value.postalCode) || '').trim())
+
+function applySavedBilling (id) {
+  billingSavedId.value = id || null
+  const a = savedBillingBook.value.find((x) => x.id === id)
+  if (!a) return
+  billing.value = {
+    ...emptyAddress(),
+    firstName: a.firstName || '', lastName: a.lastName || '',
+    addressLine1: a.addressLine1 || '', addressLine2: a.addressLine2 || '', landmark: a.landmark || '',
+    city: a.city || '', stateProvince: a.stateProvince || '', postalCode: a.postalCode || '',
+    countryCode: a.countryCode || '', phoneNumber: a.phoneNumber || ''
+  }
+}
+
+// When the billing form opens empty, start it with the buyer's default saved billing address, else their name.
+function seedBilling () {
+  if ((billing.value.addressLine1 || '').trim()) return
+  const preferred = savedBillingBook.value.find((a) => a.isDefault && a.addressType === 'Billing') ||
+    savedBillingBook.value.find((a) => a.addressType === 'Billing')
+  if (preferred) return applySavedBilling(preferred.id)
+  billing.value = {
+    ...billing.value,
+    firstName: billing.value.firstName || addr.value.firstName || profile.value?.firstName || '',
+    lastName: billing.value.lastName || addr.value.lastName || profile.value?.lastName || ''
+  }
+}
+
+// What the billing address still lacks, phrased for "Please add your billing …".
+const billingMissing = computed(() => {
+  const fflUs = fflVisible.value
+  if (billingUsesShipping.value) {
+    // The delivery address is checked by the contact step; only the FFL US-billing rule applies here.
+    return fflUs && addr.value.countryCode && addr.value.countryCode !== 'US'
+      ? ['address in the United States (required for FFL items)']
+      : []
+  }
+  const a = billing.value
+  const m = []
+  if (!(a.firstName || '').trim()) m.push('first name')
+  if (!(a.lastName || '').trim()) m.push('last name')
+  if (!a.countryCode) m.push('country')
+  if (!(a.addressLine1 || '').trim()) m.push('street address')
+  if (!(a.city || '').trim()) m.push('city')
+  if (!(a.stateProvince || '').trim()) m.push('state')
+  const zipLabel = (postalMeta(a.countryCode).label || 'postal code').toLowerCase()
+  const zip = (a.postalCode || '').trim()
+  if (!zip) m.push(zipLabel)
+  else if (a.countryCode && !postalValid(a.countryCode, zip)) m.push(`a valid ${zipLabel}`)
+  if (fflUs && a.countryCode && a.countryCode !== 'US') m.push('address in the United States (required for FFL items)')
+  return m
+})
+
+function buildBillTo () {
+  if (billingUsesShipping.value) return buildShipTo()
+  const a = billing.value
+  return {
+    firstName: (a.firstName || '').trim(),
+    lastName: (a.lastName || '').trim(),
+    email: email.value.trim(),
+    phoneNumber: (a.phoneNumber || addr.value.phoneNumber || '').trim() || null,
+    line1: (a.addressLine1 || '').trim(),
+    line2: (a.addressLine2 || '').trim() || null,
+    city: (a.city || '').trim(),
+    region: (a.stateProvince || '').trim() || null,
+    postalCode: (a.postalCode || '').trim() || null,
+    countryCode: (a.countryCode || '').toUpperCase().trim(),
+    landmark: (a.landmark || '').trim() || null
+  }
+}
+
 // ---- Guest contact persistence ----------------------------------------------
 // Save the contact + delivery details to localStorage so a guest who must create an account can sign
 // in and come straight back to a fully-filled checkout (cleared once the order is placed). Restored on
@@ -1360,7 +1760,9 @@ async function setSavedAddressDefault (a) {
 const CHECKOUT_KEY = 'sf.checkout.contact'
 function persistContact () {
   try {
-    LocalStorage.set(CHECKOUT_KEY, { email: email.value, addr: addr.value })
+    LocalStorage.set(CHECKOUT_KEY, {
+      email: email.value, addr: addr.value, billing: billing.value, billingSameAsShipping: billingSameAsShipping.value
+    })
   } catch (e) { /* storage disabled — non-fatal */ }
 }
 function restoreContact () {
@@ -1369,6 +1771,8 @@ function restoreContact () {
     if (saved && typeof saved === 'object') {
       if (typeof saved.email === 'string' && !email.value) email.value = saved.email
       if (saved.addr && typeof saved.addr === 'object') addr.value = { ...emptyAddress(), ...saved.addr }
+      if (saved.billing && typeof saved.billing === 'object') billing.value = { ...emptyAddress(), ...saved.billing }
+      if (typeof saved.billingSameAsShipping === 'boolean') billingSameAsShipping.value = saved.billingSameAsShipping
     }
   } catch (e) { /* ignore malformed */ }
 }
@@ -1380,7 +1784,7 @@ function clearContact () {
   pointsApplied.value = 0
   pointsDiscountAmount.value = 0
 }
-watch([email, addr], persistContact, { deep: true })
+watch([email, addr, billing, billingSameAsShipping], persistContact, { deep: true })
 
 const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()))
 
@@ -1402,30 +1806,38 @@ const phoneValid = computed(() => {
   return !!p && isPossiblePhoneNumber(p)
 })
 
-// Who the order is for — needed either way, and all pickup needs.
-const contactComplete = computed(() => {
+// What is still missing or invalid, in form order, phrased for "Please add …". Who the order is for is
+// always needed (and is all pickup needs); a delivery also needs a postal address with a valid ZIP.
+const { postalMeta, postalValid, statesFor } = useAddress()
+const missingFields = computed(() => {
   const a = addr.value
-  return (
-    !!(a.firstName || '').trim() &&
-    !!(a.lastName || '').trim() &&
-    emailValid.value &&
-    phoneValid.value
-  )
-})
-
-const requiredComplete = computed(() => {
-  if (!contactComplete.value) return false
+  const m = []
+  if (!(a.firstName || '').trim()) m.push('first name')
+  if (!(a.lastName || '').trim()) m.push('last name')
+  if (!email.value.trim()) m.push('email')
+  else if (!emailValid.value) m.push('a valid email')
+  if (!(a.phoneNumber || '').trim()) m.push('phone number')
+  else if (!phoneValid.value) m.push('a valid phone number')
   // Collecting in store, or an inquiry that only collects contact details — nothing is shipped
   // anywhere, so a postal address would be noise.
-  if (isPickup.value || contactOnly.value) return true
-  const a = addr.value
-  return (
-    !!(a.addressLine1 || '').trim() &&
-    !!(a.stateProvince || '').trim() &&
-    !!(a.postalCode || '').trim() &&
-    !!a.countryCode
-  )
+  // An FFL-only cart ships to the dealer: the dealer's address is the ship-to, not the buyer's.
+  if (isPickup.value || contactOnly.value || fflOnly.value) return m
+  if (!a.countryCode) m.push('country')
+  if (!(a.addressLine1 || '').trim()) m.push('street address')
+  if (!(a.stateProvince || '').trim()) m.push('state')
+  const zipLabel = (postalMeta(a.countryCode).label || 'postal code').toLowerCase()
+  const zip = (a.postalCode || '').trim()
+  if (!zip) m.push(zipLabel)
+  else if (a.countryCode && !postalValid(a.countryCode, zip)) m.push(`a valid ${zipLabel}`)
+  return m
 })
+const requiredComplete = computed(() => missingFields.value.length === 0)
+
+// "a, b and c"
+function joinList (list) {
+  if (list.length <= 1) return list.join('')
+  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`
+}
 
 
 // ---- Inquiry mode (REQ-INQ-001) ---------------------------------------------
@@ -1442,7 +1854,8 @@ const contactOnly = computed(() => isInquiry.value && !collectAddress.value)
 
 const contactSectionTitle = computed(() => {
   if (isPickup.value) return 'Contact & pickup store'
-  if (contactOnly.value) return 'Your contact details'
+  if (contactOnly.value || fflOnly.value) return 'Your contact details'
+  if (fflMixed.value) return 'Shipping information'
   if (isInquiry.value) return 'Contact & delivery address'
   return 'Contact & delivery address'
 })
@@ -1577,8 +1990,64 @@ const shippingOptions = computed(() => quote.value?.shippingOptions || [])
 // shipping setup or an unserviceable destination — so it blocks placement rather than waving the order
 // through with no carrier and no shipping cost.
 const shippingUnavailable = computed(
-  () => !!quote.value && !quoting.value && !shippingOptions.value.length
+  () => !!quote.value && !quoting.value && !shippingOptions.value.length &&
+    // An FFL-only cart has no buyer shipment: its only options are the FFL ones.
+    (!quote.value.ffl || quote.value.ffl.hasNonFflItems)
 )
+
+// ---- FFL dealer shipment (docs/ffl-shipping-information-requirements.md) ------------------------
+// The panel keeps the cart's dealer on the server; the quote then rates the firearms to that dealer
+// separately from the buyer's own items. Placement needs a dealer and an FFL method (FFL-51).
+const fflPanelRef = ref(null)
+const fflState = ref(null)
+const fflReloadKey = ref(0)
+const fflRequiredError = ref('')
+const selectedFflMethodId = ref(null)
+const fflRequireSignature = ref(false)
+const fflInsure = ref(false)
+const fflQuote = computed(() => quote.value?.ffl || null)
+// Every shippable line needs a dealer: the whole order ships to the dealer, so the buyer's own delivery
+// address is not collected and the dealer's premise address is sent as the ship-to.
+// Independent of the fulfilment choice, so it can also withdraw the pickup option.
+const fflShipsToDealer = computed(() =>
+  !isInquiry.value && !!fflState.value?.enabled &&
+  !!fflState.value?.hasFflItems && !fflState.value?.hasNonFflItems
+)
+const fflOnly = computed(() => fflShipsToDealer.value && !isPickup.value)
+// FFL items plus ordinary ones: one order, two shipments — firearms to the dealer, the rest to the buyer's own
+// shipping address, which the contact step therefore still collects (and labels as such).
+const fflMixed = computed(() =>
+  !isInquiry.value && !isPickup.value && !!fflState.value?.enabled &&
+  !!fflState.value?.hasFflItems && !!fflState.value?.hasNonFflItems
+)
+// Pickup was chosen before the cart became FFL-only: switch back to delivery (to the dealer).
+watch(fflShipsToDealer, (v) => { if (v && isPickup.value) fulfilment.value = 'deliver' }, { immediate: true })
+function fflAddOnSelection () {
+  return { requireSignature: fflRequireSignature.value, insurance: fflInsure.value }
+}
+function onFflState (s) {
+  fflState.value = s
+}
+function onFflSelected (s) {
+  fflState.value = s
+  fflRequiredError.value = ''
+  // A new dealer re-rates the FFL shipment (and may change tax for an FFL-only cart).
+  if (quote.value) runQuote()
+}
+function onFflShippingChange (methodId) {
+  selectedFflMethodId.value = methodId
+  runQuote()
+}
+function onFflAddOnChange (which, value) {
+  if (which === 'signature') fflRequireSignature.value = value
+  else fflInsure.value = value
+  runQuote()
+}
+function scrollToFflPanel () {
+  fflPanelRef.value?.scrollIntoView()
+}
+// The cart changed (lines added/removed): re-read which lines need a dealer.
+watch(() => items.value.map((i) => i.productId + ':' + i.quantity).join(','), () => { fflReloadKey.value++ })
 
 // The server recommends at most one option, and only when selection is automatic. When it does, show that
 // one and collapse the rest; otherwise every option is primary and the expander stays empty.
@@ -1641,7 +2110,8 @@ const shippingIntegrationName = computed(() => {
   return c ? (CARRIER_META[c] || { label: c }).label : null
 })
 const canQuote = computed(() =>
-  requiredComplete.value && items.value.length > 0 && (!isPickup.value || !!pickupStoreId.value)
+  requiredComplete.value && items.value.length > 0 && (!isPickup.value || !!pickupStoreId.value) &&
+  (!fflOnly.value || !!fflState.value?.dealer)
 )
 
 // Mode-aware calls to action: under pickup there is no shipping to calculate, only a total.
@@ -1649,6 +2119,41 @@ const quoteLabel = computed(() => {
   if (isPickup.value) return quote.value ? 'Recalculate total' : 'Calculate total'
   return quote.value ? 'Recalculate shipping' : 'Save & calculate shipping'
 })
+// The contact step's button: prices the order and moves on to the billing address. An FFL-only cart is priced
+// later (once the dealer is chosen), and an unchanged, already-priced order just continues.
+const contactContinueLabel = computed(() => {
+  if (fflOnly.value) return 'Save & continue'
+  if (quote.value && canCollectDetails.value) return 'Continue'
+  return isPickup.value ? 'Calculate total' : 'Save & calculate shipping'
+})
+
+// The quote button stays clickable: with details missing, a click flags the fields inline and says what to
+// add, instead of a greyed-out button that never explains itself.
+const quoteAttempted = ref(false)
+const quoteMissingText = computed(() => {
+  if (isPickup.value && !pickupStoreId.value) return 'Please choose a store to collect from.'
+  if (missingFields.value.length) return `Please add ${joinList(missingFields.value)}.`
+  if (fflOnly.value && !fflState.value?.dealer) return 'Please choose an FFL dealer below.'
+  return ''
+})
+async function onQuoteClick () {
+  quoteAttempted.value = true
+  if (canQuote.value) return runQuote()
+  emailTouched.value = true
+  if (showContactForm.value) await formRef.value?.validate(true)
+}
+
+// A saved address with a gap: open the form pre-filled with it so the buyer only adds what is missing.
+// Not re-saved to the address book (that would duplicate the address).
+function editSelectedAddress () {
+  const keep = { ...addr.value }
+  selectedAddressId.value = 'new'
+  addr.value = keep
+  saveNewAddress.value = false
+  quoteAttempted.value = true
+  emailTouched.value = true
+  nextTick(() => formRef.value?.validate(true))
+}
 
 // ---- Guest → account (express registration) ---------------------------------
 // When a store disallows guest ordering, turn the already-entered checkout details into an account:
@@ -1702,6 +2207,20 @@ function buildShipTo () {
   if (isPickup.value || contactOnly.value) {
     return { ...contact, line1: '', line2: null, city: '', region: null, postalCode: null, countryCode: '', landmark: null }
   }
+  // FFL-only: the order ships to the selected dealer, so the dealer's premise address is the ship-to.
+  const dealer = fflOnly.value ? fflState.value?.dealer : null
+  if (dealer) {
+    return {
+      ...contact,
+      line1: (dealer.street || '').trim(),
+      line2: null,
+      city: (dealer.city || '').trim(),
+      region: (dealer.state || '').trim() || null,
+      postalCode: (dealer.zip || '').trim() || null,
+      countryCode: 'US',
+      landmark: null
+    }
+  }
   return {
     ...contact,
     line1: (a.addressLine1 || '').trim(),
@@ -1726,9 +2245,13 @@ async function runQuote () {
       shippingMethodId: selectedShippingMethodId.value || null,
       pickupInStore: isPickup.value,
       pickupStoreId: isPickup.value ? pickupStoreId.value : null,
-      addOns: isPickup.value ? null : addOnSelection()
+      addOns: isPickup.value ? null : addOnSelection(),
+      fflShippingMethodId: isPickup.value ? null : (selectedFflMethodId.value || null),
+      fflAddOns: isPickup.value ? null : fflAddOnSelection()
     })
     quote.value = q
+    // Mirror the server's FFL method pick (requested, else recommended, else cheapest).
+    selectedFflMethodId.value = q?.ffl?.selectedMethodId || null
     trackLock(q && q.checkoutLockExpiresUtc)
     // Keep a valid shipping selection, defaulting to whatever the quote actually priced. This mirrors the
     // server's rule (recommended, else cheapest) — if the two disagreed, the radio would show one option
@@ -1899,7 +2422,7 @@ const squareNotConfigured = computed(
 
 // Mount the card field once Square is the chosen method and the payment section is on screen.
 async function ensureSquareCard () {
-  if (paymentMethod.value !== 'Square' || !canCollectDetails.value) return
+  if (paymentMethod.value !== 'Square' || !canCollectDetails.value || wizardStep.value !== 'shipping') return
   squareCardError.value = ''
   await nextTick()
   const ok = await square.mount('#sq-card-container')
@@ -1909,7 +2432,7 @@ async function ensureSquareCard () {
   }
 }
 
-watch([paymentMethod, canCollectDetails], ensureSquareCard)
+watch([paymentMethod, canCollectDetails, wizardStep], ensureSquareCard)
 
 // ---- Authorize.Net on-site card fields (Accept.js) --------------------------
 // Authorize.Net takes the card in plain fields; on Place order Accept.js tokenizes them into a single-use
@@ -2018,19 +2541,349 @@ const canPlace = computed(
     items.value.length > 0 &&
     // An all-online-gift-certificate cart ships nothing, so it has no shipping options to pick from.
     (!!selectedShippingMethodId.value || !(quote.value.shippingOptions || []).length) &&
+    // FFL items need a dealer and a method for the dealer shipment (FFL-51).
+    (!quote.value.ffl || (!!quote.value.ffl.dealer && !!selectedFflMethodId.value)) &&
     (payWithGiftCertificate.value || noPaymentRequired.value || !!paymentMethod.value) &&
+    billingMissing.value.length === 0 &&
     !squareNotConfigured.value &&
     !authNetNotConfigured.value &&
     // Card / bank fields live outside the q-form, so check them here (and again before tokenizing).
     (paymentMethod.value !== 'AuthorizeNet' || payWithGiftCertificate.value || noPaymentRequired.value ||
       authNetDetailsValid(authNetInstrument.value, authNetCard.value, authNetBank.value)) &&
+    // Placed from the last step only, after every panel was confirmed in turn.
+    wizardStep.value === 'shipping' &&
     !placing.value
 )
+
+// ---- Step guidance --------------------------------------------------------------------------------------
+// Numbered section headers (a tick once a step is complete) and the "To place your order" checklist under
+// the Place order button: the button is only ever disabled together with a reason the buyer can act on.
+const fflVisible = computed(() =>
+  !isInquiry.value && !isPickup.value && !!fflState.value?.enabled && !!fflState.value?.hasFflItems
+)
+const fflDealerChosen = computed(() => !!fflState.value?.dealer)
+const needsPayment = computed(() => !payWithGiftCertificate.value && !noPaymentRequired.value)
+
+// Declared here (not with the billing state) because billingUsesShipping reads fflOnly, defined further up.
+watch(billingUsesShipping, (same) => { if (!same) seedBilling() })
+
+const steps = computed(() => {
+  if (isInquiry.value) return {}
+  let n = 0
+  const s = { contact: ++n }
+  s.billing = ++n
+  if (fflVisible.value) s.ffl = ++n
+  s.shipping = ++n
+  if (needsPayment.value) s.payment = ++n
+  return s
+})
+
+const stepDone = computed(() => {
+  const q = quote.value
+  const shippingChosen = !!q && !shippingUnavailable.value &&
+    (!!selectedShippingMethodId.value || !shippingOptions.value.length) &&
+    (!q.ffl || (!!q.ffl.dealer && !!selectedFflMethodId.value))
+  return {
+    contact: !!q && isRoutable.value,
+    billing: billingMissing.value.length === 0 && (!billingUsesShipping.value || !!shippingAddressText.value),
+    ffl: fflDealerChosen.value,
+    shipping: shippingChosen,
+    payment: !!paymentMethod.value && !paymentDetailsIncomplete.value &&
+      !squareNotConfigured.value && !authNetNotConfigured.value
+  }
+})
+
+const placeBlockers = computed(() => {
+  if (isInquiry.value || orderResult.value) return []
+  const q = quote.value
+  const b = []
+  if (!q) {
+    if (isPickup.value && !pickupStoreId.value) {
+      b.push({ key: 'store', text: 'Choose a store to collect from', target: 'contact' })
+    } else if (missingFields.value.length) {
+      b.push({ key: 'details', text: `Add your ${joinList(missingFields.value)}`, target: 'contact' })
+    }
+    // FFL-only carts are priced once the dealer is chosen (FFL step), not from the contact step.
+    if (!fflOnly.value) {
+      b.push({ key: 'quote', text: `Click "${quoteLabel.value}" to see delivery options and totals`, target: 'contact' })
+    }
+  } else if (!isRoutable.value) {
+    b.push({ key: 'route', text: "We can't deliver to this address. Try a different address", target: 'contact' })
+  }
+
+  if (billingMissing.value.length) {
+    b.push({ key: 'billing', text: `Add your billing ${joinList(billingMissing.value)}`, target: 'billing' })
+  }
+
+  if (fflVisible.value && !fflDealerChosen.value) {
+    b.push({ key: 'ffl', text: 'Select an FFL dealer to receive your firearm', target: 'ffl' })
+  }
+
+  if (canCollectDetails.value) {
+    const ffl = q.ffl
+    if (ffl && ffl.dealer && !ffl.shippingOptions.length) {
+      b.push({ key: 'ffl-ship', text: "We can't ship to your selected FFL dealer. Choose another dealer", target: 'ffl' })
+    } else if (ffl && ffl.dealer && !selectedFflMethodId.value) {
+      b.push({ key: 'ffl-method', text: 'Choose a shipping method for your FFL items', target: 'shipping' })
+    }
+    if (shippingUnavailable.value) {
+      b.push({ key: 'no-ship', text: 'No delivery options for this address. Try a different address', target: 'contact' })
+    } else if (shippingOptions.value.length && !selectedShippingMethodId.value) {
+      b.push({ key: 'method', text: 'Choose a shipping method', target: 'shipping' })
+    }
+    if (needsPayment.value) {
+      if (!paymentMethods.value.length) {
+        b.push({ key: 'pay-none', text: 'No payment method is available for this order. Please contact us', target: 'payment' })
+      } else if (!paymentMethod.value) {
+        b.push({ key: 'pay', text: 'Choose a payment method', target: 'payment' })
+      } else if (squareNotConfigured.value || authNetNotConfigured.value) {
+        b.push({ key: 'pay-setup', text: 'Choose another payment method', target: 'payment' })
+      } else if (paymentDetailsIncomplete.value) {
+        b.push({
+          key: 'pay-details',
+          text: authNetInstrument.value === 'ach' ? 'Enter valid bank account details' : 'Enter valid card details',
+          target: 'payment'
+        })
+      }
+    }
+    if (termsRequired.value && !termsAccepted.value) {
+      b.push({ key: 'terms', text: 'Tick the terms and conditions box above', target: 'terms' })
+    }
+  }
+  // Everything is filled in, but the buyer is still on an earlier step (e.g. went Back): send them forward.
+  if (!b.length && wizardStep.value !== 'shipping') {
+    b.push({ key: 'next', text: `Continue to ${wizardSteps.value[wizardSteps.value.length - 1].label.toLowerCase()}`, target: 'shipping' })
+  }
+  return b
+})
+
+// ---- Step-by-step flow ---------------------------------------------------------------------------------
+// One panel at a time: Delivery → Billing → FFL dealer (FFL carts) → Shipping & payment. Back goes to the
+// previous panel; forward only once the current one is complete. Inquiries keep the single-page form.
+const wizardSteps = computed(() => {
+  const s = [
+    { key: 'contact', label: isPickup.value ? 'Contact & store' : (fflOnly.value ? 'Contact' : (fflMixed.value ? 'Shipping address' : 'Delivery address')) },
+    { key: 'billing', label: 'Billing address' }
+  ]
+  if (fflVisible.value) s.push({ key: 'ffl', label: 'FFL dealer' })
+  const last = isPickup.value ? 'Collection' : 'Shipping'
+  s.push({ key: 'shipping', label: needsPayment.value ? `${last} & payment` : last })
+  return s
+})
+const wizardIndex = computed(() => Math.max(0, wizardSteps.value.findIndex((s) => s.key === wizardStep.value)))
+const isFirstWizardStep = computed(() => wizardIndex.value === 0)
+
+// Whether a step's own panel is complete (the last step has nothing after it).
+function wizardStepComplete (key) {
+  if (key === 'contact') return fflOnly.value ? requiredComplete.value : canCollectDetails.value
+  if (key === 'billing') return billingMissing.value.length === 0
+  if (key === 'ffl') return fflDealerChosen.value
+  return false
+}
+// A step can be opened once every step before it is complete; the last one also needs a live quote.
+function canReachStep (index) {
+  const list = wizardSteps.value
+  for (let i = 0; i < index; i++) if (!wizardStepComplete(list[i].key)) return false
+  return list[index]?.key !== 'shipping' || canCollectDetails.value
+}
+function goToStep (key, scroll = true) {
+  const list = wizardSteps.value
+  let target = list.findIndex((s) => s.key === key)
+  if (target < 0) target = list.length - 1
+  // Never skip an incomplete step: stop at the first one that still needs attention.
+  while (target > 0 && !canReachStep(target)) target--
+  wizardStep.value = list[target].key
+  if (scroll) nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+}
+function goBack () {
+  if (wizardIndex.value > 0) goToStep(wizardSteps.value[wizardIndex.value - 1].key)
+}
+
+// "Continue" on the Billing and FFL steps.
+const continuing = ref(false)
+async function goNext () {
+  const key = wizardStep.value
+  if (key === 'billing') {
+    billingAttempted.value = true
+    const ok = billingUsesShipping.value || !billingFormRef.value || await billingFormRef.value.validate()
+    if (!ok || billingMissing.value.length) return
+  }
+  if (key === 'ffl' && !fflDealerChosen.value) {
+    fflRequiredError.value = 'Please select an FFL dealer to continue.'
+    return
+  }
+  const next = wizardSteps.value[wizardIndex.value + 1]
+  if (!next) return
+  // Entering the last step needs a live quote; an FFL-only cart is first priced here, once the dealer is known.
+  if (next.key === 'shipping' && !quote.value) {
+    continuing.value = true
+    try { await runQuote() } finally { continuing.value = false }
+  }
+  goToStep(next.key)
+}
+
+// "Save & calculate shipping" (contact step): price the order, then move on to the billing address.
+async function onContactContinue () {
+  if (fflOnly.value) {
+    // Nothing to price until the dealer is chosen: just check the contact details and continue.
+    quoteAttempted.value = true
+    emailTouched.value = true
+    if (!requiredComplete.value) { await formRef.value?.validate(true); return }
+    return goToStep('billing')
+  }
+  // Already priced and nothing changed (an edit clears the quote): no need to price again.
+  if (quote.value && canCollectDetails.value) return goToStep('billing')
+  // Address verification first (AV-01): a refused or corrected address is dealt with before shipping is rated.
+  if (canQuote.value && !(await verifyDeliveryAddress())) return
+  await onQuoteClick()
+  if (canCollectDetails.value) goToStep('billing')
+}
+
+// ---- Delivery address verification (docs/shipstation-verification-requirements.md AV-01/10/13) ----------
+// The server checks the P.O. box rule and the configured provider (USPS / Avalara) and records the answer on
+// the cart; placement re-checks it, so this step is the friendly version of a rule that is enforced anyway.
+const verifyingAddress = ref(false)
+const addressError = ref(null)
+const suggestionOpen = ref(false)
+const addressSuggestion = ref(null)
+const addressSuggestionNotes = ref([])
+const enteredAddressForDialog = ref(null)
+const acceptingAddress = ref('')
+let verifiedAddressKey = ''
+let resolveSuggestion = null
+
+function deliveryAddressKey () { return JSON.stringify(buildShipTo()) }
+
+function formatVerifiedAddress (a) {
+  if (!a) return ''
+  return [a.line1, a.line2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.countryCode].filter(Boolean).join(', ')
+}
+
+// Resolves true when checkout may go on with the delivery address as it now stands.
+async function verifyDeliveryAddress () {
+  if (isPickup.value || contactOnly.value || fflOnly.value) return true
+  const key = deliveryAddressKey()
+  if (key === verifiedAddressKey) return true
+  addressError.value = null
+  verifyingAddress.value = true
+  let res
+  try {
+    res = await checkoutApi.verifyAddress({ cartId: null, sessionId: sessionId.value, shipTo: buildShipTo() })
+  } catch {
+    // The verify call itself failing never locks the buyer out (AV-14); placement checks the address again.
+    return true
+  } finally {
+    verifyingAddress.value = false
+  }
+  if (res && res.canContinue === false) {
+    addressError.value = {
+      message: res.message || 'We could not verify your shipping address. Please check it and try again.',
+      messages: res.messages || []
+    }
+    return false
+  }
+  if (res?.status === 'suggested' && res.suggestion) {
+    enteredAddressForDialog.value = buildShipTo()
+    addressSuggestion.value = res.suggestion
+    addressSuggestionNotes.value = res.messages || []
+    suggestionOpen.value = true
+    return new Promise((resolve) => { resolveSuggestion = resolve })
+  }
+  verifiedAddressKey = key
+  return true
+}
+
+function finishSuggestion (ok) {
+  const resolve = resolveSuggestion
+  resolveSuggestion = null
+  suggestionOpen.value = false
+  if (resolve) resolve(ok)
+}
+// Closing the dialog with "Edit address" leaves the buyer on the form.
+watch(suggestionOpen, (open) => { if (!open && resolveSuggestion) finishSuggestion(false) })
+
+// Keep what the buyer typed where it only differs in letter case or punctuation.
+function sameText (a, b) {
+  const norm = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()
+  return norm(a) === norm(b)
+}
+
+async function acceptAddress (keepMine) {
+  acceptingAddress.value = keepMine ? 'mine' : 'suggested'
+  try {
+    if (!keepMine) {
+      const sug = addressSuggestion.value || {}
+      const a = addr.value
+      const stateLabel = statesFor(a.countryCode).find((o) => o.value === sug.region)?.label
+      addr.value = {
+        ...a,
+        addressLine1: sug.line1 && !sameText(sug.line1, a.addressLine1) ? sug.line1 : a.addressLine1,
+        addressLine2: sameText(sug.line2, a.addressLine2) ? a.addressLine2 : (sug.line2 || ''),
+        city: sug.city && !sameText(sug.city, a.city) ? sug.city : a.city,
+        stateProvince: stateLabel && !sameText(stateLabel, a.stateProvince) ? stateLabel : a.stateProvince,
+        postalCode: sug.postalCode || a.postalCode
+      }
+      await nextTick()
+    }
+    await checkoutApi.acceptAddress({ cartId: null, sessionId: sessionId.value, shipTo: buildShipTo(), keepMine })
+    verifiedAddressKey = deliveryAddressKey()
+    finishSuggestion(true)
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+  } finally {
+    acceptingAddress.value = ''
+  }
+}
+
+// Editing the address clears an old refusal.
+watch(addr, () => { addressError.value = null }, { deep: true })
+
+// The buyer is past a step that is no longer complete (an address change voided the quote, the cart
+// changed…): bring them back to it, so the visible panel always matches what still needs doing.
+watch(
+  () => [wizardStep.value, quoting.value, canCollectDetails.value, billingMissing.value.length, fflDealerChosen.value, wizardSteps.value.length],
+  () => {
+    if (isInquiry.value || quoting.value || continuing.value || orderResult.value) return
+    if (!wizardSteps.value.some((s) => s.key === wizardStep.value)) return goToStep('shipping')
+    if (!canReachStep(wizardIndex.value)) goToStep(wizardStep.value)
+  }
+)
+
+const contactCardRef = ref(null)
+const shippingCardRef = ref(null)
+const paymentCardRef = ref(null)
+const termsRef = ref(null)
+async function scrollToSection (target) {
+  // Open the step that holds the section first (clamped to the first incomplete step).
+  if (!isInquiry.value && target !== 'terms') {
+    const stepKey = { contact: 'contact', billing: 'billing', ffl: 'ffl', shipping: 'shipping', payment: 'shipping' }[target]
+    if (stepKey && stepKey !== wizardStep.value) {
+      goToStep(stepKey, false)
+      await nextTick()
+      if (stepKey !== wizardStep.value) return // the step isn't reachable yet; the earlier one is now shown
+    }
+  }
+  if (target === 'ffl') return scrollToFflPanel()
+  if (target === 'billing') billingAttempted.value = true
+  const r = { contact: contactCardRef, billing: billingCardRef, shipping: shippingCardRef, payment: paymentCardRef, terms: termsRef }[target]
+  const el = r?.value?.$el || r?.value
+  if (!el || !el.scrollIntoView) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  // Show where to act: a short highlight on the section (the terms box may already be on screen, so a
+  // scroll alone looks like nothing happened), and keyboard focus on the terms checkbox itself.
+  el.classList.remove('sf-flash')
+  void el.offsetWidth // restart the animation when clicked twice
+  el.classList.add('sf-flash')
+  setTimeout(() => el.classList.remove('sf-flash'), 1600)
+  if (target === 'terms') el.querySelector('.q-checkbox')?.focus()
+}
 
 async function placeOrder () {
   placeError.value = ''
   const ok = await formRef.value.validate()
-  if (!ok || !canPlace.value) return
+  billingAttempted.value = true
+  const billOk = billingUsesShipping.value || !billingFormRef.value || await billingFormRef.value.validate()
+  if (!ok || !billOk || !canPlace.value) return
   placing.value = true
   // Snapshot backorder state now — the cart is emptied after a successful placement, so the confirmation
   // notice reads this rather than the (then-empty) cart. Persisted too, so it survives a gateway redirect.
@@ -2041,7 +2894,7 @@ async function placeOrder () {
   } catch (e) { /* storage disabled — non-fatal */ }
   try {
     // Signed-in buyer entering a new address who opted to save it → add it to their account (best-effort).
-    if (!isPickup.value && isAuthed.value && selectedAddressId.value === 'new' && saveNewAddress.value) {
+    if (!isPickup.value && !fflOnly.value && isAuthed.value && selectedAddressId.value === 'new' && saveNewAddress.value) {
       await saveCurrentAddress().catch(() => {})
     }
     // Square: tokenize the entered card into a single-use nonce (source id) before placing — the server
@@ -2054,6 +2907,7 @@ async function placeOrder () {
         cartId: null,
         sessionId: sessionId.value,
         shipTo: buildShipTo(),
+        billTo: buildBillTo(),
         selectedShippingMethodId: selectedShippingMethodId.value,
         paymentToken: null,
         couponCode: null,
@@ -2104,6 +2958,7 @@ async function placeOrder () {
       cartId: null,
       sessionId: sessionId.value,
       shipTo: buildShipTo(),
+      billTo: buildBillTo(),
       selectedShippingMethodId: selectedShippingMethodId.value,
       paymentMethod: paymentMethod.value,
       paymentToken,
@@ -2149,6 +3004,19 @@ async function placeOrder () {
     if (handleCheckoutSessionError(err)) return
     placeError.value = getApiErrorMessage(err)
     notify.error(placeError.value)
+    // No (or no longer eligible) FFL dealer: send the buyer back to the dealer panel.
+    const code = err?.response?.data?.code
+    if (code === 'FFL_DEALER_REQUIRED' || code === 'FFL_DEALER_NOT_ELIGIBLE') {
+      fflRequiredError.value = placeError.value
+      fflReloadKey.value++
+      wizardStep.value = 'ffl'
+      nextTick(scrollToFflPanel)
+    }
+    // A billing problem the page didn't catch (e.g. the FFL US-billing rule): reopen the billing step.
+    if (/billing|billed/i.test(placeError.value || '')) {
+      billingAttempted.value = true
+      wizardStep.value = 'billing'
+    }
     // 409 = the server refused before charging (price changed, method gone, address no longer allowed, …).
     // Re-price so the summary shows what placing again would cost; the buyer then confirms it.
     if (err?.response?.status === 409) runQuote()
@@ -2162,6 +3030,9 @@ async function placeOrder () {
 function shownPrices () {
   return {
     addOns: isPickup.value ? null : addOnSelection(),
+    // The FFL shipment's method and add-ons, priced the same way as the last quote.
+    selectedFflShippingMethodId: isPickup.value ? null : (selectedFflMethodId.value || null),
+    fflAddOns: isPickup.value ? null : fflAddOnSelection(),
     expectedShippingTotal: quote.value ? quote.value.shippingTotal : null,
     expectedTotal: quote.value ? quote.value.total : null,
     // SH-41 / PY-13: the server refuses the placement without it when terms are required.
@@ -2406,9 +3277,86 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
+.address-choice {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 4px;
+  min-height: 56px;
+}
+.address-choice--suggested {
+  border-color: var(--q-primary);
+}
 .storefront-container {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+/* Checkout step progress (wraps to a horizontal scroller on narrow screens). */
+.sf-wizard {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sf-wizard__step {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* Read-only billing recap when billing matches the delivery address. */
+.sf-billing-recap {
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Numbered checkout step; turns into a green tick once complete. */
+.sf-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--q-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.sf-step--done {
+  background: var(--q-positive);
+}
+
+/* "To place your order" checklist under the Place order button. */
+.sf-checklist {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 8px 12px;
+}
+.sf-checklist__item {
+  cursor: pointer;
+  padding: 2px 0;
+  color: var(--q-primary);
+  &:hover .sf-checklist__text, &:focus-visible .sf-checklist__text {
+    text-decoration: underline;
+  }
+  &:focus-visible { outline: none; }
+}
+
+/* Brief highlight on the section a checklist item points to. */
+.sf-flash {
+  animation: sf-flash 1.6s ease-out;
+  border-radius: 4px;
+}
+@keyframes sf-flash {
+  0%, 40% { box-shadow: 0 0 0 3px rgba(242, 140, 40, 0.75); background-color: rgba(242, 140, 40, 0.12); }
+  100% { box-shadow: 0 0 0 3px rgba(242, 140, 40, 0); background-color: transparent; }
+}
+body.body--dark .sf-checklist {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .sf-address-option {

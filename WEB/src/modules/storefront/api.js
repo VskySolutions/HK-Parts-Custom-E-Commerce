@@ -182,6 +182,15 @@ export const checkoutApi = {
   payNone (payload) {
     return customerApi.post(CHECKOUT + '/pay-none', { ...payload, paymentMethod: 'NoPaymentRequired', payWithGiftCertificate: false }).then(unwrap)
   },
+  // Address verification (docs/shipstation-verification-requirements.md §6.1): { cartId, sessionId, shipTo } →
+  // { status: valid|suggested|invalid|unavailable|poBox|notChecked, canContinue, message, messages[], suggestion }.
+  verifyAddress (payload) {
+    return customerApi.post(CHECKOUT + '/address/verify', payload).then(unwrap)
+  },
+  // The buyer's answer to "We suggest: …": { cartId, sessionId, shipTo, keepMine }. keepMine=false sends the suggestion.
+  acceptAddress (payload) {
+    return customerApi.post(CHECKOUT + '/address/accept', payload).then(unwrap)
+  },
   // Release the cart's low-stock checkout lock when the countdown runs out (CK-23). Body { cartId, sessionId }.
   releaseLock (payload) {
     return customerApi.post(CHECKOUT + '/lock/release', payload).then(unwrap)
@@ -213,6 +222,37 @@ export const checkoutApi = {
 }
 
 // ---- currency resource group (WO-26) ----------------------------------------
+// FFL dealer step (docs/ffl-shipping-information-requirements.md §6.1). The browser only talks to our API —
+// the dealer directory is searched server-side, so no directory credentials ever reach the page.
+export const fflApi = {
+  // { enabled, introText, transferWarning, checkoutRadii, publicRadii }
+  config () {
+    return anonApi.get('/api/ffl/config').then(unwrap)
+  },
+  // Checkout radius search -> { zip, radius, dealers[], totalFound, truncated, message }
+  searchCheckout (zip, radius) {
+    return anonApi.get(CHECKOUT + '/ffl/dealers', { params: { zip, radius } }).then(unwrap)
+  },
+  // Public finder radius search (5–50 mi by default).
+  searchPublic (zip, radius) {
+    return anonApi.get('/api/ffl/dealers', { params: { zip, radius } }).then(unwrap)
+  },
+  dealer (key) {
+    return anonApi.get(CHECKOUT + '/ffl/dealers/' + encodeURIComponent(key)).then(unwrap)
+  },
+  // The cart's selected or remembered dealer -> CheckoutFflStateDto. customerApi so a signed-in buyer's
+  // last FFL dealer can be remembered (FFL-25/27).
+  selection (sessionId) {
+    return customerApi.get(CHECKOUT + '/ffl/selection', { params: { sessionId } }).then(unwrap)
+  },
+  select (sessionId, dealerKey) {
+    return customerApi.put(CHECKOUT + '/ffl/selection', { cartId: null, sessionId, dealerKey }).then(unwrap)
+  },
+  clear (sessionId) {
+    return customerApi.delete(CHECKOUT + '/ffl/selection', { params: { sessionId } }).then(unwrap)
+  }
+}
+
 export const currencyApi = {
   // Enabled display currencies (base first), each with code, symbol and rate.
   list () {

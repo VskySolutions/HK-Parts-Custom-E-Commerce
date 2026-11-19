@@ -57,6 +57,11 @@
           </q-badge>
         </q-td>
       </template>
+      <template #body-cell-ffl="cell">
+        <q-td :props="cell">
+          <span v-if="cell.row.hasFflItems" class="text-negative text-weight-medium">FFL Required</span>
+        </q-td>
+      </template>
       <template #body-cell-status="cell">
         <q-td :props="cell"><q-badge :color="orderStatusColor(cell.row.status)" :label="cell.row.status" /></q-td>
       </template>
@@ -93,6 +98,8 @@ const columns = [
   { name: 'contactName', label: 'Customer', field: 'contactName', align: 'left' },
   { name: 'placedOnUtc', label: 'Date', field: 'placedOnUtc', align: 'left', sortable: true },
   { name: 'itemCount', label: 'Items', field: 'itemCount', align: 'center' },
+  // FFL-90: orders that ship firearms to a licensed dealer.
+  { name: 'ffl', label: 'FFL', field: 'hasFflItems', align: 'center' },
   { name: 'totalAmount', label: 'Total', field: 'totalAmount', align: 'right', sortable: true },
   { name: 'status', label: 'Status', field: 'status', align: 'left', sortable: true }
 ]

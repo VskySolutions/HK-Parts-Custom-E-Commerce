@@ -58,6 +58,12 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasForeignKey(x => x.ShippingAddressId)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // Bill-to address confirmed at checkout (a second FK to Addresses → NoAction).
+        b.HasOne(x => x.BillingAddress)
+            .WithMany()
+            .HasForeignKey(x => x.BillingAddressId)
+            .OnDelete(DeleteBehavior.NoAction);
+
         b.HasIndex(x => x.OrderNumber).IsUnique();
         b.HasIndex(x => new { x.AssignedStoreId, x.Status });
         b.HasIndex(x => x.Status);

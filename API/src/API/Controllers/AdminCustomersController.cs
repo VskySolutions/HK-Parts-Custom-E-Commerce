@@ -17,8 +17,37 @@ public class AdminCustomersController : ApiControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedList<CustomerListItemDto>>> List(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
-        [FromQuery] bool? emailVerified = null, [FromQuery] bool? isActive = null, [FromQuery] bool? isTaxExempt = null)
-        => Ok(await Mediator.Send(new ListCustomersQuery(page, pageSize, search, emailVerified, isActive, isTaxExempt)));
+        [FromQuery] bool? emailVerified = null, [FromQuery] bool? isActive = null, [FromQuery] bool? isTaxExempt = null,
+        [FromQuery] Guid? customerGroupId = null, [FromQuery] bool? hasCustomerGroup = null,
+        [FromQuery] DateTime? registeredFromUtc = null, [FromQuery] DateTime? registeredToUtc = null,
+        [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListCustomersQuery(
+            page, pageSize, search, emailVerified, isActive, isTaxExempt,
+            customerGroupId, hasCustomerGroup, registeredFromUtc, registeredToUtc, sortBy, sortDescending)));
+
+    /// <summary>
+    /// Block several customers at once. Body: { customerIds, allMatching, filter, reason, internalNotes } —
+    /// either the ticked ids, or (allMatching = true) every customer the list shows for <c>filter</c>.
+    /// Already-blocked, staff and unknown ids are skipped. Returns { blocked, skipped }. Requires <c>Customers.Blacklist</c>.
+    /// </summary>
+    [HttpPost("blacklist/bulk")]
+    [RequirePermission(Permissions.CustomersBlacklist)]
+    public async Task<ActionResult<BulkBlacklistCustomersResult>> BulkBlacklist([FromBody] BulkBlacklistCustomersCommand command)
+        => Ok(await Mediator.Send(command));
+
+    /// <summary>
+    /// Guest customers: buyers who placed a storefront order without registering, one row per contact email,
+    /// most recent first. Search matches email, name, phone or order number.
+    /// </summary>
+    [HttpGet("guests")]
+    public async Task<ActionResult<PaginatedList<GuestCustomerDto>>> ListGuests(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
+        => Ok(await Mediator.Send(new ListGuestCustomersQuery(page, pageSize, search)));
+
+    /// <summary>A guest customer's orders (by contact email), newest first.</summary>
+    [HttpGet("guests/orders")]
+    public async Task<ActionResult<List<GuestOrderDto>>> ListGuestOrders([FromQuery] string email)
+        => Ok(await Mediator.Send(new ListGuestCustomerOrdersQuery(email)));
 
     /// <summary>Admin creates a customer (identity + profile) and returns the new customer id. Email is marked verified or a verification email is sent, per the request.</summary>
     [HttpPost]
@@ -124,6 +153,12 @@ public class AdminCustomersController : ApiControllerBase
     [HttpPut("{id:guid}/active")]
     [RequirePermission(Permissions.UsersWrite)]
     public async Task<ActionResult<CustomerDetailDto>> SetActive(Guid id, [FromBody] SetCustomerActiveCommand command)
+        => Ok(await Mediator.Send(command with { CustomerId = id }));
+
+    /// <summary>Mark the customer's email verified / unverified (User.EmailVerified). Unverified customers cannot sign in.</summary>
+    [HttpPut("{id:guid}/email-verified")]
+    [RequirePermission(Permissions.UsersWrite)]
+    public async Task<ActionResult<CustomerDetailDto>> SetEmailVerified(Guid id, [FromBody] SetCustomerEmailVerifiedCommand command)
         => Ok(await Mediator.Send(command with { CustomerId = id }));
 
     /// <summary>Exempt the customer from the restricted-state shipping rule (SR-92), or remove the exemption.</summary>

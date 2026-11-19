@@ -1,6 +1,13 @@
 /* Shipping admin module routes (WO-116). */
 export default [
   {
+    // FFL dealer directory + FFL shipping settings (docs/ffl-shipping-information-requirements.md).
+    path: 'shipping/ffl-dealers',
+    name: 'admin-ffl-dealers',
+    meta: { title: 'FFL Dealers', permissions: ['Stores.Read'] },
+    component: () => import('modules/shipping/pages/ffl-dealers.vue')
+  },
+  {
     path: 'shipping',
     name: 'admin-shipping',
     meta: { title: 'Shipping', permissions: ['Stores.Read'] },

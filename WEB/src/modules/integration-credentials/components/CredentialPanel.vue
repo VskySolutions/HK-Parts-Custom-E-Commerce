@@ -106,7 +106,17 @@
             <AppFieldLabel label="Active" />
             <q-toggle v-model="form.active" :label="form.active ? 'Used at runtime' : 'Not used'" color="positive" />
           </div>
-          <div class="col-12 col-sm-6">
+          <!-- Legacy "Test Mode" wording for providers that ask for it: on = sandbox (isProduction false). -->
+          <div v-if="item.testModeToggle" class="col-12 col-sm-6">
+            <AppFieldLabel label="Test Mode" />
+            <q-toggle
+              :model-value="!form.isProduction"
+              :label="form.isProduction ? 'Off (live)' : 'On (sandbox)'"
+              color="orange-7"
+              @update:model-value="(v) => { form.isProduction = !v }"
+            />
+          </div>
+          <div v-else class="col-12 col-sm-6">
             <AppFieldLabel label="Environment" />
             <q-toggle v-model="form.isProduction" :label="form.isProduction ? 'Production' : 'Sandbox'" color="blue-7" />
           </div>
@@ -116,7 +126,7 @@
 
         <!-- Fields with `col: 'half' | 'third'` share a row on a wide drawer (short numbers, selects). -->
         <div class="row q-col-gutter-md">
-        <div v-for="field in item.fields" :key="field.key" :class="fieldCol(field)">
+        <div v-for="field in visibleFields" :key="field.key" :class="fieldCol(field)">
           <template v-if="field.type === 'toggle'">
             <q-toggle v-model="form.fields[field.key]" :label="field.label" color="primary" />
           </template>
@@ -130,6 +140,34 @@
             :required="!!field.required || (!!field.requiredWhenActive && form.active)"
             :error="!!fieldError(field)"
             :error-message="fieldError(field) || undefined"
+          />
+          <!-- "Ship to applicable countries": All / Specific. Not sent; it decides whether the country list is. -->
+          <AppSelect
+            v-else-if="field.type === 'countryScope'"
+            :model-value="form.fields[field.key]"
+            @update:model-value="(v) => { form.fields[field.key] = v; if (v === 'all' && field.countriesKey) form.fields[field.countriesKey] = [] }"
+            :label="field.label"
+            :options="COUNTRY_SCOPE_OPTIONS"
+            emit-value
+            map-options
+          />
+          <AppSelect
+            v-else-if="field.type === 'countries'"
+            :model-value="form.fields[field.key]"
+            @update:model-value="(v) => onCountriesPicked(field, v)"
+            :label="field.label"
+            :options="countryFilter[field.key] || countryOptions"
+            multiple
+            use-chips
+            use-input
+            emit-value
+            map-options
+            input-debounce="0"
+            :required="!isCountryPickerOff(field)"
+            :placeholder="isCountryPickerOff(field) ? 'All countries (pick to limit)' : undefined"
+            :error="!!fieldError(field)"
+            :error-message="fieldError(field) || undefined"
+            @filter="(val, update) => filterCountries(field.key, val, update)"
           />
           <AppSelect
             v-else-if="field.type === 'tags'"
@@ -241,6 +279,7 @@ import AppTextField from 'components/common/AppTextField.vue'
 import AppFieldLabel from 'components/common/AppFieldLabel.vue'
 import AppSelect from 'components/common/AppSelect.vue'
 import PanelHeader from 'modules/integration-credentials/components/PanelHeader.vue'
+import { useAddress } from 'composables/useAddress'
 
 const props = defineProps({
   item: { type: Object, required: true }
@@ -338,6 +377,40 @@ function fieldRules (field) {
   return rules
 }
 
+// ---- Ship-to countries: "All Countries" / "Specific Countries" + a country picker (legacy PHP parity) ----
+// A 'countryScope' field is form-only: "all" sends an empty country list (the carrier then ships everywhere),
+// "specific" shows the 'countries' field it controls (showWhen) and needs at least one country.
+const COUNTRY_SCOPE_OPTIONS = [
+  { label: 'All Countries', value: 'all' },
+  { label: 'Specific Countries', value: 'specific' }
+]
+const { countryOptions } = useAddress()
+const countryFilter = reactive({})
+function filterCountries (key, val, update) {
+  update(() => {
+    const needle = (val || '').trim().toLowerCase()
+    countryFilter[key] = needle
+      ? countryOptions.filter((c) => c.label.toLowerCase().includes(needle) || String(c.value).toLowerCase() === needle)
+      : countryOptions
+  })
+}
+function isVisible (field) {
+  return !field.showWhen || form.fields[field.showWhen.key] === field.showWhen.value
+}
+// A country picker stays on screen and editable while "All Countries" is chosen, as on the legacy PHP
+// screen; isVisible() still decides whether it is validated and sent.
+function isCountryPickerOff (field) {
+  return field.type === 'countries' && !isVisible(field)
+}
+// Picking a country while "All Countries" is selected switches the scope to "Specific Countries".
+function onCountriesPicked (field, value) {
+  form.fields[field.key] = value
+  if (field.showWhen && Array.isArray(value) && value.length) {
+    form.fields[field.showWhen.key] = field.showWhen.value
+  }
+}
+const visibleFields = computed(() => (props.item.fields || []).filter((f) => isVisible(f) || f.type === 'countries'))
+
 // List fields (select/multiselect/tags/toggle) are not q-input based, so their one rule — "pick at least
 // one while active" — is checked here and blocks the save (the API refuses it too: US-T2).
 const triedSave = ref(false)
@@ -347,15 +420,20 @@ function fieldError (field) {
     const v = form.fields[field.key]
     if (!Array.isArray(v) || v.length === 0) return 'Choose at least one while active'
   }
+  if (field.type === 'countries' && isVisible(field)) {
+    const v = form.fields[field.key]
+    if (!Array.isArray(v) || v.length === 0) return 'Choose at least one country, or pick All Countries'
+  }
   return null
 }
 const listFieldsInvalid = computed(() =>
   (props.item.fields || []).some((f) =>
-    f.type === 'multiselect' && f.requiredWhenActive && form.active &&
-    !(Array.isArray(form.fields[f.key]) && form.fields[f.key].length)))
+    (f.type === 'multiselect' && f.requiredWhenActive && form.active &&
+      !(Array.isArray(form.fields[f.key]) && form.fields[f.key].length)) ||
+    (f.type === 'countries' && isVisible(f) && !(Array.isArray(form.fields[f.key]) && form.fields[f.key].length))))
 
 function isListField (field) {
-  return field.type === 'multiselect' || field.type === 'tags'
+  return field.type === 'multiselect' || field.type === 'tags' || field.type === 'countries'
 }
 
 // Grid width of a field: full row by default; 'half' / 'third' share a row from the sm breakpoint up.
@@ -418,6 +496,11 @@ function openForm (dto) {
       ? (Array.isArray(dto[f.key]) ? [...dto[f.key]] : dto[f.key])
       : (!dto && f.prefill ? prefillValue(f.prefill) : emptyValue(f))
   }
+  for (const f of props.item.fields) {
+    if (f.type !== 'countryScope') continue
+    const list = fields[f.countriesKey]
+    fields[f.key] = Array.isArray(list) && list.length ? 'specific' : (dto ? 'all' : (f.prefill || 'all'))
+  }
   triedSave.value = false
   form.name = dto?.name || ''
   form.active = dto ? !!dto.active : false
@@ -461,6 +544,12 @@ function buildPayload () {
   const payload = { name: form.name.trim(), active: form.active, isProduction: form.isProduction }
   for (const f of props.item.fields) {
     const v = form.fields[f.key]
+    if (f.type === 'countryScope') continue
+    if (!isVisible(f)) {
+      // A hidden country list ("All Countries") is sent empty, which means every country.
+      if (isListField(f)) payload[f.key] = []
+      continue
+    }
     if (isListField(f)) {
       payload[f.key] = Array.isArray(v) ? v : []
     } else if (f.type === 'toggle') {

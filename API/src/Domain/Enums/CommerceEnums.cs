@@ -19,6 +19,13 @@ public enum CustomerBlacklistStatus
     Inactive = 1
 }
 
+/// <summary>A change recorded in the block / unblock history.</summary>
+public enum CustomerBlacklistAction
+{
+    Blocked = 0,
+    Unblocked = 1
+}
+
 /// <summary>How a blacklist entry matches a buyer at checkout (PY-15).</summary>
 public enum BlacklistMatchMode
 {

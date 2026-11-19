@@ -18,6 +18,8 @@ public class FedExCredentialDto
     public string? ApiKey { get; set; }
     public string? ApiSecret { get; set; }
     public string? AccountNumber { get; set; }
+    public string? MeterNumber { get; set; }
+    public string? Password { get; set; }
     public string? DisplayName { get; set; }
     public string? RateMode { get; set; }
     public List<string> AllowedServices { get; set; } = new();
@@ -38,6 +40,7 @@ public class FedExCredentialDto
     {
         Id = e.Id, Name = e.Name, Active = e.Active, IsProduction = e.IsProduction,
         BaseUrl = e.BaseUrl, ApiKey = e.ApiKey, ApiSecret = e.ApiSecret, AccountNumber = e.AccountNumber,
+        MeterNumber = e.MeterNumber, Password = e.Password,
         DisplayName = e.DisplayName,
         RateMode = e.RateMode,
         AllowedServices = UspsMailClasses.SplitList(e.AllowedServices),
@@ -89,16 +92,21 @@ public record SaveFedExCredentialCommand(
     decimal? HandlingFee = null,
     decimal? MinimumOrderAmount = null,
     List<string>? ShipToCountries = null,
-    bool LoggingEnabled = false) : IRequest<FedExCredentialDto>;
+    bool LoggingEnabled = false,
+    string? MeterNumber = null,
+    string? Password = null) : IRequest<FedExCredentialDto>;
 
 public class SaveFedExCredentialCommandValidator : AbstractValidator<SaveFedExCredentialCommand>
 {
     public SaveFedExCredentialCommandValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.BaseUrl).NotEmpty().MaximumLength(500)
-            .Must(IntegrationCredentialSupport.BeAnAbsoluteHttpUrl)
+        // Optional: blank follows Test Mode (IsProduction false = sandbox host, true = live host).
+        RuleFor(x => x.BaseUrl).MaximumLength(500)
+            .Must(u => string.IsNullOrWhiteSpace(u) || IntegrationCredentialSupport.BeAnAbsoluteHttpUrl(u))
             .WithMessage("Base URL must be an absolute http(s) URL, e.g. https://apis-sandbox.fedex.com");
+        RuleFor(x => x.MeterNumber).MaximumLength(50);
+        RuleFor(x => x.Password).MaximumLength(200);
         RuleFor(x => x.ApiKey).NotEmpty();
         RuleFor(x => x.ApiSecret).NotEmpty();
         // Required, not optional: FedEx rejects an account-less rate request with a 403 that names no
@@ -150,6 +158,8 @@ public class SaveFedExCredentialCommandHandler : IRequestHandler<SaveFedExCreden
         e.ApiKey = IntegrationCredentialSupport.Norm(request.ApiKey);
         e.ApiSecret = IntegrationCredentialSupport.Norm(request.ApiSecret);
         e.AccountNumber = IntegrationCredentialSupport.Norm(request.AccountNumber);
+        e.MeterNumber = IntegrationCredentialSupport.Norm(request.MeterNumber);
+        e.Password = IntegrationCredentialSupport.Norm(request.Password);
         e.DisplayName = IntegrationCredentialSupport.Norm(request.DisplayName);
         e.RateMode = IntegrationCredentialSupport.Norm(request.RateMode)?.ToUpperInvariant();
         // Saved as an explicit (possibly empty) list: null means "never configured" and offers every service.

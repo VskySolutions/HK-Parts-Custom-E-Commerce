@@ -6,6 +6,7 @@ using HKPartsEcommerce.Application.Common.Exceptions;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.Checkout;
+using HKPartsEcommerce.Application.Features.Ffl;
 using HKPartsEcommerce.Application.Features.GiftCertificates;
 using HKPartsEcommerce.Application.Features.OrderRouting;
 using HKPartsEcommerce.Application.Features.Payments;
@@ -44,6 +45,10 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     private readonly IGiftCertificateService? _giftCertificates;
     private readonly ISettingsService? _settings;
     private readonly ICheckoutLockService? _checkoutLocks;
+    private readonly IAddressVerificationService? _addressVerification;
+
+    /// <summary>The ship-to verification of the order being placed (AV-15), copied onto its shipping row. Set by PlaceAsync.</summary>
+    private (AddressVerificationStatus Status, bool Overridden)? _placementAddressCheck;
 
     public CheckoutOrchestrator(
         IApplicationDbContext db,
@@ -65,7 +70,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // Optional so existing composition (tests) keeps working; DI always supplies them.
         IGiftCertificateService? giftCertificates = null,
         ISettingsService? settings = null,
-        ICheckoutLockService? checkoutLocks = null)
+        ICheckoutLockService? checkoutLocks = null,
+        IAddressVerificationService? addressVerification = null)
     {
         _db = db;
         _routing = routing;
@@ -86,13 +92,15 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         _giftCertificates = giftCertificates;
         _settings = settings;
         _checkoutLocks = checkoutLocks;
+        _addressVerification = addressVerification;
     }
 
     public async Task<CheckoutQuote> QuoteAsync(CheckoutQuoteRequest req, CancellationToken ct)
     {
         var priced = await BuildAsync(
             req.CartId, req.SessionId, req.ShipTo, req.ShippingMethodId,
-            requestCouponCode: null, forPlacement: false, req.PickupInStore, req.PickupStoreId, req.AddOns, ct);
+            requestCouponCode: null, forPlacement: false, req.PickupInStore, req.PickupStoreId, req.AddOns, ct,
+            req.FflShippingMethodId, req.FflAddOns);
 
         var quote = new CheckoutQuote
         {
@@ -104,19 +112,10 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             DiscountTotal = priced.DiscountTotal,
             ShippingOptions = priced.ShippingOptions.ToList(),
             ShippingTotal = priced.ShippingTotal,
-            ShippingMethodTotal = priced.Shipping?.MethodPrice ?? priced.ShippingTotal,
-            ShippingAddOns = priced.Shipping is { } s && (s.SignatureAvailable || s.InsuranceAvailable)
-                ? new ShippingAddOnQuote
-                {
-                    SignatureAvailable = s.SignatureAvailable,
-                    SignatureFee = s.SignatureFeeOffered,
-                    SignatureSelected = s.SignatureSelected,
-                    InsuranceAvailable = s.InsuranceAvailable,
-                    InsuranceFee = s.InsuranceFeeOffered,
-                    InsuranceSelected = s.InsuranceSelected,
-                    DeclaredValue = s.DeclaredValue,
-                }
-                : null,
+            ShippingMethodTotal = priced.Ffl is { } fflPart
+                ? (priced.Shipping?.MethodPrice ?? 0m) + fflPart.Pricing.MethodPrice
+                : priced.Shipping?.MethodPrice ?? priced.ShippingTotal,
+            ShippingAddOns = ToAddOnQuote(priced.Shipping),
             Tax = priced.Tax,
             TaxTotal = priced.TaxTotal,
             Total = priced.Total,
@@ -125,6 +124,25 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             GuestOrderingAllowed = priced.GuestOrderingAllowed,
             IsInquiry = priced.IsInquiry,
         };
+
+        // The FFL shipment (§5.8): the dealer and the options rated to the dealer's address.
+        if (priced.Ffl is { } ffl)
+        {
+            quote.Ffl = new CheckoutFflQuote
+            {
+                HasNonFflItems = ffl.HasNonFflItems,
+                Dealer = ffl.Dealer is null ? null : FflDirectory.ToDto(ffl.Dealer, _clock.UtcNow),
+                DealerRequired = ffl.Dealer is null,
+                DealerMessage = ffl.DealerIssue,
+                ShippingOptions = ffl.Options.ToList(),
+                SelectedMethodId = ffl.Selected?.MethodId,
+                ShippingTotal = ffl.Pricing.ShippingTotal,
+                ShippingMethodTotal = ffl.Pricing.MethodPrice,
+                AddOns = ToAddOnQuote(ffl.Pricing),
+                ItemCount = ffl.Pricing.ItemCount,
+                DeclaredValue = ffl.Pricing.DeclaredValue,
+            };
+        }
 
         // An inquiry takes no payment, so no method is offered and none may be selected — the storefront
         // renders the request form instead of the payment step.
@@ -217,7 +235,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // the destination rules run again (OP-54), and the add-ons are re-priced from the current rules.
         var priced = await BuildAsync(
             req.CartId, req.SessionId, req.ShipTo, req.SelectedShippingMethodId,
-            requestCouponCode: req.CouponCode, forPlacement: true, req.PickupInStore, req.PickupStoreId, req.AddOns, ct);
+            requestCouponCode: req.CouponCode, forPlacement: true, req.PickupInStore, req.PickupStoreId, req.AddOns, ct,
+            req.SelectedFflShippingMethodId, req.FflAddOns);
 
         // Inquiry carts never reach a gateway (REQ-INQ-001). The storefront already renders the request
         // form instead of the payment step, but the switch is enforced here so a crafted request cannot
@@ -226,6 +245,10 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             throw new ConflictException(
                 "This store does not accept online payment for these items. Please submit an inquiry instead.");
 
+        // Address verification (AV-01/10/14): the buyer's ship-to, re-checked before anything is charged, so a
+        // client that skipped the verify step cannot place an order to an address the provider rejected.
+        _placementAddressCheck = await VerifyShipToForPlacementAsync(req.ShipTo, priced, ct);
+
         // Pre-payment checks (CK-01..03, SH-41, PY-10..15), before any gateway is contacted and on every path
         // (gateway, gift certificate, zero total — PY-41): session, terms, blacklist, low-stock lock.
         var settings = await CheckoutSettingsStore.LoadAsync(_settings, ct);
@@ -233,6 +256,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         if (settings.TermsRequired && req.TermsAccepted != true)
             throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.TermsRequired,
                 "You must accept our terms and conditions to place your order.");
+        EnsureBillingAddress(req, priced);
         await EnsureNotBlacklistedAsync(req, priced, settings, ct);
         await AcquireCheckoutLocksAsync(priced, ct);
         await TouchCheckoutActivityAsync(priced.Cart.Id, ct);
@@ -250,6 +274,32 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         {
             await ReleasePlacementLockAsync(priced.Cart.Id, lockUntil);
         }
+    }
+
+    /// <summary>
+    /// Verifies the ship-to of the buyer's own shipment (docs/shipstation-verification-requirements.md §4). Skipped
+    /// for pickup and for an FFL-only cart, whose only shipment goes to a dealer from the licensed directory (AV-03);
+    /// a mixed cart verifies the buyer's address (AV-04). The cart's last verify answer is reused when the address
+    /// is unchanged (AV-06); otherwise the address is checked now. Invalid → 409 ADDRESS_INVALID; provider down →
+    /// allowed and flagged unless the admin chose to block (AV-14). Null when verification did not apply.
+    /// </summary>
+    private async Task<(AddressVerificationStatus Status, bool Overridden)?> VerifyShipToForPlacementAsync(
+        CheckoutAddress shipTo, PricedCheckout priced, CancellationToken ct)
+    {
+        if (_addressVerification is null || priced.IsPickup || priced.Shipping is null)
+            return null;
+
+        var hash = Application.Features.AddressVerification.AddressVerificationSupport.Hash(
+            Application.Features.AddressVerification.AddressVerificationSupport.ToVerifiable(shipTo));
+        var cart = priced.Cart;
+        if (cart.ShipToAddressHash == hash && cart.ShipToVerifyStatus is AddressVerificationStatus known
+            && known is AddressVerificationStatus.Valid or AddressVerificationStatus.Suggested or AddressVerificationStatus.NotChecked)
+            return (known, cart.ShipToAddressOverridden);
+
+        var check = await Application.Features.AddressVerification.CheckoutAddressGate.CheckAsync(_db, _addressVerification, shipTo, ct);
+        if (check.Blocking)
+            throw check.ToConflict();
+        return (check.Status, false);
     }
 
     /// <summary>Releases the cart's low-stock checkout locks (CK-23): the storefront countdown ran out, or the buyer left.</summary>
@@ -289,6 +339,67 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 priced.Cart.Id,
                 priced.Lines.Select(l => new CheckoutLockItem(l.ProductId, l.ProductName)).ToList(),
                 ct);
+
+    /// <summary>
+    /// The bill-to the buyer confirmed on the checkout page: the explicit <see cref="PlaceCheckoutRequest.BillTo"/>,
+    /// else the delivery address ("same as shipping", and older clients) when it is the buyer's own postal address.
+    /// Null when there is none — a pickup or FFL-only order sent without one.
+    /// </summary>
+    private static CheckoutAddress? EffectiveBillTo(PlaceCheckoutRequest req, PricedCheckout priced)
+    {
+        if (req.BillTo is not null) return req.BillTo;
+        var shipsToDealerOnly = priced.Ffl is { HasNonFflItems: false };
+        return priced.IsPickup || shipsToDealerOnly || string.IsNullOrWhiteSpace(req.ShipTo?.Line1) ? null : req.ShipTo;
+    }
+
+    /// <summary>
+    /// Every order is placed with a complete billing address (the checkout page always shows one). Pickup and
+    /// FFL-only orders have no buyer ship-to to fall back on, so they must send it; an FFL cart must bill to the
+    /// United States (SH-02 / FFL-13).
+    /// </summary>
+    private static void EnsureBillingAddress(PlaceCheckoutRequest req, PricedCheckout priced)
+    {
+        var bill = EffectiveBillTo(req, priced);
+        var missing = new List<string>();
+        if (bill is null) missing.Add("billing address");
+        else
+        {
+            if (string.IsNullOrWhiteSpace(bill.FirstName)) missing.Add("first name");
+            if (string.IsNullOrWhiteSpace(bill.LastName)) missing.Add("last name");
+            if (string.IsNullOrWhiteSpace(bill.Line1)) missing.Add("street address");
+            if (string.IsNullOrWhiteSpace(bill.City)) missing.Add("city");
+            if (string.IsNullOrWhiteSpace(bill.PostalCode)) missing.Add("postal code");
+            if (string.IsNullOrWhiteSpace(bill.CountryCode)) missing.Add("country");
+        }
+        if (missing.Count > 0)
+            throw new ValidationException(new[]
+            {
+                new FluentValidation.Results.ValidationFailure(
+                    "BillTo", $"Please complete your billing address ({string.Join(", ", missing)})."),
+            });
+
+        if (priced.Ffl is not null && !string.Equals(bill!.CountryCode?.Trim(), "US", StringComparison.OrdinalIgnoreCase))
+            throw new ConflictException(
+                "Items that require shipping to an authorized FFL dealer can only be billed and shipped to the United States.");
+    }
+
+    /// <summary>A checkout address as a new shared <see cref="Address"/> row (null in, null out).</summary>
+    private static Address? ToAddressRow(CheckoutAddress? a) => a is null ? null : new Address
+    {
+        FirstName = a.FirstName,
+        LastName = a.LastName,
+        Email = a.Email,
+        PhoneNumber = a.PhoneNumber,
+        Latitude = a.Latitude,
+        Longitude = a.Longitude,
+        CountryCode = a.CountryCode ?? string.Empty,
+        StateProvince = a.Region,
+        PostalCode = a.PostalCode ?? string.Empty,
+        AddressLine1 = a.Line1 ?? string.Empty,
+        AddressLine2 = a.Line2,
+        Landmark = a.Landmark,
+        City = a.City ?? string.Empty,
+    };
 
     /// <summary>CK-23: release on every successful placement path. Never fails the placement.</summary>
     private Task ReleaseCheckoutLocksAsync(Guid cartId) =>
@@ -341,12 +452,13 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
             var a = req.ShipTo;
+            var bill = EffectiveBillTo(req, priced) ?? a;
             static string H(string? v) => System.Net.WebUtility.HtmlEncode(v ?? string.Empty);
             var vars = new Dictionary<string, string>
             {
                 ["customerName"] = H($"{a.FirstName} {a.LastName}".Trim()),
                 ["customerEmail"] = H(a.Email),
-                ["billingAddress"] = H(string.Join(", ", new[] { a.Line1, a.Line2, a.City, $"{a.Region} {a.PostalCode}".Trim(), a.CountryCode }
+                ["billingAddress"] = H(string.Join(", ", new[] { bill.Line1, bill.Line2, bill.City, $"{bill.Region} {bill.PostalCode}".Trim(), bill.CountryCode }
                     .Where(x => !string.IsNullOrWhiteSpace(x)))),
                 ["itemsSummary"] = string.Join("<br>", priced.Lines.Select(l => $"- {System.Net.WebUtility.HtmlEncode(l.ProductName)} (Qty: {l.Quantity})")),
                 ["reason"] = string.IsNullOrWhiteSpace(match.Entry.Reason) ? "No reason recorded" : H(match.Entry.Reason),
@@ -507,6 +619,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 Landmark = req.ShipTo.Landmark,
                 City = req.ShipTo.City ?? string.Empty,
             },
+            BillingAddress = ToAddressRow(EffectiveBillTo(req, priced)),
             AssignedStoreId = storeId,
             IsPickup = priced.IsPickup,
             PlacedOnUtc = now,
@@ -537,10 +650,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             GiftCertificateAppliedAmount = giftCertificateApplied,
         };
 
-        foreach (var line in priced.Lines)
-            order.Lines.Add(ToOrderLine(line));
-        // Frozen with the order in the same SaveChanges, so an order never exists without its shipping row.
-        order.Shippings.Add(await BuildShippingSnapshotAsync(priced, ct));
+        // Lines and the frozen shipping rows go in the same SaveChanges, so an order never exists without them.
+        await AddLinesAndShippingsAsync(order, priced, ct);
 
         order.StatusHistory.Add(new OrderStatusHistory
         {
@@ -576,7 +687,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         var payResult = await _payments.AuthorizeAsync(
             new PaymentRequest(order.Id, req.PaymentMethod, gatewayAmount, order.CurrencyCode, req.PaymentToken,
                 OrderNumber: order.OrderNumber, Metadata: InstrumentMetadata(instrument),
-                Customer: BuildPaymentCustomer(req.ShipTo, customerId)),
+                Customer: BuildPaymentCustomer(req.ShipTo, EffectiveBillTo(req, priced), customerId)),
             ct);
 
         payment.Status = payResult.Status;
@@ -691,15 +802,16 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     }
 
     /// <summary>
-    /// The buyer as the gateway sees it (AN-14/15): bill-to = the checkout address (the storefront collects a
-    /// single address), ship-to = the same address, the customer id for signed-in
-    /// buyers, and the buyer's IP. There is no FFL-dealer address on an order yet, so ship-to is the buyer's.
+    /// The buyer as the gateway sees it (AN-14/15): bill-to = the billing address confirmed at checkout (else the
+    /// checkout address), ship-to = the checkout address, the customer id for signed-in buyers, and the buyer's IP.
+    /// An FFL shipment's dealer address lives on its shipping row, not here.
     /// </summary>
-    private PaymentCustomer BuildPaymentCustomer(CheckoutAddress a, Guid? customerId)
+    private PaymentCustomer BuildPaymentCustomer(CheckoutAddress a, CheckoutAddress? billTo, Guid? customerId)
     {
-        var address = new PaymentAddress(a.FirstName, a.LastName, null, a.Line1, a.Line2, a.City, a.Region,
-            a.PostalCode, a.CountryCode, a.PhoneNumber);
-        return new PaymentCustomer(customerId, a.Email, address, address, _current.IpAddress);
+        static PaymentAddress ToPayment(CheckoutAddress x) => new(x.FirstName, x.LastName, null, x.Line1, x.Line2,
+            x.City, x.Region, x.PostalCode, x.CountryCode, x.PhoneNumber);
+        var shipTo = ToPayment(a);
+        return new PaymentCustomer(customerId, a.Email, billTo is null ? shipTo : ToPayment(billTo), shipTo, _current.IpAddress);
     }
 
     /// <summary>The Authorize.Net row's "default order status" for approved payments (null = Pending).</summary>
@@ -852,6 +964,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 Landmark = req.ShipTo.Landmark,
                 City = req.ShipTo.City ?? string.Empty,
             },
+            BillingAddress = ToAddressRow(EffectiveBillTo(req, priced)),
             AssignedStoreId = priced.Routing.AssignedStoreId,
             IsPickup = priced.IsPickup,
             PlacedOnUtc = now,
@@ -876,9 +989,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             GiftCertificateCode = certificate?.Code,
             GiftCertificateAppliedAmount = certificate is null ? 0m : applied,
         };
-        foreach (var line in priced.Lines)
-            order.Lines.Add(ToOrderLine(line));
-        order.Shippings.Add(await BuildShippingSnapshotAsync(priced, ct));
+        await AddLinesAndShippingsAsync(order, priced, ct);
         order.StatusHistory.Add(new OrderStatusHistory
         {
             FromStatus = OrderStatus.Pending,
@@ -926,6 +1037,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 foreach (var h in order.StatusHistory) context.Entry(h).State = EntityState.Detached;
                 foreach (var s in order.Shippings) context.Entry(s).State = EntityState.Detached;
                 if (order.ShippingAddress is not null) context.Entry(order.ShippingAddress).State = EntityState.Detached;
+                if (order.BillingAddress is not null) context.Entry(order.BillingAddress).State = EntityState.Detached;
             }
 
             var cart = await _db.Carts.FirstOrDefaultAsync(c => c.Id == priced.Cart.Id, ct);
@@ -1515,7 +1627,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     private async Task<PricedCheckout> BuildAsync(
         Guid? cartId, string? sessionId, CheckoutAddress shipTo, string? shippingMethodId,
         string? requestCouponCode, bool forPlacement, bool pickupInStore, Guid? pickupStoreId,
-        ShippingAddOnSelection? addOns, CancellationToken ct)
+        ShippingAddOnSelection? addOns, CancellationToken ct,
+        string? fflShippingMethodId = null, ShippingAddOnSelection? fflAddOns = null)
     {
         // 1. Load the cart + its lines and compute the subtotal from the snapshotted unit prices.
         var cart = await LoadCartAsync(cartId, sessionId, ct);
@@ -1621,64 +1734,78 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // (OP-54), since the address or cart can change after the shipping step.
         var rules = await ShippingRulesEngine.LoadAsync(_db, ct);
         var rateLines = await BuildShippingRateLinesAsync(shippableLines, ct);
-        await EnsureDestinationAllowedAsync(rules, shipTo, rateLines, ct);
 
-        var weightKg = Math.Max(1m, shippableLines.Sum(l => (decimal)l.Quantity));
-        var shippingOptions = await _shipping.GetRatesAsync(
-            new CarrierRateRequest(
-                new CarrierAddress(store.CountryCode, store.StateProvince, store.PostalCode, store.Latitude, store.Longitude, store.City,
-                    store.AddressLine1, store.AddressLine2, store.Name),
-                new CarrierAddress(shipTo.CountryCode, shipTo.Region, shipTo.PostalCode, shipTo.Latitude, shipTo.Longitude, shipTo.City,
-                    shipTo.Line1, shipTo.Line2, $"{shipTo.FirstName} {shipTo.LastName}".Trim()),
-                weightKg, Length: null, Width: null, Height: null, OrderSubtotal: subtotal,
-                Lines: rateLines),
-            ct);
+        // FFL split (FFL shipping requirements §5.8): FFL-required lines ship to the cart's selected dealer,
+        // rated to the dealer's (commercial) address; everything else ships to the buyer. The flag is read from
+        // the catalog on every build, so a product flagged after it entered the cart still counts (FFL-04).
+        var fflSettings = await FflSettingsStore.LoadAsync(_settings, ct);
+        var fflRateLines = fflSettings.Enabled ? rateLines.Where(l => l.IsFfl).ToList() : new List<ShippingRateLine>();
+        var otherRateLines = fflRateLines.Count > 0 ? rateLines.Where(l => !l.IsFfl).ToList() : rateLines.ToList();
 
-        // Flag the recommended option (Automatic) or clear the flag (Manual). The recommendation is the
-        // default when the buyer has not chosen — it never overrides a choice they did make.
-        var selection = await _shippingSelector.SelectAsync(shippingOptions, ct);
-        shippingOptions = selection.Options;
-
-        ShippingRateOption? selected;
-        if (forPlacement)
+        FflDealer? fflDealer = null;
+        string? fflDealerIssue = null;
+        CheckoutAddress? dealerAddress = null;
+        if (fflRateLines.Count > 0)
         {
-            // Nothing quoted. This is never "the order needs no shipping" — no product can be marked
-            // non-shippable, and pickup prices its own option on a path that never reaches here. It means
-            // every rate source declined or is misconfigured, so refuse rather than ship for free.
-            if (!shippingOptions.Any())
-                throw new ConflictException(
-                    "No delivery options are available for this address. Please try a different address or contact support.");
+            // FFL-11/12: any FFL line (not only exactly one) limits the buyer to a US address.
+            if (!string.Equals(shipTo.CountryCode?.Trim(), "US", StringComparison.OrdinalIgnoreCase))
+                throw CheckoutErrorCodes.Conflict(FflMessages.UsOnlyCode, FflMessages.UsOnly);
 
-            if (string.IsNullOrWhiteSpace(shippingMethodId))
+            // FFL-52/57/59: the dealer is read from the directory by key and must still be eligible.
+            if (cart.FflDealerKey is not null)
             {
-                // No method chosen. Under Automatic that is fine — fall back to the recommendation; under
-                // Manual nothing is recommended, so the buyer has to pick.
-                selected = selection.Recommended;
-                if (selected is null)
-                    throw new ConflictException("Please choose a shipping method.");
+                fflDealer = await FflDirectory.FindAsync(_db, cart.FflDealerKey, ct);
+                fflDealerIssue = fflDealer is null
+                    ? FflMessages.DealerLoadFailed
+                    : FflDirectory.IneligibleReason(fflDealer, _clock.UtcNow);
+                if (fflDealerIssue is not null)
+                    fflDealer = null;
             }
-            else
-            {
-                // The buyer's chosen method must still be on offer.
-                selected = shippingOptions.FirstOrDefault(o => o.MethodId == shippingMethodId)
-                    ?? throw new ConflictException(
-                        $"The selected shipping method '{shippingMethodId}' is no longer available. Please choose another option.");
-            }
-        }
-        else
-        {
-            // Prefer the requested method if given and still offered; otherwise fall back to the
-            // recommendation, or to the cheapest when nothing is recommended (Manual).
-            selected = !string.IsNullOrWhiteSpace(shippingMethodId)
-                ? shippingOptions.FirstOrDefault(o => o.MethodId == shippingMethodId)
-                : null;
-            selected ??= selection.Recommended ?? shippingOptions.OrderBy(o => o.Rate).FirstOrDefault();
+
+            // FFL-51: no dealer, no order.
+            if (forPlacement && fflDealer is null)
+                throw CheckoutErrorCodes.Conflict(
+                    fflDealerIssue is null ? FflMessages.DealerRequiredCode : FflMessages.DealerNotEligibleCode,
+                    fflDealerIssue ?? FflMessages.DealerRequired);
+
+            if (fflDealer is not null)
+                dealerAddress = DealerAddress(fflDealer, shipTo);
         }
 
-        // Add-ons (SR-80..83): priced from the current rules on every quote and again at placement, and kept
-        // as their own amounts. Shipment total = method price + signature fee + insurance fee.
-        var shipping = PriceShipment(rules, selected, rateLines, addOns);
-        var shippingTotal = shipping.ShippingTotal;
+        // Destination rules: the buyer's items against the buyer's address, the firearms against the dealer's.
+        if (otherRateLines.Count > 0)
+            await EnsureDestinationAllowedAsync(rules, shipTo, otherRateLines, ct);
+        if (dealerAddress is not null)
+            await EnsureDestinationAllowedAsync(rules, dealerAddress, fflRateLines, ct);
+
+        IReadOnlyList<ShippingRateOption> shippingOptions = Array.Empty<ShippingRateOption>();
+        ShippingRateOption? selected = null;
+        ShipmentPricing? shipping = null;
+        if (otherRateLines.Count > 0)
+        {
+            (shippingOptions, selected) = await RateShipmentAsync(
+                store, shipTo, otherRateLines, subtotal, shippingMethodId, forPlacement, isFfl: false, ct);
+            // Add-ons (SR-80..83): priced from the current rules on every quote and again at placement, and kept
+            // as their own amounts. Shipment total = method price + signature fee + insurance fee.
+            shipping = PriceShipment(rules, selected, otherRateLines, addOns);
+        }
+
+        FflShipment? fflShipment = null;
+        if (fflRateLines.Count > 0)
+        {
+            IReadOnlyList<ShippingRateOption> fflOptions = Array.Empty<ShippingRateOption>();
+            ShippingRateOption? fflSelected = null;
+            if (dealerAddress is not null)
+                (fflOptions, fflSelected) = await RateShipmentAsync(
+                    store, dealerAddress, fflRateLines, subtotal, fflShippingMethodId, forPlacement, isFfl: true, ct);
+            // FFL-76: the FFL shipment's insurance is banded on the FFL items' value, not the whole cart.
+            fflShipment = new FflShipment(
+                fflDealer, fflDealerIssue, otherRateLines.Count > 0, fflOptions, fflSelected,
+                PriceShipment(rules, fflSelected, fflRateLines, fflAddOns),
+                fflRateLines.Select(l => l.ProductId).ToHashSet());
+        }
+
+        var shippingTotal = (shipping?.ShippingTotal ?? 0m) + (fflShipment?.Pricing.ShippingTotal ?? 0m);
 
         // 5. Coupon + discounts. Validate the coupon first so its bound discount is "unlocked" for the
         // engine: coupon-gated rules (RequiresCoupon) apply only when a valid code carrying them is present,
@@ -1717,10 +1844,12 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // 6. Tax (AC-CHK-003.5): origin = store address, destination = ship-to, plus the taxable shipping cost.
         // Each line is taxed on its discounted value: the discount engine's per-line allocation (order/product/
         // coupon reductions spread across the lines) is netted off before tax, so tax follows the price paid.
+        // An FFL-only cart is delivered to the dealer, so it is taxed there; a mixed cart is taxed at the buyer's address.
+        var taxTo = fflShipment is not null && otherRateLines.Count == 0 && dealerAddress is not null ? dealerAddress : shipTo;
         var tax = await _tax.CalculateAsync(
             new TaxCalculationRequest(
                 new TaxAddress(store.CountryCode ?? string.Empty, store.StateProvince, store.PostalCode, store.City),
-                new TaxAddress(shipTo.CountryCode, shipTo.Region, shipTo.PostalCode, shipTo.City),
+                new TaxAddress(taxTo.CountryCode, taxTo.Region, taxTo.PostalCode, taxTo.City),
                 BuildTaxLines(lines, discountResult.LineDiscounts),
                 shippingTotal,
                 taxExemption),
@@ -1735,8 +1864,93 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             discountResult.Applied, discountResult.TotalDiscount,
             tax, tax.TotalTax, total, guestOrderingAllowed, couponCode, couponValid,
             BaseSubtotal: baseSubtotal, GroupDiscountTotal: groupDiscountTotal, GroupDiscountName: groupName,
-            Shipping: shipping);
+            Shipping: shipping, Ffl: fflShipment);
     }
+
+    /// <summary>
+    /// Rates one shipment from the assigned store to <paramref name="destination"/> and picks its method: at
+    /// placement the buyer's choice must still be offered (or, unchosen, the recommendation); on a quote the
+    /// request falls back to the recommendation, then the cheapest. The carriers narrow an FFL shipment to their
+    /// FFL services and rate it to a commercial address (UPS Next Day only by default, FFL-72).
+    /// </summary>
+    private async Task<(IReadOnlyList<ShippingRateOption> Options, ShippingRateOption? Selected)> RateShipmentAsync(
+        Store store, CheckoutAddress destination, IReadOnlyList<ShippingRateLine> lines, decimal subtotal,
+        string? requestedMethodId, bool forPlacement, bool isFfl, CancellationToken ct)
+    {
+        var weightKg = Math.Max(1m, lines.Sum(l => (decimal)l.Quantity));
+        var shippingOptions = await _shipping.GetRatesAsync(
+            new CarrierRateRequest(
+                new CarrierAddress(store.CountryCode, store.StateProvince, store.PostalCode, store.Latitude, store.Longitude, store.City,
+                    store.AddressLine1, store.AddressLine2, store.Name),
+                new CarrierAddress(destination.CountryCode, destination.Region, destination.PostalCode, destination.Latitude,
+                    destination.Longitude, destination.City, destination.Line1, destination.Line2,
+                    $"{destination.FirstName} {destination.LastName}".Trim()),
+                weightKg, Length: null, Width: null, Height: null, OrderSubtotal: subtotal,
+                Lines: lines),
+            ct);
+
+        // Flag the recommended option (Automatic) or clear the flag (Manual). The recommendation is the
+        // default when the buyer has not chosen — it never overrides a choice they did make.
+        var selection = await _shippingSelector.SelectAsync(shippingOptions, ct);
+        shippingOptions = selection.Options;
+
+        ShippingRateOption? selected;
+        if (forPlacement)
+        {
+            // Nothing quoted. This is never "the order needs no shipping" — no product can be marked
+            // non-shippable, and pickup prices its own option on a path that never reaches here. It means
+            // every rate source declined or is misconfigured, so refuse rather than ship for free.
+            if (!shippingOptions.Any())
+                throw new ConflictException(isFfl
+                    ? "No delivery options are available to your selected FFL dealer. Please choose another dealer or contact support."
+                    : "No delivery options are available for this address. Please try a different address or contact support.");
+
+            if (string.IsNullOrWhiteSpace(requestedMethodId))
+            {
+                // No method chosen. Under Automatic that is fine — fall back to the recommendation; under
+                // Manual nothing is recommended, so the buyer has to pick.
+                selected = selection.Recommended;
+                if (selected is null)
+                    throw new ConflictException(isFfl
+                        ? "Please choose a shipping method for your FFL items."
+                        : "Please choose a shipping method.");
+            }
+            else
+            {
+                // The buyer's chosen method must still be on offer.
+                selected = shippingOptions.FirstOrDefault(o => o.MethodId == requestedMethodId)
+                    ?? throw new ConflictException(isFfl
+                        ? $"The selected FFL shipping method '{requestedMethodId}' is no longer available. Please choose another option."
+                        : $"The selected shipping method '{requestedMethodId}' is no longer available. Please choose another option.");
+            }
+        }
+        else
+        {
+            // Prefer the requested method if given and still offered; otherwise fall back to the
+            // recommendation, or to the cheapest when nothing is recommended (Manual).
+            selected = !string.IsNullOrWhiteSpace(requestedMethodId)
+                ? shippingOptions.FirstOrDefault(o => o.MethodId == requestedMethodId)
+                : null;
+            selected ??= selection.Recommended ?? shippingOptions.OrderBy(o => o.Rate).FirstOrDefault();
+        }
+
+        return (shippingOptions, selected);
+    }
+
+    /// <summary>The dealer as a ship-to address (FFL-53): the directory's premise address, country US.</summary>
+    private static CheckoutAddress DealerAddress(FflDealer dealer, CheckoutAddress buyer) => new(
+        FirstName: "FFL",
+        LastName: FflDirectory.DisplayName(dealer),
+        Email: buyer.Email,
+        Line1: dealer.PremiseStreet?.Trim() ?? string.Empty,
+        Line2: null,
+        City: dealer.PremiseCity?.Trim() ?? string.Empty,
+        Region: dealer.PremiseState?.Trim(),
+        PostalCode: dealer.PremiseZipCode?.Trim(),
+        CountryCode: "US",
+        Latitude: dealer.Latitude,
+        Longitude: dealer.Longitude,
+        PhoneNumber: dealer.VoicePhone?.Trim());
 
     /// <summary>
     /// Prices an inquiry checkout (REQ-INQ-001): the buyer is requesting a quote, not paying. Lines and
@@ -2276,7 +2490,82 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         string? GroupDiscountName = null,
         bool IsInquiry = false,
         bool IsPickup = false,
-        ShipmentPricing? Shipping = null);
+        ShipmentPricing? Shipping = null,
+        FflShipment? Ffl = null);
+
+    /// <summary>
+    /// The FFL shipment of a cart holding FFL-required lines: the selected (eligible) dealer or why there is
+    /// none, the options rated to the dealer and the chosen one, and its pricing. <see cref="PricedCheckout.Shipping"/>
+    /// then covers only the non-FFL lines (null for an FFL-only cart).
+    /// </summary>
+    private sealed record FflShipment(
+        FflDealer? Dealer,
+        string? DealerIssue,
+        bool HasNonFflItems,
+        IReadOnlyList<ShippingRateOption> Options,
+        ShippingRateOption? Selected,
+        ShipmentPricing Pricing,
+        IReadOnlySet<Guid> ProductIds);
+
+    private static ShippingAddOnQuote? ToAddOnQuote(ShipmentPricing? s) =>
+        s is not null && (s.SignatureAvailable || s.InsuranceAvailable)
+            ? new ShippingAddOnQuote
+            {
+                SignatureAvailable = s.SignatureAvailable,
+                SignatureFee = s.SignatureFeeOffered,
+                SignatureSelected = s.SignatureSelected,
+                InsuranceAvailable = s.InsuranceAvailable,
+                InsuranceFee = s.InsuranceFeeOffered,
+                InsuranceSelected = s.InsuranceSelected,
+                DeclaredValue = s.DeclaredValue,
+            }
+            : null;
+
+    /// <summary>
+    /// Adds the order lines (flagging the FFL ones) and the frozen shipping rows. For an FFL cart the order-level
+    /// method is the FFL shipment's when it is the only one, or "Mixed" when the buyer's items ship too (FFL-74);
+    /// each shipment's own method stays on its row.
+    /// </summary>
+    private async Task AddLinesAndShippingsAsync(Order order, PricedCheckout priced, CancellationToken ct)
+    {
+        var fflProducts = priced.Ffl?.ProductIds;
+        foreach (var line in priced.Lines)
+        {
+            var orderLine = ToOrderLine(line);
+            orderLine.IsFfl = fflProducts is not null && !line.IsOnlineGiftCertificate && fflProducts.Contains(line.ProductId);
+            order.Lines.Add(orderLine);
+        }
+
+        foreach (var row in await BuildShippingSnapshotsAsync(priced, ct))
+        {
+            // AV-15: the buyer's shipment records how its address was verified; a directory dealer is never verified (AV-03).
+            if (_placementAddressCheck is { } check && row.ShipmentType != OrderShipmentType.Ffl && row.ShipToType == ShipToType.Customer)
+            {
+                row.AddressVerifyStatus = check.Status;
+                row.AddressOverridden = check.Overridden;
+            }
+            order.Shippings.Add(row);
+        }
+
+        if (priced.Ffl is not { } ffl)
+            return;
+
+        order.HasFflItems = true;
+        if (priced.SelectedShipping is null)
+        {
+            order.ShippingMethodId = ffl.Selected?.MethodId;
+            order.ShippingMethodName = ffl.Selected?.Name;
+            order.ShippingCarrier = ffl.Selected?.Carrier;
+            order.ShippingWasRecommended = ffl.Selected?.IsRecommended ?? false;
+        }
+        else
+        {
+            order.ShippingMethodId = "mixed";
+            order.ShippingMethodName = "Mixed";
+            order.ShippingCarrier = "Mixed";
+            order.ShippingWasRecommended = false;
+        }
+    }
 
     /// <summary>
     /// How the delivered shipment was priced: the method price, the add-ons on offer and chosen, and the
@@ -2376,6 +2665,29 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     /// The order's shipping row (section 3 / 8 of the order-placement requirements): what the buyer chose and
     /// paid for this shipment, copied from the priced checkout and never re-rated.
     /// </summary>
+    private async Task<IReadOnlyList<OrderShipping>> BuildShippingSnapshotsAsync(PricedCheckout priced, CancellationToken ct)
+    {
+        var selected = priced.SelectedShipping;
+        var s = priced.Shipping;
+
+        // FFL cart (FFL-80, as one order): the buyer's items ship to the buyer, the firearms to the dealer.
+        if (!priced.IsPickup && priced.Ffl is { } ffl)
+        {
+            var rows = new List<OrderShipping>();
+            if (selected is not null && s is not null)
+                rows.Add(await BuildCarrierRowAsync(selected, s, OrderShipmentType.NonFfl, ct));
+
+            // Placement refuses an FFL cart without an eligible dealer and a rated method, so both are set here.
+            var fflRow = await BuildCarrierRowAsync(ffl.Selected!, ffl.Pricing, OrderShipmentType.Ffl, ct);
+            FflDirectory.ApplyToShipping(fflRow, ffl.Dealer!, FflDealerSource.Directory);
+            fflRow.ContainsFflItems = true;
+            rows.Add(fflRow);
+            return rows;
+        }
+
+        return new[] { await BuildShippingSnapshotAsync(priced, ct) };
+    }
+
     private async Task<OrderShipping> BuildShippingSnapshotAsync(PricedCheckout priced, CancellationToken ct)
     {
         var selected = priced.SelectedShipping;
@@ -2406,6 +2718,13 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 DeclaredValue = 0m,
             };
 
+        return await BuildCarrierRowAsync(selected, s, OrderShipmentType.Combined, ct);
+    }
+
+    /// <summary>One delivered shipment's row: the chosen method, its price and add-ons, frozen at placement.</summary>
+    private async Task<OrderShipping> BuildCarrierRowAsync(
+        ShippingRateOption selected, ShipmentPricing s, OrderShipmentType shipmentType, CancellationToken ct)
+    {
         // OP-14: the internal method code. A custom method's id is its row id, so store its calculation type;
         // a carrier option's id is already the carrier's service code.
         var methodName = selected.MethodId;
@@ -2420,7 +2739,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
 
         return new OrderShipping
         {
-            ShipmentType = OrderShipmentType.Combined,
+            ShipmentType = shipmentType,
             ShipToType = ShipToType.Customer,
             MethodId = selected.MethodId,
             MethodName = methodName,

@@ -26,16 +26,37 @@ public static class UpsCodes
     /// <summary>UP-22: the Next Day services an FFL cart may use.</summary>
     public static readonly IReadOnlyList<string> DefaultFflServices = new[] { "01", "13", "14" };
 
+    /// <summary>
+    /// The "Default package type" choices: the legacy PHP list (EcommUPS::getPackageTypes) mapped onto UPS Rating
+    /// API PackagingType codes. The PHP codes themselves are not reused: several clash with the REST codes
+    /// (PHP "01" = Bag, REST "01" = UPS Letter). Bag / Box / Carton have no UPS packaging code of their own, so they
+    /// are stored as site codes and rated as a customer-supplied package (<see cref="RatingPackagingCode"/>).
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string> PackageTypes = new Dictionary<string, string>
     {
-        ["02"] = "Customer supplied package",
-        ["01"] = "UPS Letter",
-        ["03"] = "Tube",
-        ["04"] = "PAK",
-        ["21"] = "UPS Express Box",
-        ["24"] = "UPS 25KG Box",
+        ["02"] = "Package (customer supplied)",
+        ["30"] = "Pallet",
         ["25"] = "UPS 10KG Box",
+        ["24"] = "UPS 25KG Box",
+        ["2a"] = "UPS Express Box Small",
+        ["2b"] = "UPS Express Box Medium",
+        ["2c"] = "UPS Express Box Large",
+        ["21"] = "UPS Express Box",
+        ["01"] = "UPS Letter",
+        ["04"] = "UPS PAK",
+        ["03"] = "UPS Tube",
+        [BagPackageType] = "Bag",
+        [BoxPackageType] = "Box",
+        [CartonPackageType] = "Carton/Piece",
     };
+
+    public const string BagPackageType = "BAG";
+    public const string BoxPackageType = "BOX";
+    public const string CartonPackageType = "CTN";
+
+    /// <summary>The PackagingType code sent to UPS for a stored package type: Bag / Box / Carton go as "02".</summary>
+    public static string RatingPackagingCode(string packageType) =>
+        packageType is BagPackageType or BoxPackageType or CartonPackageType ? DefaultPackageType : packageType;
 
     public static readonly IReadOnlyDictionary<string, string> PickupTypes = new Dictionary<string, string>
     {

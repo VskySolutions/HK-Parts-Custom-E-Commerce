@@ -165,6 +165,57 @@ export const accountApi = {
   }
 }
 
+/* ---- Returns (RMA) — CustomerRmaController / StorefrontReturnsController
+ * (docs/order-return-requirements.bak.md section 6). ---- */
+const RMAS = '/api/customer/rmas'
+
+export const returnsApi = {
+  // Public policy bits for the form: { enabled, windowDays, labelMode, requirePhotos, allowStoreCredit, … }.
+  config () {
+    return anonApi.get('/api/storefront/returns/config').then(unwrap)
+  },
+  reasons () {
+    return anonApi.get('/api/storefront/returns/reasons').then(unwrap)
+  },
+  // What one of my orders can still return: { eligible, reason, windowClosesOnUtc, lines:[…] }.
+  returnable (orderId) {
+    return customerApi.get(ORDERS + '/' + encodeURIComponent(orderId) + '/returnable').then(unwrap)
+  },
+  // Request a return. Photos (File[]) go as multipart next to the JSON payload.
+  submit (payload, photos = []) {
+    const form = new FormData()
+    form.append('payload', JSON.stringify(payload))
+    photos.forEach((f) => form.append('photos', f))
+    return customerApi.post(RMAS, form).then(unwrap)
+  },
+  list (params = {}) {
+    return customerApi.get(RMAS, { params, paramsSerializer: qsSerializer }).then(unwrap)
+  },
+  get (id) {
+    return customerApi.get(RMAS + '/' + encodeURIComponent(id)).then(unwrap)
+  },
+  cancel (id) {
+    return customerApi.post(RMAS + '/' + encodeURIComponent(id) + '/cancel').then(unwrap)
+  },
+  message (id, body) {
+    return customerApi.post(RMAS + '/' + encodeURIComponent(id) + '/messages', { rmaId: id, body }).then(unwrap)
+  },
+  setTracking (id, carrier, trackingNumber) {
+    return customerApi.put(RMAS + '/' + encodeURIComponent(id) + '/tracking', { rmaId: id, carrier, trackingNumber }).then(unwrap)
+  },
+  upload (id, file) {
+    const form = new FormData()
+    form.append('file', file)
+    return customerApi.post(RMAS + '/' + encodeURIComponent(id) + '/attachments', form).then(unwrap)
+  },
+  async openAttachment (id, attachmentId) {
+    const res = await customerApi.get(RMAS + '/' + encodeURIComponent(id) + '/attachments/' + encodeURIComponent(attachmentId), { responseType: 'blob' })
+    const url = window.URL.createObjectURL(res.data)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+  }
+}
+
 // Trigger a browser download from raw blob data (shared by the PDF + JSON exporters).
 function saveBlob (data, filename, mime) {
   const blob = new Blob([data], { type: mime })
@@ -184,4 +235,4 @@ async function downloadPdf (url, filename) {
   saveBlob(res.data, filename, 'application/pdf')
 }
 
-export default { customerAuthApi, accountApi }
+export default { customerAuthApi, accountApi, returnsApi }

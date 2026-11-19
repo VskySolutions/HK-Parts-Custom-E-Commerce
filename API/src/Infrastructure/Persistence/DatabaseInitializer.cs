@@ -41,6 +41,7 @@ public class DatabaseInitializer
         await SeedBaseCurrencyAsync(cancellationToken);
         await SeedTaxCategoriesAsync(cancellationToken);
         await SeedCmsContentAsync(cancellationToken);
+        await SeedRmaReasonsAsync(cancellationToken);
     }
 
     private async Task SeedRolesAsync(CancellationToken ct)
@@ -148,6 +149,43 @@ public class DatabaseInitializer
         });
         await _db.SaveChangesAsync(ct);
         _logger.LogInformation("Seeded default base currency (USD).");
+    }
+
+    /// <summary>
+    /// Seeds the default return reasons (order-return-requirements 6.2) the first time; after that the list is
+    /// owned by admins and never touched again.
+    /// </summary>
+    private async Task SeedRmaReasonsAsync(CancellationToken ct)
+    {
+        if (await _db.RmaReasons.AnyAsync(ct))
+            return;
+
+        // (name, fee applies, merchant fault, requires comment, requires photo)
+        var seeds = new (string Name, bool Fee, bool Fault, bool Comment, bool Photo)[]
+        {
+            ("Wrong part ordered", true, false, false, false),
+            ("Doesn't fit", true, false, false, false),
+            ("Damaged in shipping", false, true, true, true),
+            ("Defective", false, true, true, true),
+            ("Received wrong item", false, true, false, false),
+            ("No longer needed", true, false, false, false),
+            ("Other", true, false, true, false),
+        };
+        var sort = 0;
+        foreach (var s in seeds)
+        {
+            _db.RmaReasons.Add(new RmaReason
+            {
+                Name = s.Name,
+                FeeApplies = s.Fee,
+                MerchantFault = s.Fault,
+                RequiresComment = s.Comment,
+                RequiresPhoto = s.Photo,
+                SortOrder = sort++,
+            });
+        }
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Seeded default return reasons.");
     }
 
     private async Task SeedTaxCategoriesAsync(CancellationToken ct)

@@ -113,7 +113,7 @@
         <div class="row q-col-gutter-md">
           <div class="col-12 col-md-6">
             <AppSelect
-              label="Match blocked buyers on"
+              label="Match blocked customers on"
               :model-value="form.blacklistMatchMode"
               :options="blacklistMatchModeOptions"
               :hint="matchModeHint"
@@ -124,14 +124,14 @@
           <div class="col-12 col-md-6">
             <AppTextField
               label="Alert these addresses"
-              hint="Sent when a blocked buyer tries to order, comma separated. Empty = the store's notification address."
+              hint="Sent when a blocked customer tries to order, comma separated. Empty = the store's notification address."
               :model-value="form.blacklistAlertEmail"
               :disable="!canWrite"
               @update:model-value="form.blacklistAlertEmail = $event"
             />
           </div>
         </div>
-        <q-btn flat no-caps color="primary" icon="o_block" label="Manage blocked buyers" class="q-mt-sm" :to="{ name: 'admin-customer-blacklist' }" />
+        <q-btn flat no-caps color="primary" icon="o_block" label="Manage blocked customers" class="q-mt-sm" :to="{ name: 'admin-customer-blacklist' }" />
       </AppSection>
 
       <div class="row justify-end q-gutter-sm q-mb-lg">

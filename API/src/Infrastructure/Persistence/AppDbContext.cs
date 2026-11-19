@@ -64,6 +64,7 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<AuthorizeNetCredential> AuthorizeNetCredentials => Set<AuthorizeNetCredential>();
     public DbSet<TaxJarCredential> TaxJarCredentials => Set<TaxJarCredential>();
     public DbSet<StripeTaxCredential> StripeTaxCredentials => Set<StripeTaxCredential>();
+    public DbSet<AvalaraCredential> AvalaraCredentials => Set<AvalaraCredential>();
     public DbSet<FedExCredential> FedExCredentials => Set<FedExCredential>();
     public DbSet<DhlExpressCredential> DhlExpressCredentials => Set<DhlExpressCredential>();
     public DbSet<UspsCredential> UspsCredentials => Set<UspsCredential>();
@@ -142,9 +143,16 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<OrderLineItem> OrderLineItems => Set<OrderLineItem>();
     public DbSet<OrderShipping> OrderShippings => Set<OrderShipping>();
     public DbSet<ShippingRuleSettings> ShippingRuleSettings => Set<ShippingRuleSettings>();
+    public DbSet<ShipStationSettings> ShipStationSettings => Set<ShipStationSettings>();
+    public DbSet<ShipStationLog> ShipStationLogs => Set<ShipStationLog>();
+    public DbSet<AddressVerificationSettings> AddressVerificationSettings => Set<AddressVerificationSettings>();
+    public DbSet<AddressVerificationResult> AddressVerificationResults => Set<AddressVerificationResult>();
+    public DbSet<FflDealer> FflDealers => Set<FflDealer>();
+    public DbSet<ZipGeocode> ZipGeocodes => Set<ZipGeocode>();
     public DbSet<CheckoutLock> CheckoutLocks => Set<CheckoutLock>();
     public DbSet<CustomerBlacklistEntry> CustomerBlacklistEntries => Set<CustomerBlacklistEntry>();
     public DbSet<CustomerBlacklistHit> CustomerBlacklistHits => Set<CustomerBlacklistHit>();
+    public DbSet<CustomerBlacklistEvent> CustomerBlacklistEvents => Set<CustomerBlacklistEvent>();
     public DbSet<StoreManagerAssignment> StoreManagerAssignments => Set<StoreManagerAssignment>();
     public DbSet<Shipment> Shipments => Set<Shipment>();
     public DbSet<ShipmentLineItem> ShipmentLineItems => Set<ShipmentLineItem>();
@@ -152,6 +160,10 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<Rma> Rmas => Set<Rma>();
     public DbSet<StoreCreditTransaction> StoreCreditTransactions => Set<StoreCreditTransaction>();
     public DbSet<RmaLineItem> RmaLineItems => Set<RmaLineItem>();
+    public DbSet<RmaReason> RmaReasons => Set<RmaReason>();
+    public DbSet<RmaHistory> RmaHistory => Set<RmaHistory>();
+    public DbSet<RmaMessage> RmaMessages => Set<RmaMessage>();
+    public DbSet<RmaAttachment> RmaAttachments => Set<RmaAttachment>();
 
     // Commerce — pricing, cart, shipping, payments, tax (Phase 3)
     public DbSet<Discount> Discounts => Set<Discount>();

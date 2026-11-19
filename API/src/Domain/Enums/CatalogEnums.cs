@@ -52,7 +52,9 @@ public enum InventoryAuditAction
 {
     QtyUpdate = 1,
     PriceUpdate = 2,
-    Both = 3
+    Both = 3,
+    /// <summary>Returned units put back into stock by the RMA receiving step (RT-52).</summary>
+    ReturnRestock = 4
 }
 
 /// <summary>How the barcode scanner reached the product (recorded on each inventory audit row).</summary>

@@ -13,6 +13,11 @@ namespace HKPartsEcommerce.API.Controllers;
 [RequireModule(Modules.Orders)]
 public class AdminOrderDocumentsController : ApiControllerBase
 {
+    /// <summary>The invoice as data, for the on-screen invoice page (same figures as the PDF).</summary>
+    [HttpGet("{id:guid}/invoice/view")]
+    public async Task<ActionResult<InvoiceDto>> InvoiceView(Guid id)
+        => Ok(await Mediator.Send(new GetOrderInvoiceQuery(id)));
+
     /// <summary>Download the order's invoice as a PDF.</summary>
     [HttpGet("{id:guid}/invoice")]
     public async Task<IActionResult> Invoice(Guid id)

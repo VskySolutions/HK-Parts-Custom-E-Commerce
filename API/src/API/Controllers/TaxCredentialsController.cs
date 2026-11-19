@@ -57,4 +57,28 @@ public class TaxCredentialsController : ApiControllerBase
         await Mediator.Send(new DeleteStripeTaxCredentialCommand(id));
         return NoContent();
     }
+
+    // ---- Avalara (AvaTax v2: address verification, AV-21) ----
+    [HttpGet("avalara")]
+    public async Task<ActionResult<IReadOnlyList<IntegrationCredentialListItemDto>>> ListAvalara()
+        => Ok(await Mediator.Send(new ListAvalaraCredentialsQuery()));
+
+    [HttpGet("avalara/{id:guid}")]
+    public async Task<ActionResult<AvalaraCredentialDto>> GetAvalara(Guid id)
+        => Ok(await Mediator.Send(new GetAvalaraCredentialQuery(id)));
+
+    [HttpPost("avalara")]
+    public async Task<ActionResult<AvalaraCredentialDto>> CreateAvalara([FromBody] SaveAvalaraCredentialCommand command)
+        => Ok(await Mediator.Send(command with { Id = null }));
+
+    [HttpPut("avalara/{id:guid}")]
+    public async Task<ActionResult<AvalaraCredentialDto>> UpdateAvalara(Guid id, [FromBody] SaveAvalaraCredentialCommand command)
+        => Ok(await Mediator.Send(command with { Id = id }));
+
+    [HttpDelete("avalara/{id:guid}")]
+    public async Task<IActionResult> DeleteAvalara(Guid id)
+    {
+        await Mediator.Send(new DeleteAvalaraCredentialCommand(id));
+        return NoContent();
+    }
 }

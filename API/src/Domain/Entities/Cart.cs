@@ -40,6 +40,22 @@ public class Cart : AuditableEntity, ISoftDeletable
     /// </summary>
     public DateTime? LastCheckoutActivityUtc { get; set; }
 
+    /// <summary>
+    /// The FFL dealer the buyer picked for the cart's firearms (FFL-41/52), by directory key. Only the key is
+    /// kept: the dealer's address is read from the directory on every quote and again at placement, so a
+    /// browser can never supply the ship-to address.
+    /// </summary>
+    public string? FflDealerKey { get; set; }
+
+    /// <summary>
+    /// Address verification of the buyer's ship-to (docs/shipstation-verification-requirements.md AV-06/13):
+    /// the hash of the address last verified, its outcome, and whether the buyer chose to keep their own
+    /// version over the provider's suggestion. A different ship-to at placement is verified again.
+    /// </summary>
+    public string? ShipToAddressHash { get; set; }
+    public Enums.AddressVerificationStatus? ShipToVerifyStatus { get; set; }
+    public bool ShipToAddressOverridden { get; set; }
+
     /// <summary>When a recovery email was sent for this abandoned cart; null = not yet notified (WO-31).</summary>
     public DateTime? AbandonmentNotifiedOnUtc { get; set; }
 

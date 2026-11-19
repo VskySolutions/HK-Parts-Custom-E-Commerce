@@ -34,8 +34,18 @@ public class OrderLineItem : BaseEntity
 
     public decimal LineTotal { get; set; }
 
+    /// <summary>The product required an FFL dealer when the order was placed (legacy <c>is_ffl</c>): this line ships to the dealer.</summary>
+    public bool IsFfl { get; set; }
+
     /// <summary>Units of this line already dispatched across shipments; drives partial-fulfilment state (WO-46).</summary>
     public int QuantityShipped { get; set; }
+
+    /// <summary>
+    /// Units taken off this line by "Apply credit" (legacy <c>qty_refunded</c>). Applying a credit lowers
+    /// <see cref="Quantity"/> and <see cref="LineTotal"/> by the returned units, exactly like the PHP admin, so
+    /// the units originally ordered are <see cref="Quantity"/> + <see cref="QuantityRefunded"/>.
+    /// </summary>
+    public int QuantityRefunded { get; set; }
 
     /// <summary>The eBay line item id on an imported eBay order (needed to report fulfillment back).</summary>
     public string? EbayLineItemId { get; set; }

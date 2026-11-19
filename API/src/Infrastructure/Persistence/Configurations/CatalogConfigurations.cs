@@ -78,6 +78,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         b.Property(x => x.ShortDescription).HasMaxLength(1000);
         b.Property(x => x.Sku).HasMaxLength(100);
         b.Property(x => x.InquiryButtonLabel).HasMaxLength(80);
+        b.Property(x => x.IsReturnable).HasDefaultValue(true);
         b.Property(x => x.SubscriptionIntervals).HasMaxLength(200);
         b.Property(x => x.Price).HasPrecision(18, 2);
         b.Property(x => x.GiftCardAmount).HasPrecision(18, 2);

@@ -158,6 +158,19 @@ public class StripeTaxCredential : IntegrationCredentialBase
     [Encrypted] public string? SecretKey { get; set; }
 }
 
+/// <summary>
+/// Avalara AvaTax v2 account (table <c>Credentials_Avalara</c>). Used for checkout address verification
+/// (<c>POST /api/v2/addresses/resolve</c>, AV-21), signed in with Basic auth (account id + licence key).
+/// </summary>
+public class AvalaraCredential : IntegrationCredentialBase
+{
+    /// <summary>Sandbox https://sandbox-rest.avatax.com or live https://rest.avatax.com. Required.</summary>
+    public string? BaseUrl { get; set; }
+    public string? AccountId { get; set; }
+    [Encrypted] public string? LicenseKey { get; set; }
+    public string? CompanyCode { get; set; }
+}
+
 // ---- Shipping carriers -----------------------------------------------------
 
 /// <summary>FedEx API credentials + account + endpoint (table <c>Credentials_FedEx</c>).</summary>
@@ -174,6 +187,15 @@ public class FedExCredential : IntegrationCredentialBase
     /// like bad credentials, so an absent account number is worth ruling out first.
     /// </summary>
     public string? AccountNumber { get; set; }
+
+    /// <summary>
+    /// Legacy FedEx Web Services (SOAP) meter number. Kept for parity with the PHP settings screen only:
+    /// the REST API signs in with <see cref="ApiKey"/> + <see cref="ApiSecret"/> and never sends it.
+    /// </summary>
+    public string? MeterNumber { get; set; }
+
+    /// <summary>Legacy FedEx Web Services (SOAP) password. Stored for parity only; not used by the REST API.</summary>
+    [Encrypted] public string? Password { get; set; }
 
     // ---- Rating settings (docs/fedex-shipping-requirements.md §2, §4) ----
 

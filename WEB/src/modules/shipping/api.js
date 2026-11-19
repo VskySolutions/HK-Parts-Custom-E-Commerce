@@ -83,3 +83,39 @@ export default {
   shippingCarrierMeta,
   shippingMethodsBlockedReason
 }
+
+/* ShipStation Custom Store (docs/shipstation-verification-requirements.md §5.1): settings (password write-only)
+ * + the call log ShipStation's export / shipnotify requests leave behind. */
+const SHIPSTATION = '/api/admin/shipstation'
+export const shipStationApi = {
+  get () { return api.get(`${SHIPSTATION}/settings`).then(unwrap) },
+  update (payload) { return api.put(`${SHIPSTATION}/settings`, payload).then(unwrap) },
+  activity (params = {}) { return api.get(`${SHIPSTATION}/activity`, { params, paramsSerializer: qsSerializer }).then(unwrap) }
+}
+
+export const shipStationStatusOptions = [
+  { label: 'Pending', value: 'Pending', caption: 'awaiting_shipment' },
+  { label: 'Processing', value: 'Processing', caption: 'awaiting_shipment' },
+  { label: 'Shipped', value: 'Shipped', caption: 'shipped' },
+  { label: 'Cancelled', value: 'Cancelled', caption: 'cancelled' },
+  { label: 'On hold (payment under review)', value: 'OnHold', caption: 'on_hold' }
+]
+
+/* Checkout address verification (§5.2) + the P.O. box rule + the admin "Test address" box (AD-61). */
+const VERIFICATION = '/api/admin/address-verification'
+export const addressVerificationApi = {
+  get () { return api.get(VERIFICATION).then(unwrap) },
+  update (payload) { return api.put(VERIFICATION, payload).then(unwrap) },
+  test (payload) { return api.post(`${VERIFICATION}/test`, payload).then(unwrap) }
+}
+
+export const verificationProviderOptions = [
+  { label: 'Disabled', value: 'None' },
+  { label: 'Avalara (AvaTax)', value: 'Avalara' },
+  { label: 'USPS (US addresses only)', value: 'Usps' }
+]
+
+export const verificationUnavailableOptions = [
+  { label: 'Allow the order and flag it as not verified', value: 'AllowAndFlag' },
+  { label: 'Block checkout until the address can be verified', value: 'Block' }
+]

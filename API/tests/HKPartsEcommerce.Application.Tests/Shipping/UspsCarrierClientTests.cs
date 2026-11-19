@@ -126,6 +126,22 @@ public class UspsCarrierClientTests : CatalogTestBase
     }
 
     [Fact]
+    public async Task Flat_rate_services_send_the_mail_class_with_their_rate_indicator()
+    {
+        Seed(c => c.AllowedDomesticServices = "PRIORITY_MAIL,PRIORITY_MAIL:FB,PRIORITY_MAIL_EXPRESS,PRIORITY_MAIL_EXPRESS:E4");
+        var fake = new FakeUsps();
+        var options = await Client(fake).GetRatesAsync(Req(NewYork, 2m), CancellationToken.None);
+
+        var sent = fake.Calls
+            .Select(c => c.Body!.Value.GetProperty("mailClass").GetString() + "/" + c.Body!.Value.GetProperty("rateIndicator").GetString())
+            .OrderBy(s => s, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(new[] { "PRIORITY_MAIL/FB", "PRIORITY_MAIL/SP", "PRIORITY_MAIL_EXPRESS/E4", "PRIORITY_MAIL_EXPRESS/PA" }, sent);
+        Assert.Contains(options, o => o.MethodId == "PRIORITY_MAIL:FB" && o.Name == "USPS - Priority Mail Medium Flat Rate Box");
+        Assert.Contains(options, o => o.MethodId == "PRIORITY_MAIL_EXPRESS:E4" && o.Name == "USPS - Priority Mail Express Flat Rate Envelope");
+    }
+
+    [Fact]
     public async Task US_T3_handling_fee_is_added_to_each_option()
     {
         Seed(c => c.HandlingFee = 1.00m);

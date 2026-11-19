@@ -30,6 +30,7 @@ public class SetIntegrationCredentialActiveCommandHandler : IRequestHandler<SetI
             "square"       => IntegrationCredentialSupport.SetActiveAsync(_db.SquareCredentials, _db, id, active, ct),
             "authorizenet" => IntegrationCredentialSupport.SetActiveAsync(_db.AuthorizeNetCredentials, _db, id, active, ct),
             "taxjar"       => IntegrationCredentialSupport.SetActiveAsync(_db.TaxJarCredentials, _db, id, active, ct),
+            "avalara"      => IntegrationCredentialSupport.SetActiveAsync(_db.AvalaraCredentials, _db, id, active, ct),
             "stripe-tax"   => IntegrationCredentialSupport.SetActiveAsync(_db.StripeTaxCredentials, _db, id, active, ct),
             "fedex"        => IntegrationCredentialSupport.SetActiveAsync(_db.FedExCredentials, _db, id, active, ct),
             "dhl"          => IntegrationCredentialSupport.SetActiveAsync(_db.DhlExpressCredentials, _db, id, active, ct),

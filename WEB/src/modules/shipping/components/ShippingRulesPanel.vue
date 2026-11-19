@@ -104,14 +104,10 @@
 
           <q-separator class="q-my-md" />
 
-          <q-toggle v-model="rules.refusePoBoxes" label="Refuse P.O. box addresses" color="primary" :disable="!canWrite" />
-          <AppTextField
-            v-model="rules.poBoxMessage"
-            class="q-mt-sm"
-            label="P.O. box message"
-            placeholder="We cannot ship to a P.O. box. Please enter a street address."
-            :disable="!canWrite || !rules.refusePoBoxes"
-          />
+          <div class="text-caption text-grey-7">
+            <q-icon name="o_info" size="14px" class="q-mr-xs" />
+            The P.O. box rule is on the <b>Verification</b> tab, with checkout address verification.
+          </div>
 
           <AppTextField
             v-model="rules.invalidDestinationMessage"
@@ -171,8 +167,6 @@ const rules = reactive({
   restrictedStates: [],
   internationalRestrictionEnabled: true,
   allowedCountryCodes: [],
-  refusePoBoxes: false,
-  poBoxMessage: '',
   invalidDestinationMessage: ''
 })
 
@@ -212,8 +206,9 @@ function buildPayload () {
     restrictedStates: rules.restrictedStates,
     internationalRestrictionEnabled: rules.internationalRestrictionEnabled,
     allowedCountryCodes: rules.allowedCountryCodes,
-    refusePoBoxes: rules.refusePoBoxes,
-    poBoxMessage: rules.poBoxMessage || null,
+    // Null keeps the P.O. box rule as saved on the Verification tab.
+    refusePoBoxes: null,
+    poBoxMessage: null,
     invalidDestinationMessage: rules.invalidDestinationMessage || null
   }
 }
@@ -232,8 +227,6 @@ function apply (r) {
     restrictedStates: r.restrictedStates || [],
     internationalRestrictionEnabled: r.internationalRestrictionEnabled,
     allowedCountryCodes: r.allowedCountryCodes || [],
-    refusePoBoxes: r.refusePoBoxes,
-    poBoxMessage: r.poBoxMessage || '',
     invalidDestinationMessage: r.invalidDestinationMessage || ''
   })
   version.value = r.version || 1

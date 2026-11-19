@@ -11,7 +11,8 @@
       @back="$router.push({ name: 'admin-orders' })"
     >
       <template #actions>
-        <q-btn outline color="grey-8" no-caps icon="o_download" label="Invoice" class="q-mr-xs" @click="downloadInvoice" />
+        <q-btn outline color="grey-8" no-caps icon="o_receipt_long" label="Invoice" class="q-mr-xs" :to="{ name: 'admin-order-invoice', params: { id: route.params.id } }" target="_blank" />
+        <q-btn outline color="grey-8" no-caps icon="o_download" label="Invoice Download" class="q-mr-xs" @click="downloadInvoice" />
         <q-btn outline color="grey-8" no-caps icon="o_description" label="Packing slip" @click="downloadPackingSlip" />
       </template>
     </AppDetailHeader>
@@ -72,6 +73,15 @@
                     </td>
                     <td class="text-right">{{ formatMoney(s.methodPrice) }}</td>
                   </tr>
+                  <!-- Address verification at checkout (AV-15): flag unverified or customer-overridden addresses. -->
+                  <tr v-if="s.addressVerifyStatus && s.addressVerifyStatus !== 'NotChecked'">
+                    <td class="text-grey-8">Address check</td>
+                    <td colspan="2">
+                      <q-badge v-if="s.addressVerifyStatus === 'Unavailable'" color="warning" text-color="dark" label="Not verified (service unavailable)" />
+                      <q-badge v-else-if="s.addressOverridden" color="orange-2" text-color="orange-10" label="Customer kept their own address over the suggestion" />
+                      <q-badge v-else color="green-1" text-color="positive" label="Verified" />
+                    </td>
+                  </tr>
                   <tr v-if="s.signatureRequired">
                     <td class="text-grey-8">Signature required</td>
                     <td>Yes</td>
@@ -82,9 +92,34 @@
                     <td>Declared value {{ formatMoney(s.declaredValue) }}</td>
                     <td class="text-right">{{ formatMoney(s.insuranceFee) }}</td>
                   </tr>
-                  <tr v-if="s.shipToType === 'FflDealer'">
-                    <td class="text-grey-8">FFL dealer</td>
-                    <td colspan="2">{{ s.fflDealerName || '—' }}<span v-if="s.fflNumber"> · {{ s.fflNumber }}</span></td>
+                  <tr v-if="s.shipToType === 'FflDealer' || s.containsFflItems">
+                    <td class="text-grey-8 vertical-top">Ship to FFL dealer</td>
+                    <td colspan="2">
+                      <!-- FFL-91: FFL Required Shipment, number and the ATF eZ Check link. -->
+                      <div class="text-negative text-weight-medium">FFL Required Shipment</div>
+                      <div class="text-weight-medium">
+                        FFL {{ s.fflDealerName || '—' }}
+                        <q-btn
+                          v-if="s.fflDealerKey"
+                          flat dense no-caps size="sm" color="primary" icon="o_edit_note" label="Update Dealer Data"
+                          @click="openFflDealerData(s)"
+                        />
+                      </div>
+                      <div v-if="s.fflDealerStreet">{{ s.fflDealerStreet }}</div>
+                      <div v-if="s.fflDealerCity">{{ s.fflDealerCity }}, {{ s.fflDealerState }} {{ s.fflDealerZip }}</div>
+                      <div v-if="s.fflDealerPhone">{{ s.fflDealerPhone }}</div>
+                      <div v-if="s.fflNumber">
+                        FFL Number: {{ s.fflNumber }}
+                        <a :href="FFL_EZ_CHECK_URL" target="_blank" rel="noopener noreferrer" class="text-primary q-ml-sm">Validate FFL</a>
+                      </div>
+                      <div v-if="s.fflSource === 'Admin'" class="text-caption text-grey-7">Dealer changed by an administrator.</div>
+                      <q-btn
+                        v-if="canChangeFflDealer"
+                        outline dense no-caps size="sm" color="primary" icon="o_swap_horiz" class="q-mt-xs"
+                        label="Select New Shipping Dealer"
+                        @click="openFflChangeDealer(s)"
+                      />
+                    </td>
                   </tr>
                   <tr class="text-weight-medium">
                     <td>Shipping total</td>
@@ -98,8 +133,17 @@
               </q-markup-table>
             </div>
             <div class="col-12">
-              <div class="text-caption text-grey-7">Ship to</div>
+              <div class="text-caption text-grey-7">{{ order.hasFflItems ? 'Customer address' : 'Ship to' }}</div>
               <div>{{ shipAddress }}</div>
+              <div v-if="order.hasFflItems" class="text-caption text-grey-7">
+                FFL items ship to the dealer above<span v-if="(order.shippings || []).some((x) => x.shipmentType === 'NonFfl')">; the other items ship here</span>.
+              </div>
+            </div>
+            <div v-if="order.billingAddress" class="col-12">
+              <div class="text-caption text-grey-7">Bill to</div>
+              <div>{{ billName }}</div>
+              <div>{{ billAddress }}</div>
+              <div v-if="order.billingAddress.phoneNumber" class="text-caption text-grey-7">{{ order.billingAddress.phoneNumber }}</div>
             </div>
           </div>
         </AppSection>
@@ -120,6 +164,7 @@
               <tr v-for="l in order.lines" :key="l.id">
                 <td>
                   {{ l.productName }}
+                  <q-badge v-if="l.isFfl" color="deep-orange" label="FFL" class="q-ml-xs"><q-tooltip>Ships to the FFL dealer</q-tooltip></q-badge>
                   <AppLineCustomAttributes :attributes="l.customAttributes" />
                 </td>
                 <td>{{ l.sku || '—' }}</td>
@@ -244,6 +289,26 @@
           </q-list>
         </AppSection>
 
+        <AppSection title="Returns" class="q-mt-md">
+          <template #actions>
+            <q-btn flat color="grey-8" no-caps icon="o_pending_actions" label="Return request (review workflow)" @click="openReturnDialog" />
+            <q-btn unelevated color="primary" no-caps icon="o_account_balance_wallet" label="Apply credit" :to="{ name: 'admin-order-quick-return', params: { id: route.params.id } }" />
+          </template>
+          <div v-if="!returns.length" class="text-grey-6">No returns for this order.</div>
+          <q-list v-else separator dense>
+            <q-item v-for="r in returns" :key="r.id" clickable @click="router.push({ name: 'admin-rma-detail', params: { id: r.id } })">
+              <q-item-section>
+                <q-item-label class="text-weight-medium">{{ r.rmaNumber }}</q-item-label>
+                <q-item-label caption>{{ formatDate(r.requestedOnUtc) }} · {{ r.unitCount }} unit(s)</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-badge :color="rmaStatusColor(r.status)" :label="humanizeEnum(r.status)" />
+                <div class="text-caption q-mt-xs">{{ formatMoney(r.totalRefund) }}</div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </AppSection>
+
         <AppSection title="Timeline" class="q-mt-md">
           <div v-if="!history.length" class="text-grey-6">No status changes yet.</div>
           <q-timeline v-else color="primary">
@@ -349,7 +414,7 @@
       <q-card style="min-width: 380px">
         <q-card-section class="text-subtitle1 text-weight-medium">Mark as shipped</q-card-section>
         <q-card-section class="q-gutter-sm">
-          <q-input v-model="trackingDialog.carrier" dense outlined label="Carrier" :rules="[(v) => !!v || 'Required']" />
+          <q-select v-model="trackingDialog.carrier" :options="shipmentCarrierOptions" emit-value map-options dense outlined label="Carrier" :rules="[(v) => !!v || 'Required']" />
           <q-input v-model="trackingDialog.trackingNumber" dense outlined label="Tracking number" :rules="[(v) => !!v || 'Required']" />
         </q-card-section>
         <q-card-actions align="right">
@@ -374,7 +439,7 @@
             </div>
           </div>
           <q-separator class="q-my-sm" />
-          <q-input v-model="shipmentDialog.carrier" dense outlined label="Carrier" :rules="[(v) => !!v || 'Required']" />
+          <q-select v-model="shipmentDialog.carrier" :options="shipmentCarrierOptions" emit-value map-options dense outlined label="Carrier" :rules="[(v) => !!v || 'Required']" />
           <q-input v-model="shipmentDialog.trackingNumber" dense outlined label="Tracking number (optional)" />
           <q-input v-model="shipmentDialog.serviceName" dense outlined label="Service (optional)" />
         </q-card-section>
@@ -431,7 +496,55 @@
       </q-card>
     </q-dialog>
 
+    <!-- Create return (staff: phone / counter returns, policy override with a reason) -->
+    <q-dialog v-model="returnDialog.open" persistent>
+      <q-card style="min-width: 480px; max-width: 860px; width: 100%">
+        <q-card-section class="text-subtitle1 text-weight-medium">Return request (review workflow)</q-card-section>
+        <q-card-section v-if="returnDialog.loading"><q-spinner /></q-card-section>
+        <q-card-section v-else-if="returnDialog.data" class="q-gutter-sm">
+          <q-banner v-if="returnDialog.data.reason" dense rounded class="bg-orange-1 text-deep-orange">{{ returnDialog.data.reason }}</q-banner>
+          <q-markup-table flat dense>
+            <thead><tr><th class="text-left">Item</th><th>Returnable</th><th style="width: 90px">Qty</th><th style="width: 220px">Reason</th></tr></thead>
+            <tbody>
+              <tr v-for="l in returnDialog.lines" :key="l.orderLineItemId">
+                <td>
+                  {{ l.productName }}
+                  <q-badge v-if="l.requiresFfl" color="deep-orange" label="FFL" class="q-ml-xs" />
+                  <div v-if="l.ineligibleReason" class="text-caption text-negative">{{ l.ineligibleReason }}</div>
+                </td>
+                <td class="text-center">{{ l.quantityReturnable }}</td>
+                <td><q-input v-model.number="l.quantity" type="number" min="0" :max="l.quantityReturnable" :disable="!l.eligible" dense outlined /></td>
+                <td><q-select v-model="l.reasonId" :options="returnDialog.reasons" emit-value map-options dense outlined :disable="!l.eligible" /></td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <div class="row q-col-gutter-sm">
+            <div class="col-6"><q-select v-model="returnDialog.resolution" :options="rmaResolutionOptions" emit-value map-options dense outlined label="Customer wants" /></div>
+            <div class="col-6"><q-select v-model="returnDialog.method" :options="rmaReturnMethodOptions" emit-value map-options dense outlined label="Return method" /></div>
+          </div>
+          <q-input v-model="returnDialog.comment" type="textarea" autogrow dense outlined label="Comment" />
+          <q-input v-model="returnDialog.overrideReason" dense outlined label="Policy override reason (needed outside the return policy)" />
+          <q-toggle v-model="returnDialog.approve" label="Approve now (skip review)" />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat no-caps label="Cancel" v-close-popup />
+          <q-btn color="primary" unelevated no-caps label="Create return" :loading="busy" :disable="!returnDialog.lines.some((l) => l.quantity > 0)" @click="createReturn" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <AppRecordMeta entity-type="order" :record-id="order?.id" />
+
+    <!-- FFL dealer actions (FFL-92/94). -->
+    <FflChangeDealerDialog
+      v-model="fflChangeDialog.open"
+      :order-id="order?.id || null"
+      :order-number="order?.orderNumber || ''"
+      :default-zip="order?.postalCode || ''"
+      :current="fflChangeDialog.shipping"
+      @saved="load"
+    />
+    <FflDealerDataDialog v-model="fflDataDialog.open" :dealer="fflDataDialog.dealer" />
   </q-page>
 </template>
 
@@ -448,8 +561,12 @@ import { getApiErrorMessage } from 'services/api'
 import { useNotify } from 'composables/useNotify'
 import {
   orderApi, orderStatusColor as statusColor, allowedTransitions, formatMoney, formatDate,
-  paymentStatusColor, paymentMethodLabel, humanizeEnum
+  paymentStatusColor, paymentMethodLabel, humanizeEnum, shipmentCarrierOptions, defaultShipmentCarrier,
+  rmaApi, rmaStatusColor, rmaResolutionOptions, rmaReturnMethodOptions
 } from 'modules/orders/api'
+import { fflAdminApi, FFL_EZ_CHECK_URL } from 'modules/shipping/ffl-api'
+import FflChangeDealerDialog from 'modules/shipping/components/FflChangeDealerDialog.vue'
+import FflDealerDataDialog from 'modules/shipping/components/FflDealerDataDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -469,6 +586,25 @@ const shipmentDialog = reactive({ open: false, lines: [], carrier: '', trackingN
 const refundDialog = reactive({ open: false, mode: 'full', lineIds: [], reason: '' })
 const chargeDialog = reactive({ open: false, paymentId: null, amount: 0, max: 0, currency: '' })
 const syncBusy = reactive({})
+
+// ---- FFL dealer (FFL-92..95) ----
+const fflChangeDialog = reactive({ open: false, shipping: null })
+const fflDataDialog = reactive({ open: false, dealer: null })
+// The dealer can be changed until the order ships (the server enforces the same rule).
+const canChangeFflDealer = computed(() =>
+  !!order.value && !['Shipped', 'Delivered', 'Cancelled'].includes(order.value.status))
+function openFflChangeDealer (s) {
+  fflChangeDialog.shipping = s
+  fflChangeDialog.open = true
+}
+async function openFflDealerData (s) {
+  try {
+    fflDataDialog.dealer = await fflAdminApi.dealer(s.fflDealerKey)
+    fflDataDialog.open = true
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+  }
+}
 
 // Whole days since the payment was authorized (AN-23 warns from day 25 of Authorize.Net's 30).
 function authAgeDays (p) {
@@ -527,6 +663,15 @@ const shipAddress = computed(() => {
   if (!o) return '—'
   return [o.addressLine1, o.addressLine2, o.city, o.stateProvince || o.region, o.postalCode, o.countryCode].filter(Boolean).join(', ') || '—'
 })
+const billName = computed(() => {
+  const b = order.value?.billingAddress
+  return b ? [b.firstName, b.lastName].filter(Boolean).join(' ') : ''
+})
+const billAddress = computed(() => {
+  const b = order.value?.billingAddress
+  if (!b) return '—'
+  return [b.addressLine1, b.addressLine2, b.city, b.stateProvince, b.postalCode, b.countryCode].filter(Boolean).join(', ') || '—'
+})
 const canShipMore = computed(() => (order.value?.lines || []).some((l) => remainingFor(l.id) > 0))
 // The list-price subtotal = charged subtotal + the group saving that was folded into the unit prices.
 const listSubtotal = computed(() => {
@@ -570,11 +715,63 @@ async function load () {
   } finally {
     loading.value = false
   }
+  loadReturns()
+}
+
+/* ---- Returns (RMA) for this order ---- */
+const returns = ref([])
+const returnDialog = reactive({
+  open: false, loading: false, data: null, lines: [], reasons: [],
+  resolution: 'Refund', method: 'SelfShip', comment: '', overrideReason: '', approve: false
+})
+
+async function loadReturns () {
+  try {
+    const page = await rmaApi.list({ orderId: route.params.id, pageSize: 50 })
+    returns.value = page?.items || []
+  } catch { returns.value = [] }
+}
+
+async function openReturnDialog () {
+  Object.assign(returnDialog, { open: true, loading: true, data: null, lines: [], resolution: 'Refund', method: 'SelfShip', comment: '', overrideReason: '', approve: false })
+  try {
+    const [data, reasons] = await Promise.all([rmaApi.returnable(route.params.id), rmaApi.reasons()])
+    returnDialog.data = data
+    returnDialog.reasons = reasons.filter((r) => r.isActive).map((r) => ({ label: r.name, value: r.id }))
+    returnDialog.lines = data.lines.map((l) => ({ ...l, quantity: 0, reasonId: returnDialog.reasons[0]?.value || null }))
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+    returnDialog.open = false
+  } finally {
+    returnDialog.loading = false
+  }
+}
+
+async function createReturn () {
+  busy.value = true
+  try {
+    const rma = await rmaApi.create({
+      orderId: route.params.id,
+      lines: returnDialog.lines.filter((l) => l.quantity > 0).map((l) => ({ orderLineItemId: l.orderLineItemId, quantity: l.quantity, reasonId: l.reasonId })),
+      requestedResolution: returnDialog.resolution,
+      returnMethod: returnDialog.method,
+      comment: returnDialog.comment || null,
+      approve: returnDialog.approve,
+      overrideReason: returnDialog.overrideReason || null
+    })
+    returnDialog.open = false
+    notify.success(`Return ${rma.rmaNumber} created`)
+    router.push({ name: 'admin-rma-detail', params: { id: rma.id } })
+  } catch (err) {
+    notify.error(getApiErrorMessage(err))
+  } finally {
+    busy.value = false
+  }
 }
 
 function onTransition (t) {
   if (t === 'Shipped') {
-    trackingDialog.carrier = ''
+    trackingDialog.carrier = defaultShipmentCarrier(order.value)
     trackingDialog.trackingNumber = ''
     trackingDialog.open = true
     return
@@ -610,7 +807,7 @@ function openShipmentDialog () {
   shipmentDialog.lines = (order.value.lines || [])
     .map((l) => ({ orderLineItemId: l.id, productName: l.productName, remaining: remainingFor(l.id), quantity: remainingFor(l.id) }))
     .filter((r) => r.remaining > 0)
-  shipmentDialog.carrier = ''
+  shipmentDialog.carrier = defaultShipmentCarrier(order.value)
   shipmentDialog.trackingNumber = ''
   shipmentDialog.serviceName = ''
   shipmentDialog.open = true
@@ -675,7 +872,7 @@ async function confirmRefund () {
   }
 }
 
-function downloadInvoice () { orderApi.invoice(route.params.id).catch((e) => notify.error(getApiErrorMessage(e))) }
+function downloadInvoice () { orderApi.invoice(route.params.id, order.value?.orderNumber).catch((e) => notify.error(getApiErrorMessage(e))) }
 function downloadPackingSlip () { orderApi.packingSlip(route.params.id).catch((e) => notify.error(getApiErrorMessage(e))) }
 
 onMounted(load)

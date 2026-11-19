@@ -149,6 +149,15 @@
               </div>
             </div>
 
+            <!-- Billing address confirmed at checkout -->
+            <div v-if="detail.data.billingAddress" class="q-mb-md">
+              <div class="text-body2 text-weight-medium q-mb-xs">Billing address</div>
+              <div class="text-body2 text-grey-8">
+                <div>{{ [detail.data.billingAddress.firstName, detail.data.billingAddress.lastName].filter(Boolean).join(' ') }}</div>
+                <div>{{ addressLine(detail.data.billingAddress) }}</div>
+              </div>
+            </div>
+
             <!-- Line items -->
             <div class="text-body2 text-weight-medium q-mb-xs">Items</div>
             <q-markup-table flat bordered dense class="q-mb-md">
@@ -232,7 +241,19 @@
 
         <q-separator />
         <q-card-actions align="right">
+          <div v-if="detail.returnable && !detail.returnable.eligible && detail.returnable.reason" class="text-caption text-grey-7 q-mr-auto q-pl-sm">
+            {{ detail.returnable.reason }}
+          </div>
           <q-btn flat no-caps label="Close" v-close-popup />
+          <q-btn
+            v-if="detail.returnable && detail.returnable.eligible"
+            outline
+            color="primary"
+            no-caps
+            icon="o_assignment_return"
+            label="Return items"
+            @click="router.push({ name: 'shop-account-return-new', params: { orderId: detail.data.id } })"
+          />
           <q-btn
             color="primary"
             unelevated
@@ -252,18 +273,20 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
-import { accountApi } from 'modules/storefront/account-api'
+import { useRouter } from 'vue-router'
+import { accountApi, returnsApi } from 'modules/storefront/account-api'
 import { formatPrice } from 'modules/storefront/api'
 import { formatDateTime as formatDate } from 'src/utils/datetime'
 import { getApiErrorMessage } from 'services/api'
 
 const $q = useQuasar()
+const router = useRouter()
 
 const rows = ref([])
 const loading = ref(false)
 const downloadingId = ref(null)
 const pagination = ref({ page: 1, rowsPerPage: 20, rowsNumber: 0 })
-const detail = reactive({ open: false, loading: false, data: null, timeline: [] })
+const detail = reactive({ open: false, loading: false, data: null, timeline: [], returnable: null })
 
 const columns = [
   { name: 'orderNumber', label: 'Order #', field: 'orderNumber', align: 'left' },
@@ -373,6 +396,9 @@ async function view (row) {
   detail.loading = true
   detail.data = null
   detail.timeline = []
+  detail.returnable = null
+  // Whether anything can be returned (drives the Return items button); never blocks the dialog.
+  returnsApi.returnable(row.id).then((r) => { detail.returnable = r }).catch(() => {})
   try {
     // Detail + timeline together; the timeline degrades to empty rather than failing the dialog.
     const [data, timeline] = await Promise.all([

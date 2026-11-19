@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using HKPartsEcommerce.Application.Common.Interfaces;
@@ -24,21 +25,31 @@ public class ShippingRateService : IShippingRateService
 {
     private static readonly JsonSerializerOptions TierJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
+    /// <summary>
+    /// How long a live carrier's quote is reused for an identical shipment. Checkout re-quotes on every
+    /// signature/insurance toggle and method change, none of which changes what the carrier would quote, so
+    /// the short reuse turns those re-quotes from a round trip to UPS/DHL into a memory read.
+    /// </summary>
+    private static readonly TimeSpan CarrierRateCacheTtl = TimeSpan.FromMinutes(5);
+
     private readonly IApplicationDbContext _db;
     private readonly IEnumerable<ICarrierClient> _carriers;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ShippingRateService> _logger;
+    private readonly IMemoryCache? _cache;
 
     public ShippingRateService(
         IApplicationDbContext db,
         IEnumerable<ICarrierClient> carriers,
         IServiceScopeFactory scopeFactory,
-        ILogger<ShippingRateService> logger)
+        ILogger<ShippingRateService> logger,
+        IMemoryCache? cache = null)
     {
         _db = db;
         _carriers = carriers;
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task<IReadOnlyList<ShippingRateOption>> GetRatesAsync(CarrierRateRequest request, CancellationToken ct)
@@ -321,6 +332,12 @@ public class ShippingRateService : IShippingRateService
     private async Task<IReadOnlyList<ShippingRateOption>> SafeGetRatesAsync(
         ShippingCarrierType carrier, CarrierRateRequest request, CancellationToken ct)
     {
+        // Same carrier + same shipment (origin, destination, weight, lines, subtotal) → same quote. The key is
+        // the serialized request because the record's Lines list has reference, not value, equality.
+        var cacheKey = $"carrier-rates:{carrier}:{JsonSerializer.Serialize(request)}";
+        if (_cache is not null && _cache.TryGetValue(cacheKey, out IReadOnlyList<ShippingRateOption>? cached) && cached is not null)
+            return cached;
+
         try
         {
             using var scope = _scopeFactory.CreateScope();
@@ -334,6 +351,9 @@ public class ShippingRateService : IShippingRateService
                 _logger.LogInformation(
                     "Shipping carrier {Carrier} returned no rates for {Country}/{PostalCode}.",
                     carrier, request.Destination.CountryCode, request.Destination.PostalCode);
+            // Only real quotes are reused: an empty answer may be a credential the admin is fixing right now.
+            else
+                _cache?.Set(cacheKey, rates, CarrierRateCacheTtl);
 
             return rates;
         }

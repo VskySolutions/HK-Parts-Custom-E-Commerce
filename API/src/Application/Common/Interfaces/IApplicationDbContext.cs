@@ -43,6 +43,7 @@ public interface IApplicationDbContext
     DbSet<AuthorizeNetCredential> AuthorizeNetCredentials { get; }
     DbSet<TaxJarCredential> TaxJarCredentials { get; }
     DbSet<StripeTaxCredential> StripeTaxCredentials { get; }
+    DbSet<AvalaraCredential> AvalaraCredentials { get; }
     DbSet<FedExCredential> FedExCredentials { get; }
     DbSet<DhlExpressCredential> DhlExpressCredentials { get; }
     DbSet<UspsCredential> UspsCredentials { get; }
@@ -121,15 +122,26 @@ public interface IApplicationDbContext
     DbSet<OrderLineItem> OrderLineItems { get; }
     DbSet<OrderShipping> OrderShippings { get; }
     DbSet<ShippingRuleSettings> ShippingRuleSettings { get; }
+    DbSet<ShipStationSettings> ShipStationSettings { get; }
+    DbSet<ShipStationLog> ShipStationLogs { get; }
+    DbSet<AddressVerificationSettings> AddressVerificationSettings { get; }
+    DbSet<AddressVerificationResult> AddressVerificationResults { get; }
+    DbSet<FflDealer> FflDealers { get; }
+    DbSet<ZipGeocode> ZipGeocodes { get; }
     DbSet<CheckoutLock> CheckoutLocks { get; }
     DbSet<CustomerBlacklistEntry> CustomerBlacklistEntries { get; }
     DbSet<CustomerBlacklistHit> CustomerBlacklistHits { get; }
+    DbSet<CustomerBlacklistEvent> CustomerBlacklistEvents { get; }
     DbSet<StoreManagerAssignment> StoreManagerAssignments { get; }
     DbSet<Shipment> Shipments { get; }
     DbSet<ShipmentLineItem> ShipmentLineItems { get; }
     DbSet<ShipmentTracking> ShipmentTrackingEvents { get; }
     DbSet<Rma> Rmas { get; }
     DbSet<RmaLineItem> RmaLineItems { get; }
+    DbSet<RmaReason> RmaReasons { get; }
+    DbSet<RmaHistory> RmaHistory { get; }
+    DbSet<RmaMessage> RmaMessages { get; }
+    DbSet<RmaAttachment> RmaAttachments { get; }
     DbSet<StoreCreditTransaction> StoreCreditTransactions { get; }
 
     // Commerce — pricing, cart, shipping, payments, tax (Phase 3)

@@ -9,9 +9,11 @@ namespace HKPartsEcommerce.Domain.Entities;
 /// and insurance add-ons, and who it ships to. Written once and never re-rated, so a later admin change to a
 /// method, fee or rule never alters a placed order (OP-20).
 ///
-/// Today an order has exactly one shipment (<see cref="OrderShipmentType.Combined"/>). A mixed FFL / non-FFL
-/// cart will become one order with two rows here (one per shipment), not two orders. That keeps one order
-/// number and one payment, and avoids splitting coupons, tax and the charge across orders (OP-42/43).
+/// A cart without FFL items has one shipment (<see cref="OrderShipmentType.Combined"/>). A cart with FFL items
+/// gets an <see cref="OrderShipmentType.Ffl"/> row shipped to the dealer, plus a
+/// <see cref="OrderShipmentType.NonFfl"/> row for the other items when there are any: one order with two rows,
+/// not two orders. That keeps one order number and one payment, and avoids splitting coupons, tax and the
+/// charge across orders (OP-42/43, replacing the legacy order split FFL-80).
 /// </summary>
 public class OrderShipping : BaseEntity
 {
@@ -61,10 +63,28 @@ public class OrderShipping : BaseEntity
     /// <summary>True when the shipment holds FFL-required items.</summary>
     public bool ContainsFflItems { get; set; }
 
-    /// <summary>FFL dealer the shipment goes to (<see cref="ShipToType.FflDealer"/> only). Reserved for the FFL dealer step.</summary>
+    /// <summary>FFL dealer the shipment goes to (<see cref="ShipToType.FflDealer"/> only), copied from the directory at placement.</summary>
     public string? FflDealerName { get; set; }
     public string? FflNumber { get; set; }
 
+    /// <summary>Directory key of the dealer (FFL-120), so the dealer is found without re-parsing <see cref="FflNumber"/>.</summary>
+    public string? FflDealerKey { get; set; }
+    public string? FflDealerStreet { get; set; }
+    public string? FflDealerCity { get; set; }
+    public string? FflDealerState { get; set; }
+    public string? FflDealerZip { get; set; }
+    public string? FflDealerPhone { get; set; }
+    public FflDealerSource? FflSource { get; set; }
+
     /// <summary>The <see cref="ShippingRuleSettings.Version"/> that priced the add-ons (OP-22).</summary>
     public int RulesVersion { get; set; }
+
+    /// <summary>
+    /// How the ship-to was verified at placement (docs/shipstation-verification-requirements.md AV-15):
+    /// null/NotChecked when verification did not run (off, country not listed, pickup, directory dealer).
+    /// </summary>
+    public AddressVerificationStatus? AddressVerifyStatus { get; set; }
+
+    /// <summary>The buyer kept their own address over the provider's suggestion (AV-13/15).</summary>
+    public bool AddressOverridden { get; set; }
 }

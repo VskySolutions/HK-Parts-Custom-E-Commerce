@@ -213,6 +213,11 @@
                   <q-tooltip>Firearm — must ship to a Federal Firearms Licensee</q-tooltip>
                 </q-toggle>
               </div>
+              <div class="col-auto q-mt-md">
+                <q-toggle v-model="form.isReturnable" label="Returnable" color="primary" :disable="!canWrite">
+                  <q-tooltip>Off = final sale: shown on the return form but cannot be returned online</q-tooltip>
+                </q-toggle>
+              </div>
             </div>
 
             <!-- Store listing (edit only — a sub-resource with its own endpoint) -->
@@ -958,7 +963,7 @@ const EMPTY = {
   cost: null, msrp: null, salePrice: null, saleStartDateUtc: '', saleEndDateUtc: '',
   minOrderQuantity: null, maxOrderQuantity: null, stockStatusOverride: '', backorderMessage: '',
   weight: null, length: null, width: null, height: null,
-  packagePieces: 1, packageType: null, freightClass: null, isHazardous: false
+  packagePieces: 1, packageType: null, freightClass: null, isHazardous: false, isReturnable: true
 }
 const CORE_KEYS = Object.keys(EMPTY)
 const form = reactive({ ...EMPTY })
@@ -1275,7 +1280,8 @@ function buildPayload () {
     packagePieces: toNumberOrNull(form.packagePieces) || 1,
     packageType: form.packageType || null,
     freightClass: form.freightClass || null,
-    isHazardous: form.isHazardous
+    isHazardous: form.isHazardous,
+    isReturnable: form.isReturnable
   }
   if (form.productType === 'Downloadable') {
     payload.downloadExpiryDays = toNumberOrNull(form.downloadExpiryDays)

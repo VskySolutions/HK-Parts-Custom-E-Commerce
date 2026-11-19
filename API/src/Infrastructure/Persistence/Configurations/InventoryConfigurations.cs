@@ -61,5 +61,6 @@ public class InventoryAuditLogConfiguration : IEntityTypeConfiguration<Inventory
         b.HasIndex(x => new { x.ProductId, x.CreatedOnUtc });
         b.HasIndex(x => x.ProductVariantId);
         b.HasIndex(x => x.StoreId);
+        b.HasIndex(x => x.RmaId);
     }
 }

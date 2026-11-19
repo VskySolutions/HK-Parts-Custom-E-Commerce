@@ -69,6 +69,17 @@ public enum OrderShipmentType
     Ffl = 2
 }
 
+/// <summary>How the FFL dealer on a shipment was chosen (FFL-120).</summary>
+public enum FflDealerSource
+{
+    /// <summary>The buyer picked it from the directory at checkout.</summary>
+    Directory = 0,
+    /// <summary>Typed in by hand. Reserved: manual entry is not offered (FFL-67).</summary>
+    Manual = 1,
+    /// <summary>An admin changed the dealer on the order (FFL-92).</summary>
+    Admin = 2
+}
+
 /// <summary>Who a shipment is delivered to.</summary>
 public enum ShipToType
 {

@@ -240,6 +240,18 @@
                       @update:model-value="onToggleActive"
                     />
                   </div>
+                  <div class="row items-center justify-between no-wrap q-mt-md">
+                    <div class="col">
+                      <div class="text-body2">Email verified</div>
+                      <div class="text-caption text-grey-6">{{ customer.emailVerified ? 'Email address is verified.' : 'Customer cannot sign in until the email is verified.' }}</div>
+                    </div>
+                    <q-toggle
+                      :model-value="customer.emailVerified"
+                      :disable="!canWrite || verifiedSaving"
+                      color="primary"
+                      @update:model-value="onToggleVerified"
+                    />
+                  </div>
                 </AppSection>
 
                 <AppSection title="Pricing group">
@@ -667,6 +679,15 @@ async function onToggleActive (val) {
     customer.value = await customerAdminApi.setActive(customer.value.id, val)
     notify.success(val ? 'Account activated' : 'Account deactivated')
   } catch (e) { notify.error(getApiErrorMessage(e)) } finally { activeSaving.value = false }
+}
+
+const verifiedSaving = ref(false)
+async function onToggleVerified (val) {
+  verifiedSaving.value = true
+  try {
+    customer.value = await customerAdminApi.setEmailVerified(customer.value.id, val)
+    notify.success(val ? 'Email marked as verified' : 'Email marked as unverified')
+  } catch (e) { notify.error(getApiErrorMessage(e)) } finally { verifiedSaving.value = false }
 }
 
 // Restricted-state shipping exemption (SR-92).

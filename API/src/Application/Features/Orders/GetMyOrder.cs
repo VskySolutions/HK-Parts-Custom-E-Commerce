@@ -38,6 +38,7 @@ public class GetMyOrderQueryHandler : IRequestHandler<GetMyOrderQuery, OrderDto>
 
         var order = await _db.Orders
             .Include(o => o.ShippingAddress)
+            .Include(o => o.BillingAddress)
             .AsNoTracking()
             .Include(o => o.Lines)
             .Include(o => o.Payments)

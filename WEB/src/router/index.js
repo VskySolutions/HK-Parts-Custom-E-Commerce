@@ -31,7 +31,7 @@ import usersRoutes from 'modules/users/routes'
 import rolesRoutes from 'modules/roles/routes'
 import catalogRoutes from 'modules/catalog/routes'
 import inventoryScannerRoutes from 'modules/inventory-scanner/routes'
-import ordersRoutes from 'modules/orders/routes'
+import ordersRoutes, { ordersStandaloneRoutes } from 'modules/orders/routes'
 import inquiriesRoutes from 'modules/inquiries/routes'
 import pricingRoutes from 'modules/pricing/routes'
 import priceRuleRoutes from 'modules/price-rules/routes'
@@ -114,6 +114,8 @@ const routes = [
   ...storefrontRoutes,
   // Barcode inventory scanner: standalone mobile pages (own layout, requiresAuth) like the PHP admin.
   ...inventoryScannerRoutes,
+  // Printable order invoice: standalone page (no shell), opened in a new tab from the order.
+  ...ordersStandaloneRoutes,
   appShellRoute,
   notAuthorizedRoute,
   catchAllRoute

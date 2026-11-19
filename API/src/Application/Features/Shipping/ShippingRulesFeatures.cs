@@ -33,7 +33,7 @@ public record UpdateShippingRulesCommand(
     List<string> RestrictedStates,
     bool InternationalRestrictionEnabled,
     List<string>? AllowedCountryCodes,
-    bool RefusePoBoxes,
+    bool? RefusePoBoxes,
     string? PoBoxMessage,
     string? InvalidDestinationMessage) : IRequest<ShippingRulesDto>;
 
@@ -96,8 +96,12 @@ public class UpdateShippingRulesCommandHandler : IRequestHandler<UpdateShippingR
         rules.InternationalRestrictionEnabled = request.InternationalRestrictionEnabled;
         var countries = ShippingRulesEngine.SplitCodes(string.Join(",", request.AllowedCountryCodes ?? new List<string>()));
         rules.AllowedCountryCodes = countries.Count > 0 ? string.Join(",", countries) : null;
-        rules.RefusePoBoxes = request.RefusePoBoxes;
-        rules.PoBoxMessage = string.IsNullOrWhiteSpace(request.PoBoxMessage) ? null : request.PoBoxMessage.Trim();
+        // The P.O. box rule is edited on the Address Verification screen now (§5.2); null keeps it as it is.
+        if (request.RefusePoBoxes is bool refusePoBoxes)
+        {
+            rules.RefusePoBoxes = refusePoBoxes;
+            rules.PoBoxMessage = string.IsNullOrWhiteSpace(request.PoBoxMessage) ? null : request.PoBoxMessage.Trim();
+        }
         rules.InvalidDestinationMessage = string.IsNullOrWhiteSpace(request.InvalidDestinationMessage)
             ? null : request.InvalidDestinationMessage.Trim();
         rules.Version++;

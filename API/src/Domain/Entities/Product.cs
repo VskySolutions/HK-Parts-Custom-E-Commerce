@@ -67,6 +67,8 @@ public class Product : AuditableEntity, ISoftDeletable
     /// <summary>NMFC freight class (50–500).</summary>
     public string? FreightClass { get; set; }
     public bool IsHazardous { get; set; }
+    /// <summary>False = final sale: shown on the return form but cannot be returned (RT-13).</summary>
+    public bool IsReturnable { get; set; } = true;
 
     /// <summary>
     /// On-hand stock is held per store in <see cref="InventoryLevels"/> (the single source of truth read

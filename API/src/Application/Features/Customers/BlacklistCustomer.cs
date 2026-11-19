@@ -47,6 +47,9 @@ public class BlacklistCustomerCommandHandler : IRequestHandler<BlacklistCustomer
             .Select(c => new
             {
                 c.Id,
+                c.FirstName,
+                c.LastName,
+                Email = c.User != null ? c.User.Email : null,
                 IsStaff = c.User != null && c.User.UserRoles.Any(ur => ur.Role != null && ur.Role.Name != nameof(RoleType.Customer)),
             })
             .FirstOrDefaultAsync(cancellationToken)
@@ -67,6 +70,22 @@ public class BlacklistCustomerCommandHandler : IRequestHandler<BlacklistCustomer
         };
         _db.BlacklistedCustomers.Add(entry);
 
+        // The Blocked Customers list (and the checkout block) work off CustomerBlacklistEntries: create the
+        // customer's entry, or re-activate the one left from an earlier block, in the same transaction.
+        var listEntry = await _db.CustomerBlacklistEntries
+            .FirstOrDefaultAsync(e => e.CustomerId == customer.Id, cancellationToken);
+        if (listEntry is null)
+        {
+            listEntry = new CustomerBlacklistEntry { CustomerId = customer.Id };
+            _db.CustomerBlacklistEntries.Add(listEntry);
+        }
+        listEntry.FirstName = Clean(customer.FirstName);
+        listEntry.LastName = Clean(customer.LastName);
+        listEntry.Email = Clean(customer.Email)?.ToLowerInvariant();
+        listEntry.Reason = entry.Reason;
+        listEntry.Status = CustomerBlacklistStatus.Blocked;
+        HKPartsEcommerce.Application.Features.Checkout.CustomerBlacklistHistory.Record(_db, listEntry, CustomerBlacklistAction.Blocked);
+
         try
         {
             // Single SaveChanges = one transaction (the blacklist row + its audit-trail row).
@@ -82,4 +101,6 @@ public class BlacklistCustomerCommandHandler : IRequestHandler<BlacklistCustomer
 
         return entry.Id;
     }
+
+    private static string? Clean(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
 }

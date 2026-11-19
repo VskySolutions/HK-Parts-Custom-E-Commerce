@@ -62,6 +62,7 @@ public class CopyProductCommandHandler : IRequestHandler<CopyProductCommand, Pro
             PackageType = src.PackageType,
             FreightClass = src.FreightClass,
             IsHazardous = src.IsHazardous,
+            IsReturnable = src.IsReturnable,
             AllowBackorder = src.AllowBackorder,
             EstimatedRestockDate = src.EstimatedRestockDate,
             TaxCategoryId = src.TaxCategoryId,

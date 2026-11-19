@@ -56,6 +56,7 @@ public class ProductDto
     public string? PackageType { get; set; }
     public string? FreightClass { get; set; }
     public bool IsHazardous { get; set; }
+    public bool IsReturnable { get; set; } = true;
     /// <summary>Stores the product is listed in; empty = every store.</summary>
     public List<Guid> StoreIds { get; set; } = new();
     public List<ProductCustomFieldValueDto> CustomFieldValues { get; set; } = new();
@@ -121,6 +122,7 @@ public class ProductDto
         PackageType = p.PackageType,
         FreightClass = p.FreightClass,
         IsHazardous = p.IsHazardous,
+        IsReturnable = p.IsReturnable,
         StoreIds = p.StoreMappings.Select(m => m.StoreId).ToList(),
         CustomFieldValues = p.CustomFieldValues.Select(ProductCustomFieldValueDto.From).ToList(),
         Variants = p.Variants

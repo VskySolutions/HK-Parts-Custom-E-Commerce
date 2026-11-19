@@ -24,9 +24,16 @@ public class CheckoutLock : BaseEntity
 /// A blocked buyer (PY-10): a placement whose billing name and / or email matches an active entry is refused
 /// before any gateway is contacted, whatever the payment path (card, gift certificate, zero total).
 /// How an entry matches is the checkout setting <c>Checkout.BlacklistMatchMode</c> (PY-15).
+/// <para>An entry created by blocking a customer from the Customers list carries that <see cref="CustomerId"/>
+/// and is kept in step with the customer's <see cref="BlacklistedCustomer"/> row (which hides them from the
+/// Customers list): setting the entry Inactive or deleting it unblocks the customer.</para>
 /// </summary>
 public class CustomerBlacklistEntry : AuditableEntity
 {
+    /// <summary>The customer account this entry was created from; null for a manual name / email entry.</summary>
+    public Guid? CustomerId { get; set; }
+    public Customer? Customer { get; set; }
+
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? Email { get; set; }
@@ -50,5 +57,24 @@ public class CustomerBlacklistHit : BaseEntity
 
     /// <summary>What matched: "Email", "Name" or "Name+Email".</summary>
     public string MatchedOn { get; set; } = string.Empty;
+    public DateTime AtUtc { get; set; }
+}
+
+/// <summary>
+/// One block or unblock of a customer (the Blocked Customers history tab). Append-only and not tied to the
+/// entry by FK, so history survives an entry being removed. <see cref="SubjectKey"/> groups one person's events
+/// across entries: the lower-cased email, else <c>customer:{id}</c>, else <c>name:{first last}</c>.
+/// Changed by = <see cref="AuditableEntity.CreatedById"/>.
+/// </summary>
+public class CustomerBlacklistEvent : AuditableEntity
+{
+    public string SubjectKey { get; set; } = string.Empty;
+    public Guid? BlacklistEntryId { get; set; }
+    public Guid? CustomerId { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? Email { get; set; }
+    public CustomerBlacklistAction Action { get; set; }
+    public string? Reason { get; set; }
     public DateTime AtUtc { get; set; }
 }

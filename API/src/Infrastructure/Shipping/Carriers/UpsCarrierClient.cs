@@ -378,7 +378,7 @@ public class UpsCarrierClient : ICarrierClient, IUpsRater
     {
         var package = new Dictionary<string, object?>
         {
-            ["PackagingType"] = new { Code = settings.PackageType },
+            ["PackagingType"] = new { Code = UpsCodes.RatingPackagingCode(settings.PackageType) },
             ["PackageWeight"] = new { UnitOfMeasurement = new { Code = "LBS" }, Weight = Money(p.WeightLb, 1) },
         };
         if (p.LengthIn is not null && p.WidthIn is not null && p.HeightIn is not null)

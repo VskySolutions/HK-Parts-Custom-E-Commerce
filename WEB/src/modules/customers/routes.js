@@ -7,10 +7,17 @@ export default [
     component: () => import('modules/customers/pages/index.vue')
   },
   {
+    // Guest customers: buyers who ordered without registering. Static path, so it never collides with customers/:id.
+    path: 'guest-customers',
+    name: 'admin-guest-customers',
+    meta: { title: 'Guest customers', permissions: ['Users.Read'] },
+    component: () => import('modules/customers/pages/guests.vue')
+  },
+  {
     // Customer blacklist (PY-10). A static path of its own, so it never collides with customers/:id.
     path: 'customer-blacklist',
     name: 'admin-customer-blacklist',
-    meta: { title: 'Blocked buyers', permissions: ['Users.Read'] },
+    meta: { title: 'Blocked customers', permissions: ['Users.Read'] },
     component: () => import('modules/customers/pages/blacklist.vue')
   },
   {

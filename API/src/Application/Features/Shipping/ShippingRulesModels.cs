@@ -138,18 +138,19 @@ public static class ShippingRulesEngine
         }
 
         if (rules.RefusePoBoxes && (IsPoBox(input.Line1) || IsPoBox(input.Line2)))
-            return string.IsNullOrWhiteSpace(rules.PoBoxMessage)
-                ? "We cannot ship to a P.O. box. Please enter a street address."
-                : rules.PoBoxMessage;
+            return PoBoxRefusal(rules);
 
         return null;
     }
 
-    private static readonly Regex PoBoxPattern = new(
-        @"\b(p\.?\s*o\.?\s*box|post\s+office\s+box|p\.?\s*o\.?\s*b\.?\b|pobox)",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    /// <summary>The shared P.O. box rule (AV-32).</summary>
+    public static bool IsPoBox(string? line) => PoBoxDetector.IsPoBox(line);
 
-    public static bool IsPoBox(string? line) => !string.IsNullOrWhiteSpace(line) && PoBoxPattern.IsMatch(line);
+    /// <summary>The buyer-facing P.O. box refusal: the admin's message, else the default.</summary>
+    public static string PoBoxRefusal(ShippingRuleSettings rules) =>
+        string.IsNullOrWhiteSpace(rules.PoBoxMessage)
+            ? "We cannot ship to a P.O. box. Please enter a street address."
+            : rules.PoBoxMessage;
 
     public static List<string> SplitCodes(string? csv) =>
         (csv ?? string.Empty)

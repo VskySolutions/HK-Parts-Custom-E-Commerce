@@ -2,10 +2,10 @@
   <div class="app-address-form column">
     <div v-if="showNames" class="row q-col-gutter-sm">
       <div class="col-12 col-sm-6">
-        <AppTextField label="First name" :required="required" :disable="disable" :model-value="value.firstName" placeholder="e.g. John" @update:model-value="update('firstName', $event)" />
+        <AppTextField label="First name" :required="required" :disable="disable" :model-value="value.firstName" placeholder="e.g. John" lazy-rules :rules="requiredRules('First name')" @update:model-value="update('firstName', $event)" />
       </div>
       <div class="col-12 col-sm-6">
-        <AppTextField label="Last name" :required="required" :disable="disable" :model-value="value.lastName" placeholder="e.g. Doe" @update:model-value="update('lastName', $event)" />
+        <AppTextField label="Last name" :required="required" :disable="disable" :model-value="value.lastName" placeholder="e.g. Doe" lazy-rules :rules="requiredRules('Last name')" @update:model-value="update('lastName', $event)" />
       </div>
     </div>
 

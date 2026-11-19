@@ -28,6 +28,14 @@ public class Order : AuditableEntity, ISoftDeletable
     public Guid? ShippingAddressId { get; set; }
     public Address? ShippingAddress { get; set; }
 
+    /// <summary>
+    /// The bill-to address the buyer confirmed at checkout (a shared Address row, never cascade-deleted). Null for
+    /// orders placed before billing addresses were captured, inquiries and imported orders — readers then fall
+    /// back to the customer's default billing address, else <see cref="ShippingAddress"/>.
+    /// </summary>
+    public Guid? BillingAddressId { get; set; }
+    public Address? BillingAddress { get; set; }
+
     // Read-through helpers over the linked address (require ShippingAddress to be Include()d; never mapped
     // to columns). Keep the rest of the order lifecycle (notifications, DTOs, routing) unchanged.
     [NotMapped] public string? ContactName => ShippingAddress is null ? null : $"{ShippingAddress.FirstName} {ShippingAddress.LastName}".Trim();
@@ -49,6 +57,9 @@ public class Order : AuditableEntity, ISoftDeletable
 
     /// <summary>True when the order is fulfilled by pickup-in-store rather than carrier delivery (REQ-SHP-004).</summary>
     public bool IsPickup { get; set; }
+
+    /// <summary>The order holds at least one FFL-required line (FFL-90): it has an FFL shipment to a dealer.</summary>
+    public bool HasFflItems { get; set; }
     public Store? AssignedStore { get; set; }
     public DateTime PlacedOnUtc { get; set; }
     public DateTime? RoutedOnUtc { get; set; }

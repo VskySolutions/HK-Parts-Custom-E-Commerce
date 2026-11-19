@@ -379,6 +379,7 @@ public class UspsCarrierClient : ICarrierClient, IUspsRater
     private static Dictionary<string, object?> BuildDomesticBody(UspsSettings settings, CarrierRateRequest request, string mailClass)
     {
         var (l, w, h) = Dimensions(settings, request, DomesticFallbackBox);
+        var (mailClassCode, rateIndicator) = UspsMailClasses.Parse(mailClass);
         return new Dictionary<string, object?>
         {
             ["originZIPCode"] = FiveDigitZip(request.Origin.PostalCode),
@@ -387,9 +388,9 @@ public class UspsCarrierClient : ICarrierClient, IUspsRater
             ["length"] = l,
             ["width"] = w,
             ["height"] = h,
-            ["mailClass"] = mailClass,
+            ["mailClass"] = mailClassCode,
             ["processingCategory"] = "MACHINABLE",
-            ["rateIndicator"] = DomesticRateIndicator(mailClass),
+            ["rateIndicator"] = rateIndicator,
             ["destinationEntryFacilityType"] = "NONE",
             ["priceType"] = settings.PriceType,
             ["mailingDate"] = MailingDate(),
@@ -417,10 +418,6 @@ public class UspsCarrierClient : ICarrierClient, IUspsRater
             ["mailingDate"] = MailingDate(),
         };
     }
-
-    /// <summary>Single-piece rate indicator per class; Priority Mail Express uses its own "PA" indicator.</summary>
-    private static string DomesticRateIndicator(string mailClass)
-        => mailClass.Equals("PRIORITY_MAIL_EXPRESS", StringComparison.OrdinalIgnoreCase) ? "PA" : "SP";
 
     private static decimal WeightLb(CarrierRateRequest request)
         => Math.Max(0.01m, Math.Round(request.WeightKg * PoundsPerKilogram, 2));

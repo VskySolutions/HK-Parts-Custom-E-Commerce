@@ -34,7 +34,11 @@ public record CheckoutQuoteRequest(
     string? ShippingMethodId,
     bool PickupInStore = false,
     Guid? PickupStoreId = null,
-    ShippingAddOnSelection? AddOns = null);
+    ShippingAddOnSelection? AddOns = null,
+    /// <summary>The buyer's preferred method for the FFL shipment (the cart's firearms, rated to the dealer).</summary>
+    string? FflShippingMethodId = null,
+    /// <summary>Signature / insurance answers for the FFL shipment.</summary>
+    ShippingAddOnSelection? FflAddOns = null);
 
 /// <summary>
 /// The buyer's shipping add-on answers for the shipment (SR-80): Require Signature and Shipping Insurance.
@@ -160,6 +164,43 @@ public class CheckoutQuote
     public bool TermsRequired { get; set; }
     public string? TermsText { get; set; }
     public string? TermsUrl { get; set; }
+
+    /// <summary>
+    /// The FFL shipment (FFL shipping requirements §5.8) when the cart holds FFL-required items: the selected
+    /// dealer and the options rated to the dealer's address. Null for a cart without FFL items. When present,
+    /// <see cref="ShippingOptions"/> covers only the non-FFL items (empty for an FFL-only cart) and
+    /// <see cref="ShippingTotal"/> is the sum of both shipments.
+    /// </summary>
+    public CheckoutFflQuote? Ffl { get; set; }
+}
+
+/// <summary>The FFL shipment of a checkout quote.</summary>
+public class CheckoutFflQuote
+{
+    /// <summary>The cart also holds non-FFL items, shipped to the buyer's address.</summary>
+    public bool HasNonFflItems { get; set; }
+
+    /// <summary>The selected dealer (read from the directory); null until one is chosen.</summary>
+    public Features.Ffl.FflDealerDto? Dealer { get; set; }
+
+    /// <summary>No eligible dealer is selected: placement is refused with "Please select an FFL dealer."</summary>
+    public bool DealerRequired { get; set; }
+
+    /// <summary>Why the selected dealer can no longer be used (expired, refusing transfers, delisted), if so.</summary>
+    public string? DealerMessage { get; set; }
+
+    /// <summary>Methods rated to the dealer (commercial address); empty until a dealer is selected.</summary>
+    public List<ShippingRateOption> ShippingOptions { get; set; } = new();
+    public string? SelectedMethodId { get; set; }
+
+    /// <summary>The FFL shipment's charge: method price + its add-ons.</summary>
+    public decimal ShippingTotal { get; set; }
+    public decimal ShippingMethodTotal { get; set; }
+    public ShippingAddOnQuote? AddOns { get; set; }
+
+    public int ItemCount { get; set; }
+    /// <summary>Value of the FFL items: what the FFL shipment's insurance is banded on (FFL-76).</summary>
+    public decimal DeclaredValue { get; set; }
 }
 
 /// <summary>Values of <see cref="CheckoutQuote.PaymentMode"/>.</summary>
@@ -224,7 +265,17 @@ public record PlaceCheckoutRequest(
     /// <summary>The order total the buyer was shown (the last quote's Total, before any payment fee). Same rule as above.</summary>
     decimal? ExpectedTotal = null,
     /// <summary>The buyer ticked the terms checkbox (SH-40). Required when the checkout settings say so (SH-41, PY-13, PY-43).</summary>
-    bool? TermsAccepted = null);
+    bool? TermsAccepted = null,
+    /// <summary>The method chosen for the FFL shipment (the cart's firearms, shipped to the selected dealer).</summary>
+    string? SelectedFflShippingMethodId = null,
+    /// <summary>Signature / insurance answers for the FFL shipment.</summary>
+    ShippingAddOnSelection? FflAddOns = null,
+    /// <summary>
+    /// The bill-to address shown and confirmed on the checkout page. Null = "same as the delivery address"
+    /// (<see cref="ShipTo"/>; older clients). Pickup and FFL-only orders send it explicitly, because their
+    /// ship-to carries no buyer postal address.
+    /// </summary>
+    CheckoutAddress? BillTo = null);
 
 /// <summary>Identifies the buyer's cart for a checkout call that needs nothing else (e.g. releasing the checkout lock).</summary>
 public record CheckoutCartRef(Guid? CartId, string? SessionId);

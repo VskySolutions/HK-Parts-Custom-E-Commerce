@@ -56,7 +56,8 @@ public record CreateProductCommand(
     int PackagePieces = 1,
     string? PackageType = null,
     string? FreightClass = null,
-    bool IsHazardous = false) : IRequest<ProductDto>;
+    bool IsHazardous = false,
+    bool IsReturnable = true) : IRequest<ProductDto>;
 
 public class CreateProductCommandValidator : AbstractValidator<CreateProductCommand>
 {
@@ -155,6 +156,7 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
             PackageType = request.PackageType,
             FreightClass = request.FreightClass,
             IsHazardous = request.IsHazardous,
+            IsReturnable = request.IsReturnable,
         };
 
         _db.Products.Add(entity);

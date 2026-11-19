@@ -76,46 +76,13 @@ public class ListCustomersQueryHandler : IRequestHandler<ListCustomersQuery, Pag
         // Only genuine customers: a customer is a User carrying the Customer system role (assigned on
         // registration and mapped for pre-existing accounts). Staff carry admin roles instead — and they
         // also get a Customer profile at creation, so filtering by the Customer role is what excludes them.
-        var customerRole = nameof(RoleType.Customer);
-        var query = _db.Customers.AsNoTracking()
-            .Include(c => c.User)
-            .Include(c => c.CustomerGroup)
-            .Where(c => c.User != null && c.User.UserRoles.Any(ur => ur.Role!.Name == customerRole))
-            // Blacklisted customers are hidden: NOT EXISTS an active (Deleted = 0, global filter) blacklist row.
-            // Applied in the base query so count, paging, search, filters and sort all agree.
-            .Where(c => !_db.BlacklistedCustomers.Any(b => b.CustomerId == c.Id))
-            .AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(request.Search))
-        {
-            var term = request.Search.Trim();
-            query = query.Where(c =>
-                c.FirstName.Contains(term)
-                || c.LastName.Contains(term)
-                || (c.User != null && c.User.Email.Contains(term)));
-        }
-
-        if (request.EmailVerified.HasValue)
-            query = query.Where(c => c.User != null && c.User.EmailVerified == request.EmailVerified.Value);
-
-        if (request.IsActive.HasValue)
-            query = query.Where(c => c.User != null && c.User.IsActive == request.IsActive.Value);
-
-        if (request.IsTaxExempt.HasValue)
-            query = query.Where(c => c.IsTaxExempt == request.IsTaxExempt.Value);
-
-        if (request.CustomerGroupId.HasValue)
-            query = query.Where(c => c.CustomerGroupId == request.CustomerGroupId.Value);
-        else if (request.HasCustomerGroup.HasValue)
-            query = request.HasCustomerGroup.Value
-                ? query.Where(c => c.CustomerGroupId != null)
-                : query.Where(c => c.CustomerGroupId == null);
-
-        if (request.RegisteredFromUtc.HasValue)
-            query = query.Where(c => c.CreatedOnUtc >= request.RegisteredFromUtc.Value);
-
-        if (request.RegisteredToUtc.HasValue)
-            query = query.Where(c => c.CreatedOnUtc <= request.RegisteredToUtc.Value);
+        var query = CustomerListFilters.Apply(
+            CustomerListFilters.ListedCustomers(_db)
+                .Include(c => c.User)
+                .Include(c => c.CustomerGroup),
+            new CustomerListFilter(
+                request.Search, request.EmailVerified, request.IsActive, request.IsTaxExempt,
+                request.CustomerGroupId, request.HasCustomerGroup, request.RegisteredFromUtc, request.RegisteredToUtc));
 
         var ordered = query.ApplySort(request.SortBy, request.SortDescending, SortMap);
         var page = await PaginatedList<Customer>.CreateAsync(ordered, request.Page, request.PageSize, cancellationToken);

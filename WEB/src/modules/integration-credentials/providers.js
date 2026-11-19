@@ -46,7 +46,12 @@ const FEDEX_SERVICE_OPTIONS = [
   { label: 'Standard Overnight', value: 'STANDARD_OVERNIGHT' },
   { label: 'Priority Overnight', value: 'PRIORITY_OVERNIGHT' },
   { label: 'First Overnight', value: 'FIRST_OVERNIGHT' },
-  { label: 'Ground Economy (Smart Post)', value: 'SMART_POST' },
+  { label: 'Smart Post (Ground Economy)', value: 'SMART_POST' },
+  { label: 'Distance Deferred', value: 'FEDEX_DISTANCE_DEFERRED' },
+  { label: 'Next Day - Early Morning', value: 'FEDEX_NEXT_DAY_EARLY_MORNING' },
+  { label: 'Next Day - Mid Morning', value: 'FEDEX_NEXT_DAY_MID_MORNING' },
+  { label: 'Next Day - Afternoon', value: 'FEDEX_NEXT_DAY_AFTERNOON' },
+  { label: 'Next Day - End of Day', value: 'FEDEX_NEXT_DAY_END_OF_DAY' },
   { label: 'International Economy', value: 'INTERNATIONAL_ECONOMY' },
   { label: 'International Priority', value: 'INTERNATIONAL_PRIORITY' },
   { label: 'International Priority (FEDEX_INTERNATIONAL_PRIORITY)', value: 'FEDEX_INTERNATIONAL_PRIORITY' },
@@ -58,6 +63,10 @@ const FEDEX_SERVICE_OPTIONS = [
   { label: '2 Day Freight', value: 'FEDEX_2_DAY_FREIGHT' },
   { label: '3 Day Freight', value: 'FEDEX_3_DAY_FREIGHT' },
   { label: 'First Overnight Freight', value: 'FIRST_OVERNIGHT_FREIGHT' },
+  { label: 'First Freight', value: 'FEDEX_FIRST_FREIGHT' },
+  { label: 'Next Day Freight', value: 'FEDEX_NEXT_DAY_FREIGHT' },
+  { label: 'Freight Priority', value: 'FEDEX_FREIGHT_PRIORITY' },
+  { label: 'Freight Economy', value: 'FEDEX_FREIGHT_ECONOMY' },
   { label: 'International Economy Freight', value: 'INTERNATIONAL_ECONOMY_FREIGHT' },
   { label: 'International Priority Freight', value: 'INTERNATIONAL_PRIORITY_FREIGHT' },
   { label: 'Same Day', value: 'SAME_DAY' },
@@ -264,6 +273,22 @@ export const INTEGRATIONS = [
       { key: 'secretKey', label: 'Secret Key', secret: true, required: true, placeholder: 'sk_live_…' }
     ]
   },
+  {
+    key: 'avalara', kind: 'credential', label: 'Avalara', category: 'Tax', icon: 'o_fact_check',
+    description: 'Avalara AvaTax account, used for checkout address verification (Shipping → Verification).',
+    fields: [
+      {
+        key: 'baseUrl',
+        label: 'Base URL',
+        required: true,
+        placeholder: 'https://sandbox-rest.avatax.com',
+        hints: ['Sandbox: https://sandbox-rest.avatax.com', 'Live: https://rest.avatax.com']
+      },
+      { key: 'accountId', label: 'Account ID', required: true },
+      { key: 'licenseKey', label: 'License Key', secret: true, required: true },
+      { key: 'companyCode', label: 'Company Code' }
+    ]
+  },
 
   // ---- Shipping ----
   {
@@ -272,16 +297,37 @@ export const INTEGRATIONS = [
     // Test button: rates a 5 lb residential parcel 28270 → 10001 and shows the token status (FX-40).
     testable: true,
     drawerWidth: 820,
+    // The Environment toggle is shown as the legacy "Test Mode" (on = sandbox); it picks the host when Base URL is blank.
+    testModeToggle: true,
     fields: [
       {
         key: 'baseUrl',
-        label: 'Base URL',
-        required: true,
-        placeholder: 'https://apis-sandbox.fedex.com',
-        hints: ['Sandbox: https://apis-sandbox.fedex.com', 'Live: https://apis.fedex.com', 'Create a project at developer.fedex.com with the Rate API. The old SOAP key / password / meter number do not work.']
+        label: 'Base URL (optional)',
+        placeholder: 'Blank = follows Test Mode',
+        hints: ['Leave blank: Test Mode on uses https://apis-sandbox.fedex.com, off uses https://apis.fedex.com.', 'Create a project at developer.fedex.com with the Rate API.']
       },
       { key: 'apiKey', label: 'Client ID (API key)', required: true, col: 'half' },
-      { key: 'apiSecret', label: 'Client Secret', secret: true, required: true, col: 'half' },
+      {
+        key: 'apiSecret',
+        label: 'Client Secret',
+        secret: true,
+        required: true,
+        col: 'half',
+        hints: ['The FedEx REST API signs in with Client ID + Secret.']
+      },
+      {
+        key: 'meterNumber',
+        label: 'Meter Number',
+        col: 'half',
+        hints: ['Old FedEx Web Services only. Not used by the current FedEx API; kept for reference.']
+      },
+      {
+        key: 'password',
+        label: 'Password',
+        secret: true,
+        col: 'half',
+        hints: ['Old FedEx Web Services only. Not used by the current FedEx API; kept for reference.']
+      },
       {
         key: 'accountNumber',
         label: 'Account Number',
@@ -298,8 +344,8 @@ export const INTEGRATIONS = [
         prefill: 'ACCOUNT',
         col: 'half',
         options: [
-          { label: 'Account (discounted)', value: 'ACCOUNT' },
-          { label: 'List', value: 'LIST' }
+          { label: 'Negotiated (account rates)', value: 'ACCOUNT' },
+          { label: 'Published (list rates)', value: 'LIST' }
         ]
       },
       {
@@ -330,17 +376,23 @@ export const INTEGRATIONS = [
         options: FEDEX_SERVICE_OPTIONS,
         hints: ['Optional. When set, a cart holding FFL items is offered only these (e.g. the overnight services). Empty = no extra filter. An FFL cart is always rated as non-residential (dealer).']
       },
-      {
-        key: 'shipToCountries',
-        label: 'Ship-to countries',
-        type: 'tags',
-        prefill: ['US'],
-        col: 'half',
-        placeholder: 'ISO code (e.g. US), Enter',
-        hints: ['Leave empty for all.']
-      },
       { key: 'handlingFee', label: 'Handling fee (USD)', type: 'number', min: 0, placeholder: '0.00', col: 'half', hints: ['Added to every FedEx option at checkout.'] },
       { key: 'minimumOrderAmount', label: 'Minimum order amount (USD)', type: 'number', min: 0, placeholder: 'No minimum', col: 'half' },
+      {
+        key: 'shipToScope',
+        label: 'Ship to applicable countries',
+        type: 'countryScope',
+        countriesKey: 'shipToCountries',
+        prefill: 'specific',
+        col: 'half'
+      },
+      {
+        key: 'shipToCountries',
+        label: 'Ship to specific countries',
+        type: 'countries',
+        prefill: ['US'],
+        showWhen: { key: 'shipToScope', value: 'specific' }
+      },
       { key: 'defaultLengthIn', label: 'Default package length (in)', type: 'number', min: 0, placeholder: 'e.g. 11', col: 'third' },
       { key: 'defaultWidthIn', label: 'Default package width (in)', type: 'number', min: 0, placeholder: 'e.g. 11', col: 'third' },
       { key: 'defaultHeightIn', label: 'Default package height (in)', type: 'number', min: 0, placeholder: 'e.g. 11', col: 'third', hints: ['Used when a product has no dimensions. Blank: no dimensions sent.'] },
@@ -384,7 +436,13 @@ export const INTEGRATIONS = [
         placeholder: 'https://apis-tem.usps.com',
         hints: ['Test (TEM): https://apis-tem.usps.com', 'Live: https://apis.usps.com', 'HTTPS only. The old Web Tools USERID does not work — create an app on developers.usps.com.']
       },
-      { key: 'consumerKey', label: 'Consumer Key', required: true, col: 'half' },
+      {
+        key: 'consumerKey',
+        label: 'Consumer Key (API User)',
+        required: true,
+        col: 'half',
+        hints: ['Replaces the old Web Tools "API User" (USERID), which USPS retired on January 25, 2026.']
+      },
       { key: 'consumerSecret', label: 'Consumer Secret', secret: true, required: true, col: 'half' },
       { key: 'displayName', label: 'Display name', col: 'half', placeholder: 'USPS', prefill: 'USPS', hints: ['Options show as "<display name> - <service>".'] },
       {
@@ -406,15 +464,25 @@ export const INTEGRATIONS = [
         requiredWhenActive: true,
         prefill: ['USPS_GROUND_ADVANTAGE', 'PRIORITY_MAIL', 'PRIORITY_MAIL_EXPRESS'],
         options: [
-          { label: 'Ground Advantage', value: 'USPS_GROUND_ADVANTAGE' },
+          // "MAILCLASS:XX" = the class priced with USPS rate indicator XX (flat-rate packaging).
+          { label: 'Ground Advantage (was First-Class Package / Standard Post)', value: 'USPS_GROUND_ADVANTAGE' },
           { label: 'Priority Mail', value: 'PRIORITY_MAIL' },
+          { label: 'Priority Mail: Flat Rate Envelope', value: 'PRIORITY_MAIL:FE' },
+          { label: 'Priority Mail: Padded Flat Rate Envelope', value: 'PRIORITY_MAIL:FP' },
+          { label: 'Priority Mail: Legal Flat Rate Envelope', value: 'PRIORITY_MAIL:FA' },
+          { label: 'Priority Mail: Small Flat Rate Box', value: 'PRIORITY_MAIL:FS' },
+          { label: 'Priority Mail: Medium Flat Rate Box', value: 'PRIORITY_MAIL:FB' },
+          { label: 'Priority Mail: Large Flat Rate Box', value: 'PRIORITY_MAIL:PL' },
           { label: 'Priority Mail Express', value: 'PRIORITY_MAIL_EXPRESS' },
+          { label: 'Priority Mail Express: Flat Rate Envelope', value: 'PRIORITY_MAIL_EXPRESS:E4' },
+          { label: 'Priority Mail Express: Legal Flat Rate Envelope', value: 'PRIORITY_MAIL_EXPRESS:E6' },
+          { label: 'Priority Mail Express: Padded Flat Rate Envelope', value: 'PRIORITY_MAIL_EXPRESS:FP' },
           { label: 'Parcel Select', value: 'PARCEL_SELECT' },
           { label: 'Media Mail', value: 'MEDIA_MAIL' },
           { label: 'Library Mail', value: 'LIBRARY_MAIL' },
           { label: 'Bound Printed Matter', value: 'BOUND_PRINTED_MATTER' }
         ],
-        hints: ['At least one is required while active. First-Class Package / Parcel Select Ground are now Ground Advantage.']
+        hints: ['At least one is required while active. Flat Rate Envelope also covers the Window, Gift Card and Small envelopes (same price).']
       },
       {
         key: 'allowedInternationalServices',
@@ -431,12 +499,20 @@ export const INTEGRATIONS = [
       { key: 'handlingFee', label: 'Handling fee (USD)', col: 'half', type: 'number', min: 0, placeholder: '0.00', hints: ['Added to every USPS option at checkout.'] },
       { key: 'minimumOrderAmount', label: 'Minimum order amount (USD)', col: 'half', type: 'number', min: 0, placeholder: 'No minimum' },
       {
+        key: 'shipToScope',
+        label: 'Ship to applicable countries',
+        type: 'countryScope',
+        countriesKey: 'shipToCountries',
+        prefill: 'specific',
+        col: 'half'
+      },
+      {
         key: 'shipToCountries',
-        label: 'Ship-to countries',
-        type: 'tags',
+        label: 'Ship to specific countries',
+        type: 'countries',
         prefill: ['US'],
-        placeholder: 'Type an ISO code (e.g. US) and press Enter',
-        hints: ['Countries the USPS method is offered for. Leave empty for all. Keep it to US to leave international to the Custom method.']
+        showWhen: { key: 'shipToScope', value: 'specific' },
+        hints: ['Keep it to United States to leave international orders to the Custom method.']
       },
       { key: 'defaultLengthIn', label: 'Default package length (in)', col: 'third', type: 'number', min: 0, placeholder: '12' },
       { key: 'defaultWidthIn', label: 'Default package width (in)', col: 'third', type: 'number', min: 0, placeholder: '9' },
@@ -469,15 +545,24 @@ export const INTEGRATIONS = [
         type: 'select',
         prefill: '02',
         col: 'half',
+        // Legacy PHP list mapped to UPS Rating API codes. Bag / Box / Carton have no UPS code: rated as "02".
         options: [
-          { label: '02 — Customer supplied package', value: '02' },
-          { label: '01 — UPS Letter', value: '01' },
-          { label: '03 — Tube', value: '03' },
-          { label: '04 — PAK', value: '04' },
-          { label: '21 — UPS Express Box', value: '21' },
-          { label: '24 — UPS 25KG Box', value: '24' },
-          { label: '25 — UPS 10KG Box', value: '25' }
-        ]
+          { label: 'Package (customer supplied)', value: '02' },
+          { label: 'Pallet', value: '30' },
+          { label: 'UPS 10KG Box', value: '25' },
+          { label: 'UPS 25KG Box', value: '24' },
+          { label: 'UPS Express Box Small', value: '2a' },
+          { label: 'UPS Express Box Medium', value: '2b' },
+          { label: 'UPS Express Box Large', value: '2c' },
+          { label: 'UPS Express Box', value: '21' },
+          { label: 'UPS Letter', value: '01' },
+          { label: 'UPS PAK', value: '04' },
+          { label: 'UPS Tube', value: '03' },
+          { label: 'Bag', value: 'BAG' },
+          { label: 'Box', value: 'BOX' },
+          { label: 'Carton/Piece', value: 'CTN' }
+        ],
+        hints: ['Bag, Box and Carton/Piece are rated by UPS as a customer-supplied package.']
       },
       {
         key: 'allowedServices',
@@ -511,17 +596,23 @@ export const INTEGRATIONS = [
           { label: '20 — Air Service Center', value: '20' }
         ]
       },
-      {
-        key: 'shipToCountries',
-        label: 'Ship-to countries',
-        type: 'tags',
-        prefill: ['US'],
-        col: 'half',
-        placeholder: 'ISO code (e.g. US), Enter',
-        hints: ['Leave empty for all.']
-      },
       { key: 'handlingFee', label: 'Handling fee (USD)', type: 'number', min: 0, placeholder: '0.00', col: 'half', hints: ['Added to every UPS option at checkout.'] },
       { key: 'minimumOrderAmount', label: 'Minimum order amount (USD)', type: 'number', min: 0, placeholder: 'No minimum', col: 'half' },
+      {
+        key: 'shipToScope',
+        label: 'Ship to applicable countries',
+        type: 'countryScope',
+        countriesKey: 'shipToCountries',
+        prefill: 'specific',
+        col: 'half'
+      },
+      {
+        key: 'shipToCountries',
+        label: 'Ship to specific countries',
+        type: 'countries',
+        prefill: ['US'],
+        showWhen: { key: 'shipToScope', value: 'specific' }
+      },
       { key: 'useNegotiatedRates', label: 'Use negotiated rates', type: 'toggle', col: 'third' },
       { key: 'sendPackageInfo', label: 'Send package info (one package per unit)', type: 'toggle', col: 'third', hints: ['Uses each product\'s weight and dimensions.'] },
       { key: 'loggingEnabled', label: 'Log UPS requests and responses', type: 'toggle', col: 'third', hints: ['Tokens and secrets are never logged.'] }
@@ -539,30 +630,47 @@ export const INTEGRATIONS = [
         hints: ['Freightview API host including the version path.']
       },
       { key: 'apiKey', label: 'API Key', secret: true, required: true },
+      // Common method settings (AD-04), as on USPS / UPS / FedEx; same order as the legacy PHP screen.
+      { key: 'displayName', label: 'Display name', placeholder: 'e.g. Freight', hints: ['Prefixed to every Freightview option at checkout. Blank = carrier and service only.'] },
+      { key: 'handlingFee', label: 'Handling fee (USD)', type: 'number', min: 0, placeholder: '0.00', col: 'half', hints: ['Added to every Freightview option at checkout.'] },
+      { key: 'minimumOrderAmount', label: 'Minimum order amount (USD)', type: 'number', min: 0, placeholder: 'No minimum', col: 'half', hints: ['Freightview is not offered below this cart subtotal.'] },
       {
-        key: 'originType',
-        label: 'Origin Type',
-        placeholder: 'business dock',
-        hints: ['e.g. business dock, business no dock, residential.']
+        key: 'shipToScope',
+        label: 'Ship to applicable countries',
+        type: 'countryScope',
+        countriesKey: 'shipToCountries',
+        prefill: 'all',
+        col: 'half'
       },
-      { key: 'contactName', label: 'Contact Name' },
-      { key: 'contactPhone', label: 'Contact Phone' },
-      { key: 'contactEmail', label: 'Contact Email' },
-      { key: 'pickupInstructions', label: 'Pickup Instructions' },
-      { key: 'dockOpenTime', label: 'Dock Opens', placeholder: '8:00 AM' },
-      { key: 'dockCloseTime', label: 'Dock Closes', placeholder: '5:00 PM' },
-      // Common method settings (AD-04), as on USPS / UPS / FedEx.
-      { key: 'displayName', label: 'Display name', placeholder: 'e.g. Freight', col: 'half', hints: ['Prefixed to every Freightview option at checkout. Blank = carrier and service only.'] },
       {
         key: 'shipToCountries',
-        label: 'Ship-to countries',
-        type: 'tags',
-        col: 'half',
-        placeholder: 'ISO code (e.g. US), Enter',
-        hints: ['Leave empty for all.']
+        label: 'Ship to specific countries',
+        type: 'countries',
+        showWhen: { key: 'shipToScope', value: 'specific' }
       },
-      { key: 'handlingFee', label: 'Handling fee (USD)', type: 'number', min: 0, placeholder: '0.00', col: 'half', hints: ['Added to every Freightview option at checkout.'] },
-      { key: 'minimumOrderAmount', label: 'Minimum order amount (USD)', type: 'number', min: 0, placeholder: 'No minimum', col: 'half' }
+      { key: 'contactName', label: 'Contact Name' },
+      { key: 'contactPhone', label: 'Contact Phone', col: 'half' },
+      { key: 'contactEmail', label: 'Contact Email', col: 'half' },
+      {
+        // Sent to Freightview as the pickup location type (legacy freightview_origin_type).
+        key: 'originType',
+        label: 'Pickup Type',
+        type: 'select',
+        prefill: 'business dock',
+        options: [
+          { label: 'Business dock', value: 'business dock' },
+          { label: 'Business no dock', value: 'business no dock' },
+          { label: 'Residential', value: 'residential' },
+          { label: 'Limited access', value: 'limited access' },
+          { label: 'Trade show', value: 'trade show' },
+          { label: 'Construction', value: 'construction' },
+          { label: 'Farm', value: 'farm' }
+        ],
+        hints: ['Blank is sent as business dock.']
+      },
+      { key: 'dockOpenTime', label: 'Open Time', placeholder: '8:00 AM', col: 'half' },
+      { key: 'dockCloseTime', label: 'Close Time', placeholder: '5:00 PM', col: 'half' },
+      { key: 'pickupInstructions', label: 'Special Pickup Instructions' }
     ]
   },
 
@@ -615,6 +723,7 @@ const INTEGRATION_META = {
   authorizenet: { pricing: 'paid', website: 'https://developer.authorize.net' },
   taxjar: { pricing: 'paid', website: 'https://app.taxjar.com/account#api-access' },
   'stripe-tax': { pricing: 'paid', website: 'https://dashboard.stripe.com/tax' },
+  avalara: { pricing: 'paid', website: 'https://admin.avalara.com' },
   fedex: { pricing: 'free', website: 'https://developer.fedex.com' },
   dhl: { pricing: 'free', website: 'https://developer.dhl.com' },
   usps: { pricing: 'free', website: 'https://developer.usps.com' },

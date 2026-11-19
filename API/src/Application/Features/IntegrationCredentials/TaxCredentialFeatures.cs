@@ -170,3 +170,92 @@ public class DeleteStripeTaxCredentialCommandHandler : IRequestHandler<DeleteStr
     public Task Handle(DeleteStripeTaxCredentialCommand request, CancellationToken ct)
         => IntegrationCredentialSupport.DeleteAsync(_db.StripeTaxCredentials, _db, request.Id, ct);
 }
+
+// ============================ Avalara ======================================
+// AvaTax v2 account used for checkout address verification (docs/shipstation-verification-requirements.md AV-21).
+
+public class AvalaraCredentialDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool Active { get; set; }
+    public bool IsProduction { get; set; }
+    public string? BaseUrl { get; set; }
+    public string? AccountId { get; set; }
+    public string? LicenseKey { get; set; }
+    public string? CompanyCode { get; set; }
+    public DateTime CreatedOnUtc { get; set; }
+    public DateTime UpdatedOnUtc { get; set; }
+
+    public static AvalaraCredentialDto From(AvalaraCredential e) => new()
+    {
+        Id = e.Id, Name = e.Name, Active = e.Active, IsProduction = e.IsProduction,
+        BaseUrl = e.BaseUrl, AccountId = e.AccountId, LicenseKey = e.LicenseKey, CompanyCode = e.CompanyCode,
+        CreatedOnUtc = e.CreatedOnUtc, UpdatedOnUtc = e.UpdatedOnUtc,
+    };
+}
+
+public record ListAvalaraCredentialsQuery : IRequest<IReadOnlyList<IntegrationCredentialListItemDto>>;
+
+public class ListAvalaraCredentialsQueryHandler
+    : IRequestHandler<ListAvalaraCredentialsQuery, IReadOnlyList<IntegrationCredentialListItemDto>>
+{
+    private readonly IApplicationDbContext _db;
+    public ListAvalaraCredentialsQueryHandler(IApplicationDbContext db) => _db = db;
+    public Task<IReadOnlyList<IntegrationCredentialListItemDto>> Handle(ListAvalaraCredentialsQuery request, CancellationToken ct)
+        => IntegrationCredentialSupport.ListAsync(_db.AvalaraCredentials, ct, c => c.BaseUrl);
+}
+
+public record GetAvalaraCredentialQuery(Guid Id) : IRequest<AvalaraCredentialDto>;
+
+public class GetAvalaraCredentialQueryHandler : IRequestHandler<GetAvalaraCredentialQuery, AvalaraCredentialDto>
+{
+    private readonly IApplicationDbContext _db;
+    public GetAvalaraCredentialQueryHandler(IApplicationDbContext db) => _db = db;
+    public async Task<AvalaraCredentialDto> Handle(GetAvalaraCredentialQuery request, CancellationToken ct)
+        => AvalaraCredentialDto.From(await IntegrationCredentialSupport.GetAsync(_db.AvalaraCredentials, request.Id, ct));
+}
+
+public record SaveAvalaraCredentialCommand(
+    Guid? Id, string Name, bool Active, bool IsProduction,
+    string? BaseUrl, string? AccountId, string? LicenseKey, string? CompanyCode) : IRequest<AvalaraCredentialDto>;
+
+public class SaveAvalaraCredentialCommandValidator : AbstractValidator<SaveAvalaraCredentialCommand>
+{
+    public SaveAvalaraCredentialCommandValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.BaseUrl).NotEmpty().MaximumLength(500)
+            .Must(IntegrationCredentialSupport.BeAnAbsoluteHttpUrl)
+            .WithMessage("Base URL must be an absolute http(s) URL, e.g. https://sandbox-rest.avatax.com");
+        RuleFor(x => x.AccountId).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.LicenseKey).NotEmpty();
+        RuleFor(x => x.CompanyCode).MaximumLength(100);
+    }
+}
+
+public class SaveAvalaraCredentialCommandHandler : IRequestHandler<SaveAvalaraCredentialCommand, AvalaraCredentialDto>
+{
+    private readonly IApplicationDbContext _db;
+    public SaveAvalaraCredentialCommandHandler(IApplicationDbContext db) => _db = db;
+    public async Task<AvalaraCredentialDto> Handle(SaveAvalaraCredentialCommand request, CancellationToken ct)
+    {
+        var e = await IntegrationCredentialSupport.UpsertAsync(_db.AvalaraCredentials, request.Id, request.Name, request.Active, request.IsProduction, ct);
+        e.BaseUrl = IntegrationCredentialSupport.Norm(request.BaseUrl);
+        e.AccountId = IntegrationCredentialSupport.Norm(request.AccountId);
+        e.LicenseKey = IntegrationCredentialSupport.Norm(request.LicenseKey);
+        e.CompanyCode = IntegrationCredentialSupport.Norm(request.CompanyCode);
+        await _db.SaveChangesAsync(ct);
+        return AvalaraCredentialDto.From(e);
+    }
+}
+
+public record DeleteAvalaraCredentialCommand(Guid Id) : IRequest;
+
+public class DeleteAvalaraCredentialCommandHandler : IRequestHandler<DeleteAvalaraCredentialCommand>
+{
+    private readonly IApplicationDbContext _db;
+    public DeleteAvalaraCredentialCommandHandler(IApplicationDbContext db) => _db = db;
+    public Task Handle(DeleteAvalaraCredentialCommand request, CancellationToken ct)
+        => IntegrationCredentialSupport.DeleteAsync(_db.AvalaraCredentials, _db, request.Id, ct);
+}

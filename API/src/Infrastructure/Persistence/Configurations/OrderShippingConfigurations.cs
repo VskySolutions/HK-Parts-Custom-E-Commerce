@@ -17,6 +17,12 @@ public class OrderShippingConfiguration : IEntityTypeConfiguration<OrderShipping
         b.Property(x => x.Carrier).HasMaxLength(100);
         b.Property(x => x.FflDealerName).HasMaxLength(300);
         b.Property(x => x.FflNumber).HasMaxLength(50);
+        b.Property(x => x.FflDealerKey).HasMaxLength(20);
+        b.Property(x => x.FflDealerStreet).HasMaxLength(200);
+        b.Property(x => x.FflDealerCity).HasMaxLength(100);
+        b.Property(x => x.FflDealerState).HasMaxLength(50);
+        b.Property(x => x.FflDealerZip).HasMaxLength(20);
+        b.Property(x => x.FflDealerPhone).HasMaxLength(30);
 
         b.Property(x => x.MethodPrice).HasPrecision(18, 2);
         b.Property(x => x.HandlingFee).HasPrecision(18, 2);

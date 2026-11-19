@@ -3,14 +3,28 @@
     <q-card class="blacklist-dialog">
       <!-- Red header bar -->
       <q-card-section class="blacklist-dialog__header row items-center no-wrap bg-negative text-white">
-        <div class="text-subtitle1 text-weight-bold col ellipsis">Add Customer to Blacklist</div>
+        <div class="text-subtitle1 text-weight-bold col ellipsis">{{ bulk ? 'Add Customers to Blacklist' : 'Add Customer to Blacklist' }}</div>
         <q-btn flat round dense icon="o_close" :disable="submitting" v-close-popup />
       </q-card-section>
 
       <q-form ref="formRef" greedy @submit.prevent="submit">
         <q-card-section class="q-pt-lg q-gutter-y-md">
           <!-- Read-only customer info (display only; the server reloads the customer by id). -->
-          <div class="blacklist-dialog__info rounded-borders q-pa-md q-gutter-y-sm">
+          <!-- Bulk: how many customers this blocks (ticked rows, or every customer matching the filters). -->
+          <div v-if="bulk" class="blacklist-dialog__info rounded-borders q-pa-md">
+            <div class="row no-wrap items-start">
+              <q-icon name="o_group" size="20px" color="positive" class="q-mr-md q-mt-xs" />
+              <div class="col">
+                <div class="text-caption text-grey-7">Customers</div>
+                <div class="text-body2 text-weight-bold">{{ bulk.count }} customer{{ bulk.count === 1 ? '' : 's' }} will be blocked</div>
+                <div class="text-caption text-grey-7">
+                  {{ bulk.allMatching ? 'Every customer matching the current search and filters.' : 'The selected customers.' }}
+                  The same reason applies to all of them.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="blacklist-dialog__info rounded-borders q-pa-md q-gutter-y-sm">
             <div class="row no-wrap items-start">
               <q-icon name="o_person" size="20px" color="positive" class="q-mr-md q-mt-xs" />
               <div class="col">
@@ -63,7 +77,7 @@
 
         <q-card-actions align="right" class="q-px-md q-pb-md q-pt-none">
           <q-btn unelevated color="grey-9" label="Cancel" :disable="submitting" v-close-popup />
-          <q-btn type="submit" unelevated color="negative" icon="o_block" label="Block Customer" :loading="submitting" :disable="submitting" />
+          <q-btn type="submit" unelevated color="negative" icon="o_block" :label="bulk ? `Block ${bulk.count} Customer${bulk.count === 1 ? '' : 's'}` : 'Block Customer'" :loading="submitting" :disable="submitting" />
         </q-card-actions>
       </q-form>
     </q-card>
@@ -86,7 +100,9 @@ import AppFieldLabel from 'components/common/AppFieldLabel.vue'
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   // The grid row: { id, firstName, lastName, email }.
-  customer: { type: Object, default: null }
+  customer: { type: Object, default: null },
+  // Bulk mode (replaces `customer`): { count, allMatching, customerIds, filter }. Emits `blocked` with { blocked, skipped }.
+  bulk: { type: Object, default: null }
 })
 const emit = defineEmits(['update:modelValue', 'blocked'])
 
@@ -111,11 +127,23 @@ async function reset () {
 }
 
 async function submit () {
-  if (submitting.value || !props.customer) return
+  if (submitting.value || (!props.customer && !props.bulk)) return
   const valid = await formRef.value?.validate()
   if (!valid) return
   submitting.value = true
   try {
+    if (props.bulk) {
+      const result = await customerAdminApi.bulkBlacklist({
+        customerIds: props.bulk.allMatching ? null : props.bulk.customerIds,
+        allMatching: !!props.bulk.allMatching,
+        filter: props.bulk.allMatching ? props.bulk.filter : null,
+        reason: form.reason.trim(),
+        internalNotes: form.internalNotes.trim() || null
+      })
+      emit('update:modelValue', false)
+      emit('blocked', result)
+      return
+    }
     await customerAdminApi.blacklist(props.customer.id, {
       reason: form.reason.trim(),
       internalNotes: form.internalNotes.trim() || null
