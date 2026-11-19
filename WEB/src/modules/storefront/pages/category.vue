@@ -123,8 +123,8 @@
                         >
                           <q-item-section>{{ s.name }}</q-item-section>
                           <q-item-section side>
-                            <span class="text-caption text-grey-6">{{ s.productCount }}</span>
-                            
+                            <!-- <span class="text-caption text-grey-6">{{ s.productCount }}</span> -->
+                             <q-icon name="o_arrow_right" class="text-grey-6" size="17px" />
                           </q-item-section>
                         </q-item>
                       </q-expansion-item>
@@ -260,6 +260,7 @@
                     <span class="sf-card__price-now">{{ formatPrice(p.price) }}</span>
                     <button class="sf-btn sf-btn--primary" @click="quickAdd(p)">Add to Cart</button>
                   </div>
+                  <q-badge v-if="p.stockQuantity === 0" label="Out of stock" class="q-pb-xs bg-24 text-white" />
                 </q-card-section>
               </q-card>
             </div>
