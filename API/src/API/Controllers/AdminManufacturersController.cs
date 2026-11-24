@@ -14,8 +14,8 @@ public class AdminManufacturersController : ApiControllerBase
     /// <summary>List manufacturers (paged), optionally filtered by name.</summary>
     [HttpGet]
     public async Task<ActionResult<PaginatedList<ManufacturerDto>>> List(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
-        => Ok(await Mediator.Send(new ListManufacturersQuery(page, pageSize, search)));
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListManufacturersQuery(page, pageSize, search, sortBy, sortDescending)));
 
     /// <summary>Get a single manufacturer by id</summary>
     [HttpGet("{id:guid}")]

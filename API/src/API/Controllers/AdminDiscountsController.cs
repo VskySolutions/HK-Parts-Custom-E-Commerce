@@ -19,8 +19,10 @@ public class AdminDiscountsController : ApiControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
         [FromQuery] DiscountScope? scope = null,
-        [FromQuery] bool? isActive = null)
-        => Ok(await Mediator.Send(new ListDiscountsQuery(page, pageSize, search, scope, isActive)));
+        [FromQuery] bool? isActive = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListDiscountsQuery(page, pageSize, search, scope, isActive, sortBy, sortDescending)));
 
     /// <summary>Get a single discount by id.</summary>
     [HttpGet("{id:guid}")]

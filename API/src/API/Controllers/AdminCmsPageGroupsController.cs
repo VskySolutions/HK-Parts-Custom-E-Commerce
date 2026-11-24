@@ -1,7 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
 using HKPartsEcommerce.API.Authorization;
 using HKPartsEcommerce.Application.Common.Authorization;
+using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.CmsPageGroups;
+using Microsoft.AspNetCore.Mvc;
 
 namespace HKPartsEcommerce.API.Controllers;
 
@@ -12,8 +13,8 @@ public class AdminCmsPageGroupsController : ApiControllerBase
 {
     /// <summary>List all page groups ordered by display order.</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<CmsPageGroupDto>>> List()
-        => Ok(await Mediator.Send(new ListCmsPageGroupsQuery()));
+    public async Task<ActionResult<PaginatedList<CmsPageGroupDto>>> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListCmsPageGroupsQuery(page, pageSize, search, sortBy, sortDescending)));
 
     /// <summary>Get a single page group by id.</summary>
     [HttpGet("{id:guid}")]

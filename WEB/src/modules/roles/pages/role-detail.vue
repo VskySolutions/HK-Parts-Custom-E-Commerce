@@ -85,7 +85,7 @@ async function loadModules () {
   try {
     const list = await roleApi.modules()
     const items = Array.isArray(list) ? list : list?.items || []
-    moduleOptions.value = items.map((m) => ({ label: m.displayName, value: m.key }))
+    moduleOptions.value = items.map((m) => ({ label: m.displayName, value: m.key })).sort((a, b) => a.label.localeCompare(b.label))
   } catch (err) { notify.error(getApiErrorMessage(err)) } finally { modulesLoading.value = false }
 }
 loadModules()

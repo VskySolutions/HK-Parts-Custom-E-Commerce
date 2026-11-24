@@ -42,7 +42,7 @@ const canWrite = computed(() => has('Catalog.Write'))
 const columns = [
   { name: 'code', label: 'Code', field: 'code', align: 'left', sortable: true },
   { name: 'usageType', label: 'Usage', field: 'usageType', align: 'left', sortable: true },
-  { name: 'redemptions', label: 'Redemptions', field: 'redemptionCount', align: 'center', sortable: true },
+  { name: 'redemptions', label: 'Redemptions', field: 'redemptionCount', align: 'center', sortable: false },
   { name: 'isActive', label: 'Status', field: 'isActive', align: 'center', sortable: true }
 ]
 const statusOptions = [

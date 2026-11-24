@@ -46,7 +46,7 @@
         <q-td :props="cell"><q-badge :color="storeStatus(cell.row).color" :label="storeStatus(cell.row).label" /></q-td>
       </template>
       <template #body-cell-guestOrderingEnabled="cell">
-        <q-td :props="cell"><q-icon :name="cell.row.guestOrderingEnabled ? 'o_check_circle' : 'o_block'" :color="cell.row.guestOrderingEnabled ? 'positive' : 'grey'" /></q-td>
+        <q-td :props="cell"><q-icon :name="cell.row.guestOrderingEnabled ? 'o_check_circle' : 'o_block'" :color="cell.row.guestOrderingEnabled ? 'positive' : 'grey'" size="20px" /></q-td>
       </template>
       <template #actions="{ row }">
         <q-btn flat round dense icon="o_warehouse" @click="openInventory(row)"><q-tooltip>Inventory</q-tooltip></q-btn>

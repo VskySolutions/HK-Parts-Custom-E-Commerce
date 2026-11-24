@@ -57,7 +57,7 @@
                   @click="hasChildren(cat) ? (previewId = cat.id) : goTo(cat)"
                 >
                   <span class="sf-mm-browser__name">{{ cat.name }}</span>
-                  <span class="sf-mm-browser__count">{{ totalCount(cat) }}</span>
+                  <!-- <span class="sf-mm-browser__count">{{ totalCount(cat) }}</span> -->
                   <q-icon v-if="hasChildren(cat)" name="o_chevron_right" size="17px" />
                 </button>
               </div>
@@ -89,7 +89,7 @@
                           v-close-popup
                         >
                           <span class="sf-mm-link__label">{{ s.name }}</span>
-                          <span class="sf-mm-link__count">{{ s.productCount }}</span>
+                          <!-- <span class="sf-mm-link__count">{{ s.productCount }}</span> -->
                         </router-link>
                         <router-link
                           v-if="moreCount(g)"
@@ -169,7 +169,7 @@
                           v-close-popup
                         >
                           <span class="sf-mm-link__label">{{ s.name }}</span>
-                          <span class="sf-mm-link__count">{{ s.productCount }}</span>
+                          <!-- <span class="sf-mm-link__count">{{ s.productCount }}</span> -->
                         </router-link>
                         <router-link
                           v-if="moreCount(g)"
@@ -290,7 +290,7 @@
             </q-item>
           </template>
           <q-separator />
-          <template v-for="cat in categories" :key="cat.id">
+          <!-- <template v-for="cat in categories" :key="cat.id">
             <q-expansion-item
               v-if="hasChildren(cat)"
               :label="cat.name"
@@ -321,7 +321,79 @@
                 <span class="sf-mobile-nav__count">{{ cat.productCount }}</span>
               </q-item-section>
             </q-item>
-          </template>
+          </template> -->
+
+        <template v-for="cat in categories" :key="cat.id">
+          <q-expansion-item
+            v-if="cat.children?.length"
+            :label="cat.name"
+            dense
+            expand-separator
+            expand-icon="o_add" class="product-filter-expansion"
+            header-class="sf-mobile-nav__parent"
+          >
+            <template v-for="child in cat.children" :key="child.id">
+              <q-expansion-item
+                v-if="child.children?.length"
+                :label="child.name"
+                dense
+                expand-separator class="product-filter-expansion"
+                expand-icon="o_add"
+              >
+               <template v-slot:header>
+                  <q-item-section>
+                    <router-link
+                      :to="categoryTo(child)"
+                      class="sf-mobile-nav__child-parent" 
+                      @click.stop
+                    >
+                      {{ child.name }}
+                    </router-link>
+                  </q-item-section>
+                </template>
+                <q-item
+                  v-for="subChild in child.children"
+                  :key="subChild.id"
+                  clickable
+                  :to="categoryTo(subChild)"
+                  class="q-ml-sm"
+                  @click="drawer = false"
+                >
+                  <q-item-section class="sf-mobile-nav__category">
+                    {{ subChild.name }}
+                  </q-item-section>
+                   <q-item-section side>
+                    <q-icon name="o_arrow_right" class="text-grey-6" size="17px" />
+                    </q-item-section>
+                </q-item>
+              </q-expansion-item>
+
+              <q-item
+                v-else
+                clickable
+                :to="categoryTo(child)"
+                class="q-pl-lg"
+                @click="drawer = false"
+              >
+                <q-item-section class="sf-mobile-nav__category">
+                  {{ child.name }}
+                </q-item-section>
+                <q-item-section side>
+                  <q-icon name="o_arrow_right" class="text-grey-6" size="17px" />
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-expansion-item>
+
+          <q-item
+            v-else
+            clickable
+            :to="categoryTo(cat)"
+            @click="drawer = false"
+          >
+            <q-item-section>{{ cat.name }}</q-item-section>
+          </q-item>
+        </template>
         </q-list>
       </q-scroll-area>
     </q-drawer>
@@ -343,6 +415,8 @@ const { branding } = useStorefront()
 const props = defineProps({
   quickPages: { type: Array, default: () => [] }
 })
+
+console.log("Categories Details:", categories)
 
 const drawer = ref(false)
 // Id of the top-level category whose bar dropdown is open.

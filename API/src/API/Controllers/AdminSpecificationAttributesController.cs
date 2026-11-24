@@ -15,8 +15,8 @@ public class AdminSpecificationAttributesController : ApiControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedList<SpecificationAttributeDto>>> List(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
-        [FromQuery] bool? isFilterable = null)
-        => Ok(await Mediator.Send(new ListSpecificationAttributesQuery(page, pageSize, search, isFilterable)));
+        [FromQuery] bool? isFilterable = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListSpecificationAttributesQuery(page, pageSize, search, isFilterable, sortBy, sortDescending)));
 
     /// <summary>Get a single specification attribute (including its options) by id.</summary>
     [HttpGet("{id:guid}")]

@@ -35,7 +35,7 @@ public class ListProductQuestionsQueryHandler : IRequestHandler<ListProductQuest
 
     public async Task<PaginatedList<ProductQuestionDto>> Handle(ListProductQuestionsQuery request, CancellationToken cancellationToken)
     {
-        IQueryable<ProductQuestion> query = _db.ProductQuestions.AsNoTracking().Include(q => q.Product);
+        IQueryable<ProductQuestion> query = _db.ProductQuestions.AsNoTracking().Include(q => q.Product).Where(q => q.Product != null && !q.Product.Deleted);
 
         if (request.Status is QuestionStatus status)
             query = query.Where(q => q.Status == status);
@@ -52,8 +52,7 @@ public class ListProductQuestionsQueryHandler : IRequestHandler<ListProductQuest
                 (q.AskerEmail != null && q.AskerEmail.Contains(term)));
         }
 
-        var ordered = query.ApplySort(request.SortBy, request.SortDescending, SortMap,
-            defaultSort: q => q.OrderByDescending(x => x.CreatedOnUtc));
+        var ordered = query.ApplySort(request.SortBy, request.SortDescending, SortMap, defaultSort: q => q.OrderByDescending(x => x.CreatedOnUtc));
 
         var page = await PaginatedList<ProductQuestion>.CreateAsync(ordered, request.Page, request.PageSize, cancellationToken);
         var items = page.Items.Select(ProductQuestionDto.From).ToList();

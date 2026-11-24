@@ -16,8 +16,8 @@ public class AdminProductAttributesController : ApiControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedList<ProductAttributeDto>>> List(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
-        [FromQuery] ProductAttributeDisplayType? displayType = null)
-        => Ok(await Mediator.Send(new ListProductAttributesQuery(page, pageSize, search, displayType)));
+        [FromQuery] ProductAttributeDisplayType? displayType = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListProductAttributesQuery(page, pageSize, search, displayType, sortBy, sortDescending)));
 
     /// <summary>Get a single product attribute (including its values) by id.</summary>
     [HttpGet("{id:guid}")]

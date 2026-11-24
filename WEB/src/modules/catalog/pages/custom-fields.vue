@@ -8,9 +8,9 @@
       @add="onAdd"
     >
       <template #actions>
-        <q-input v-model="search" dense outlined debounce="300" placeholder="Search fields" style="min-width: 240px">
+        <q-input v-model="search" dense outlined debounce="300" placeholder="Search fields" style="min-width: 240px" @update:model-value="reload">
           <template #prepend><q-icon name="o_search" /></template>
-          <template v-if="search" #append><q-icon name="o_close" class="cursor-pointer" @click="search = ''" /></template>
+          <template v-if="search" #append><q-icon name="o_close" class="cursor-pointer" @click="search = ''; reload()" /></template>
         </q-input>
       </template>
     </AppListHeader>
@@ -19,13 +19,14 @@
       page-key="catalog-custom-fields"
       row-key="id"
       title="All custom fields"
-      :rows="filteredRows"
+      :rows="rows"
       :columns="columns"
       :loading="loading"
       :pagination="pagination"
       show-actions
+      @request="onRequest"
+      @refresh="reload"
       no-data-label="No custom fields yet. For option-valued, filterable properties (Condition, Size…) use specification attributes instead."
-      @refresh="load"
     >
       <template #body-cell-name="cell">
         <q-td :props="cell">
@@ -107,30 +108,38 @@ const columns = [
   { name: 'isActive', label: 'Status', field: 'isActive', align: 'center' },
   { name: 'displayOrder', label: 'Display order', field: 'displayOrder', align: 'right', sortable: true }
 ]
-const pagination = ref({ rowsPerPage: 0 })
 
 const rows = ref([])
 const loading = ref(false)
 const search = ref('')
+const pagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
 
-const filteredRows = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  if (!q) return rows.value
-  return rows.value.filter((f) => (f.name || '').toLowerCase().includes(q) || (f.code || '').toLowerCase().includes(q))
-})
-
-async function load () {
+async function fetch (props) {
+  const p = props?.pagination || pagination.value
   loading.value = true
   try {
-    const result = await productCustomFieldApi.list()
-    rows.value = Array.isArray(result) ? result : []
+    const result = await productCustomFieldApi.list({
+      page: p.page,
+      pageSize: p.rowsPerPage,
+      search: search.value || undefined,
+      sortBy: p.sortBy || undefined,
+      sortDescending: !!p.descending
+    })
+    const items = Array.isArray(result) ? result : result?.items || []
+    const total = Array.isArray(result) ? result.length : result?.totalCount ?? items.length
+    rows.value = items
+    pagination.value = { ...p, rowsNumber: total }
   } catch (err) {
     rows.value = []
+    pagination.value = { ...p, rowsNumber: 0 }
     notify.error(getApiErrorMessage(err))
   } finally {
     loading.value = false
   }
 }
+
+function onRequest (props) { fetch(props) }
+function reload () { fetch({ pagination: { ...pagination.value, page: 1 } }) }
 
 // ---- Create / edit drawer ----
 const drawerOpen = ref(false)
@@ -195,7 +204,7 @@ async function onSubmit () {
     else await productCustomFieldApi.create(payload)
     notify.success(editing.value ? 'Custom field saved' : 'Custom field created')
     drawerOpen.value = false
-    await load()
+    await reload()
   } catch (err) {
     notify.error(getApiErrorMessage(err))
   } finally {
@@ -208,11 +217,11 @@ async function onDelete (row) {
   try {
     await productCustomFieldApi.remove(row.id)
     notify.success('Custom field deleted')
-    await load()
+    await reload()
   } catch (err) {
     notify.error(getApiErrorMessage(err))
   }
 }
 
-onMounted(load)
+onMounted(() => fetch())
 </script>
