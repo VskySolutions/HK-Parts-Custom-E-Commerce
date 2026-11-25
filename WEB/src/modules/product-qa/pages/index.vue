@@ -167,7 +167,7 @@ import ProductFaqFormDrawer from 'modules/product-qa/components/ProductFaqFormDr
 const notify = useNotify()
 
 const columns = [
-  { name: 'productName', label: 'Product', field: 'productName', align: 'left', sortable: true },
+  { name: 'productName', label: 'Product', field: 'productName', align: 'left', sortable: false },
   { name: 'askerName', label: 'Asker', field: 'askerName', align: 'left', sortable: true },
   { name: 'questionText', label: 'Question', field: 'questionText', align: 'left' },
   { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
@@ -239,9 +239,8 @@ async function fetch (props) {
       sortDescending: !!p.descending
     })
     const items = Array.isArray(result) ? result : result?.items || result?.data || []
-    const total = Array.isArray(result)
-      ? result.length
-      : result?.totalCount ?? result?.total ?? items.length
+    console.log("Product Q&A Items Total:", items.length)
+    const total = Array.isArray(result) ? result.length : result?.totalCount ?? result?.total ?? items.length
     rows.value = items
     pagination.value = { ...p, rowsNumber: total }
   } catch (err) {

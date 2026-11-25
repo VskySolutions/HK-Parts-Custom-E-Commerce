@@ -8,9 +8,9 @@
       @add="onAdd"
     >
       <template #actions>
-        <q-input v-model="search" dense outlined debounce="300" placeholder="Search groups" style="min-width: 240px">
+        <q-input v-model="search" dense outlined debounce="300" placeholder="Search groups" style="min-width: 240px" @update:model-value="reload">
           <template #prepend><q-icon name="o_search" /></template>
-          <template v-if="search" #append><q-icon name="o_close" class="cursor-pointer" @click="search = ''" /></template>
+          <template v-if="search" #append><q-icon name="o_close" class="cursor-pointer" @click="search = ''; reload()" /></template>
         </q-input>
       </template>
     </AppListHeader>
@@ -19,13 +19,14 @@
       page-key="cms-page-groups"
       row-key="id"
       title="All page groups"
-      :rows="filteredRows"
+      :rows="rows"
       :columns="columns"
       :loading="loading"
       :pagination="pagination"
       show-actions
       no-data-label="No page groups yet."
-      @refresh="load"
+      @request="onRequest"
+      @refresh="reload"
     >
       <template #body-cell-name="cell">
         <q-td :props="cell">
@@ -84,38 +85,43 @@ const { has } = usePermissions()
 const canWrite = computed(() => has('Cms.Write'))
 
 const columns = [
-  { name: 'name', label: 'Name', field: 'name', align: 'left' },
-  { name: 'slug', label: 'Slug', field: 'slug', align: 'left' },
-  { name: 'displayOrder', label: 'Display order', field: 'displayOrder', align: 'right' }
+  { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
+  { name: 'slug', label: 'Slug', field: 'slug', align: 'left', sortable: true },
+  { name: 'displayOrder', label: 'Display order', field: 'displayOrder', align: 'right', sortable: true }
 ]
 
 // Client-side table: page-group lists are small, so show every group on one page.
-const pagination = ref({ rowsPerPage: 0 })
-
 const rows = ref([])
 const loading = ref(false)
 const search = ref('')
+const pagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0 })
 
-const filteredRows = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  if (!q) return rows.value
-  return rows.value.filter((g) =>
-    (g.name || '').toLowerCase().includes(q) || (g.slug || '').toLowerCase().includes(q)
-  )
-})
-
-async function load () {
+async function fetch (props) {
+  const p = props?.pagination || pagination.value
   loading.value = true
   try {
-    const result = await cmsPageGroupApi.list()
-    rows.value = Array.isArray(result) ? result : result?.items || result?.data || []
+    const result = await cmsPageGroupApi.list({
+      page: p.page,
+      pageSize: p.rowsPerPage,
+      search: search.value || undefined,
+      sortBy: p.sortBy || undefined,
+      sortDescending: !!p.descending
+    })
+    const items = Array.isArray(result) ? result : result?.items || []
+    const total = Array.isArray(result) ? result.length : result?.totalCount ?? items.length
+    rows.value = items
+    pagination.value = { ...p, rowsNumber: total }
   } catch (err) {
     rows.value = []
+    pagination.value = { ...p, rowsNumber: 0 }
     notify.error(getApiErrorMessage(err))
   } finally {
     loading.value = false
   }
 }
+
+function onRequest (props) { fetch(props) }
+function reload () { fetch({ pagination: { ...pagination.value, page: 1 } }) }
 
 // ---- Create / edit drawer ----
 const drawerOpen = ref(false)
@@ -172,7 +178,7 @@ async function onSubmit () {
     else await cmsPageGroupApi.create(payload)
     notify.success(editing.value ? 'Page group saved' : 'Page group created')
     drawerOpen.value = false
-    await load()
+    await reload()
   } catch (err) {
     notify.error(getApiErrorMessage(err))
   } finally {
@@ -185,11 +191,11 @@ async function onDelete (row) {
   try {
     await cmsPageGroupApi.remove(row.id)
     notify.success('Page group deleted')
-    await load()
+    await reload()
   } catch (err) {
     notify.error(getApiErrorMessage(err))
   }
 }
 
-onMounted(load)
+onMounted(() => fetch())
 </script>

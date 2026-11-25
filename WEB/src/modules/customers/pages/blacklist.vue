@@ -156,7 +156,7 @@ import UnblockCustomerDialog from 'modules/customers/components/UnblockCustomerD
 const notify = useNotify()
 
 const columns = [
-  { name: 'name', label: 'Name', field: (r) => nameOf(r), align: 'left' },
+  { name: 'name', label: 'Name', field: (r) => nameOf(r), align: 'left', sortable: true },
   { name: 'email', label: 'Email', field: 'email', align: 'left' },
   { name: 'reason', label: 'Reason', field: 'reason', align: 'left' },
   // Guest checkout A-31: which screen the block came from.
@@ -208,7 +208,12 @@ async function load () {
   try {
     // Only currently blocked entries: an unblocked (Inactive) entry is kept server-side for its attempt history
     // but drops off this list, and its customer reappears in the Customers list.
-    const res = await blacklistApi.list({ search: searchTerm.value, status: 'Blocked', page: 1, pageSize: 200 })
+    const res = await blacklistApi.list({ 
+      search: searchTerm.value, 
+      status: 'Blocked', 
+      page: 1, 
+      pageSize: 200
+    })
     rows.value = res?.items || []
   } catch (err) {
     rows.value = []

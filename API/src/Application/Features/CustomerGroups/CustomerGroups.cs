@@ -1,33 +1,58 @@
 using FluentValidation;
-using MediatR;
-using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
+using HKPartsEcommerce.Application.Common.Extensions;
 using HKPartsEcommerce.Application.Common.Interfaces;
+using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace HKPartsEcommerce.Application.Features.CustomerGroups;
 
 // ---- Queries -----------------------------------------------------------------
 
 /// <summary>Lists customer groups (with group prices), ordered for display.</summary>
-public record ListCustomerGroupsQuery(bool ActiveOnly = false) : IRequest<List<CustomerGroupDto>>;
+public record ListCustomerGroupsQuery(bool ActiveOnly = false, int Page = 1, int PageSize = 20, string? Search = null, string? SortBy = null, bool SortDescending = false) : IRequest<PaginatedList<CustomerGroupDto>>;
 
-public class ListCustomerGroupsQueryHandler : IRequestHandler<ListCustomerGroupsQuery, List<CustomerGroupDto>>
+public class ListCustomerGroupsQueryHandler : IRequestHandler<ListCustomerGroupsQuery, PaginatedList<CustomerGroupDto>>
 {
+    private static readonly IReadOnlyDictionary<string, string> SortMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["name"] = "Name",
+        ["displayOrder"] = "DisplayOrder",
+        ["discountPercent"] = "DiscountPercent",
+        ["pricingRuleType"] = "PricingRuleType",
+        ["isActive"] = "IsActive"
+    };
+
     private readonly IApplicationDbContext _db;
     public ListCustomerGroupsQueryHandler(IApplicationDbContext db) => _db = db;
 
-    public async Task<List<CustomerGroupDto>> Handle(ListCustomerGroupsQuery request, CancellationToken cancellationToken)
+    public async Task<PaginatedList<CustomerGroupDto>> Handle(ListCustomerGroupsQuery request, CancellationToken cancellationToken)
     {
-        var query = _db.CustomerGroups.AsNoTracking().Include(g => g.GroupPrices).AsSplitQuery();
+        IQueryable<CustomerGroup> query = _db.CustomerGroups.AsNoTracking().Include(g => g.GroupPrices).AsSplitQuery().Where(g => !g.Deleted);
+
         if (request.ActiveOnly)
             query = query.Where(g => g.IsActive);
 
-        var groups = await query
-            .OrderBy(g => g.DisplayOrder).ThenBy(g => g.Name)
-            .ToListAsync(cancellationToken);
-        return groups.Select(CustomerGroupDto.From).ToList();
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var term = request.Search.Trim();
+            query = query.Where(g =>
+                g.Name.Contains(term) ||
+                (g.Description != null && g.Description.Contains(term)) ||
+                (g.DiscountPercent.HasValue &&
+                    g.DiscountPercent.Value.ToString().Contains(term)) ||
+                g.PricingRuleType.ToString().Contains(term) ||
+                g.DisplayOrder.ToString().Contains(term));
+        }
+
+        var ordered = query.ApplySort(request.SortBy, request.SortDescending, SortMap, defaultSort: q => q.OrderBy(m => m.DisplayOrder).ThenBy(m => m.Name));
+
+        var page = await PaginatedList<CustomerGroup>.CreateAsync(ordered, request.Page, request.PageSize, cancellationToken);
+        var items = page.Items.Select(CustomerGroupDto.From).ToList();
+        return new PaginatedList<CustomerGroupDto>(items, page.TotalCount, page.PageNumber, page.PageSize);
     }
 }
 

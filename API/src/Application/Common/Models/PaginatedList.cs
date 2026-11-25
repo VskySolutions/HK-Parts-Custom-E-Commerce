@@ -23,16 +23,38 @@ public class PaginatedList<T>
     public bool HasPreviousPage => PageNumber > 1;
     public bool HasNextPage => PageNumber < TotalPages;
 
-    public static async Task<PaginatedList<T>> CreateAsync(
-        IQueryable<T> source, int pageNumber, int pageSize, CancellationToken cancellationToken = default)
+    //public static async Task<PaginatedList<T>> CreateAsync(
+    //    IQueryable<T> source, int pageNumber, int pageSize, CancellationToken cancellationToken = default)
+    //{
+    //    pageNumber = pageNumber < 1 ? 1 : pageNumber;
+    //    pageSize = pageSize < 1 ? 20 : pageSize;
+    //    var count = await source.CountAsync(cancellationToken);
+    //    var items = await source
+    //        .Skip((pageNumber - 1) * pageSize)
+    //        .Take(pageSize)
+    //        .ToListAsync(cancellationToken);
+    //    return new PaginatedList<T>(items, count, pageNumber, pageSize);
+    //}
+
+    public static async Task<PaginatedList<T>> CreateAsync(IQueryable<T> source, int pageNumber, int pageSize, CancellationToken cancellationToken = default)
     {
         pageNumber = pageNumber < 1 ? 1 : pageNumber;
-        pageSize = pageSize < 1 ? 20 : pageSize;
+
         var count = await source.CountAsync(cancellationToken);
+
+        if (pageSize == 0)
+        {
+            var allItems = await source.ToListAsync(cancellationToken);
+            return new PaginatedList<T>(allItems, count, pageNumber, count);
+        }
+
+        pageSize = pageSize < 1 ? 20 : pageSize;
+
         var items = await source
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
+
         return new PaginatedList<T>(items, count, pageNumber, pageSize);
     }
 }

@@ -275,6 +275,9 @@
               </template>
             </div>
             <div class="text-body2" v-html="branding.tagline" />
+            <div class="text-center">
+              <q-img src="~modules/storefront/heckler-koch-logo.png" width="100px" height="64px" />
+            </div>
             <div class="row q-gutter-sm q-mt-md">
               <a
                 v-for="s in branding.social"

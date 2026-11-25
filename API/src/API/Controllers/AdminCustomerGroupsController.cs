@@ -1,7 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
-using HKPartsEcommerce.Application.Common.Authorization;
 using HKPartsEcommerce.API.Authorization;
+using HKPartsEcommerce.Application.Common.Authorization;
+using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.CustomerGroups;
+using Microsoft.AspNetCore.Mvc;
 
 namespace HKPartsEcommerce.API.Controllers;
 
@@ -15,8 +16,8 @@ public class AdminCustomerGroupsController : ApiControllerBase
 {
     /// <summary>List customer groups; pass activeOnly=true for assignment pickers.</summary>
     [HttpGet]
-    public async Task<ActionResult<List<CustomerGroupDto>>> List([FromQuery] bool activeOnly = false)
-        => Ok(await Mediator.Send(new ListCustomerGroupsQuery(activeOnly)));
+    public async Task<ActionResult<PaginatedList<CustomerGroupDto>>> List([FromQuery] bool activeOnly = false, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListCustomerGroupsQuery(activeOnly, page, pageSize, search, sortBy, sortDescending)));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<CustomerGroupDto>> Get(Guid id)

@@ -35,11 +35,7 @@ public class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, PaginatedLi
 
     public async Task<PaginatedList<AdminUserDto>> Handle(ListUsersQuery request, CancellationToken cancellationToken)
     {
-        IQueryable<User> query = _db.Users
-            .AsNoTracking()
-            .Include(u => u.Customer)
-            .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role);
+        IQueryable<User> query = _db.Users.AsNoTracking().Include(u => u.Customer).Include(u => u.UserRoles).ThenInclude(ur => ur.Role);
 
         // Admin/staff accounts only — exclude storefront customers. Customers carry the Customer system
         // role; staff carry at least one other (non-Customer) role.

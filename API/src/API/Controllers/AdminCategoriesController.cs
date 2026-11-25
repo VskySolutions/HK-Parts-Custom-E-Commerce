@@ -14,8 +14,8 @@ public class AdminCategoriesController : ApiControllerBase
     /// <summary>List categories (paged), optionally filtered by name.</summary>
     [HttpGet]
     public async Task<ActionResult<PaginatedList<CategoryDto>>> List(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
-        => Ok(await Mediator.Send(new ListCategoriesQuery(page, pageSize, search)));
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListCategoriesQuery(page, pageSize, search, sortBy, sortDescending)));
 
     /// <summary>Get a single category by id.</summary>
     [HttpGet("{id:guid}")]

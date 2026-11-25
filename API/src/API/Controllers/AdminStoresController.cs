@@ -16,8 +16,8 @@ public class AdminStoresController : ApiControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedList<StoreDto>>> List(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
-        [FromQuery] bool? isEnabled = null, [FromQuery] bool? guestOrderingEnabled = null, [FromQuery] bool? pickupEnabled = null)
-        => Ok(await Mediator.Send(new ListStoresQuery(page, pageSize, search, isEnabled, guestOrderingEnabled, pickupEnabled)));
+        [FromQuery] bool? isEnabled = null, [FromQuery] bool? guestOrderingEnabled = null, [FromQuery] bool? pickupEnabled = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListStoresQuery(page, pageSize, search, isEnabled, guestOrderingEnabled, pickupEnabled, sortBy, sortDescending)));
 
     /// <summary>Get a single store by id.</summary>
     [HttpGet("{id:guid}")]

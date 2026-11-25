@@ -18,8 +18,11 @@ public class AdminCouponsController : ApiControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
         [FromQuery] Guid? discountId = null,
-        [FromQuery] bool? isActive = null)
-        => Ok(await Mediator.Send(new ListCouponsQuery(page, pageSize, search, discountId, isActive)));
+        [FromQuery] bool? isActive = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] bool sortDescending = false
+        )
+        => Ok(await Mediator.Send(new ListCouponsQuery(page, pageSize, search, discountId, isActive, sortBy, sortDescending)));
 
     /// <summary>Get a single coupon by id.</summary>
     [HttpGet("{id:guid}")]

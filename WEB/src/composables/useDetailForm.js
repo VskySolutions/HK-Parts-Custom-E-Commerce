@@ -104,7 +104,7 @@ export function useDetailForm (opts) {
   const saveCore = debounce(async () => {
     if (isCreate.value) return
     const ok = await v$.value.$validate()
-    if (!ok) { coreBlocked.value = true; return }
+    if (!ok) { coreBlocked.value = true; return notify.notifyWarning("Please complete all required fields.") }
     coreBlocked.value = false
     const snap = snapshot()
     if (snap === lastCore) return

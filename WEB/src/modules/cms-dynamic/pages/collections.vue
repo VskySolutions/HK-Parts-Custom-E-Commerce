@@ -90,7 +90,7 @@ const notify = useNotify()
 
 const columns = [
   { name: 'name', label: 'Name', field: 'name', align: 'left', sortable: true },
-  { name: 'productCount', label: 'Products', field: 'productCount', align: 'left', sortable: true },
+  { name: 'productCount', label: 'Products', field: 'productCount', align: 'left', sortable: false },
   { name: 'updatedOnUtc', label: 'Last updated', field: 'updatedOnUtc', align: 'left', sortable: true }
 ]
 

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using HKPartsEcommerce.Application.Common.Authorization;
 using HKPartsEcommerce.API.Authorization;
+using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.ProductCustomFields;
 
 namespace HKPartsEcommerce.API.Controllers;
@@ -12,8 +13,8 @@ public class AdminProductCustomFieldsController : ApiControllerBase
 {
     /// <summary>List all custom fields, optionally only active (or inactive) ones.</summary>
     [HttpGet]
-    public async Task<ActionResult<List<ProductCustomFieldDto>>> List([FromQuery] bool? isActive = null)
-        => Ok(await Mediator.Send(new ListProductCustomFieldsQuery(isActive)));
+    public async Task<ActionResult<PaginatedList<ProductCustomFieldDto>>> List([FromQuery] bool? isActive = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListProductCustomFieldsQuery(isActive, page, pageSize, search, sortBy, sortDescending)));
 
     /// <summary>Create a custom field.</summary>
     [HttpPost]

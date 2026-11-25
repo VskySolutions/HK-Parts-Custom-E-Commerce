@@ -574,6 +574,11 @@
   }
   .sf-mobile-nav__list { font-size: 13.5px; }
   .sf-mobile-nav__parent { font-weight: 600; color: var(--sf-heading); }
+  .sf-mobile-nav__child-parent { 
+    font-weight: 400; 
+    color: var(--sf-accent) !important;
+    text-decoration: none;
+   }
   .sf-mobile-nav__all { color: var(--sf-accent); font-weight: 600; }
   .sf-mobile-nav__category{
     color: var(--sf-accent); font-weight: 400;
@@ -906,4 +911,9 @@
     font-size: 16px;
     color: #9e9e9e;
   }
+}
+
+// Input with long placeholder text
+.q-placeholder{
+      text-overflow: ellipsis !important;
 }
