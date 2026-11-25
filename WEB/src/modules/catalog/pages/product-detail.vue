@@ -211,6 +211,11 @@
                 </q-toggle>
               </div>
               <div class="col-auto q-mt-md">
+                <q-toggle v-model="form.accountRequired" label="Account required" color="primary" :disable="!canWrite">
+                  <q-tooltip>Buyers must sign in or create an account to buy this. Guest checkout is hidden while it is in the cart.</q-tooltip>
+                </q-toggle>
+              </div>
+              <div class="col-auto q-mt-md">
                 <q-toggle v-model="form.isPurchasable" label="Can purchase" color="primary" :disable="!canWrite">
                   <q-tooltip>Off = the product is shown but the buy button is hidden</q-tooltip>
                 </q-toggle>
@@ -963,7 +968,7 @@ const EMPTY = {
   price: null, stockQuantity: 0, allowBackorder: false, estimatedRestockDate: null,
   taxCategoryId: '', manufacturerId: null,
   isPublished: false, displayOrder: 0, isFeatured: false, featuredDisplayOrder: 0,
-  isInquiryOnly: false, inquiryButtonLabel: '',
+  isInquiryOnly: false, inquiryButtonLabel: '', accountRequired: false,
   downloadExpiryDays: null, downloadLimit: null,
   giftCardType: 'Fixed', giftCardAmount: null, giftCertificateOnline: true,
   gtin: '', taxCode: '', isPurchasable: true, isFflRequired: false,
@@ -1266,6 +1271,7 @@ function buildPayload () {
     isFeatured: form.isFeatured,
     featuredDisplayOrder: form.isFeatured ? (toNumberOrNull(form.featuredDisplayOrder) || 0) : 0,
     isInquiryOnly: form.isInquiryOnly,
+    accountRequired: form.accountRequired,
     inquiryButtonLabel: form.isInquiryOnly ? (form.inquiryButtonLabel || null) : null,
     gtin: form.gtin || null,
     taxCode: form.taxCode || null,

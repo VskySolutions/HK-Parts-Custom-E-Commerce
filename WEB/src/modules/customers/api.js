@@ -11,10 +11,16 @@ export const customerAdminApi = {
   list (params = {}) { return api.get(CUSTOMERS, { params, paramsSerializer: qsSerializer }).then(unwrap) },
   get (id) { return api.get(`${CUSTOMERS}/${id}`).then(unwrap) },
 
-  // Guest customers: buyers who ordered without registering, one row per contact email. params: { page, pageSize, search }.
+  // Guest customers (guest checkout §4.2): one row per normalized guest email. params: { page, pageSize, search, status: All|Active|Blocked }.
   listGuests (params = {}) { return api.get(`${CUSTOMERS}/guests`, { params }).then(unwrap) },
-  // A guest's orders, newest first.
-  listGuestOrders (email) { return api.get(`${CUSTOMERS}/guests/orders`, { params: { email } }).then(unwrap) },
+  // A guest's orders by opaque guest id (A-15: the email never goes in a URL), newest first.
+  listGuestOrders (guestId) { return api.get(`${CUSTOMERS}/guests/${guestId}/orders`).then(unwrap) },
+  // A-17: the filtered guest list as a blob. params: { search, status, account, format: 'csv' | 'xlsx' }.
+  exportGuests (params = {}) { return api.get(`${CUSTOMERS}/guests/export`, { params, responseType: 'blob' }).then((r) => r.data) },
+  // A-18: move a guest's orders onto the account registered with the same email. Returns { customerId, linkedOrders }.
+  linkGuestOrders (guestId) { return api.post(`${CUSTOMERS}/guests/${guestId}/link`).then(unwrap) },
+  // N-05: anonymise a guest's personal data on request. Returns { anonymizedOrders, keptFirearmOrders }.
+  anonymizeGuest (guestId) { return api.post(`${CUSTOMERS}/guests/${guestId}/anonymize`).then(unwrap) },
 
   // Admin creates a customer. payload: { firstName, lastName, email, phoneNumber, password, isActive, emailVerified,
   //   longText, allowRestrictedCapacityPurchases, taxExemptReason }.

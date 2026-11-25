@@ -3,6 +3,8 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
 using HKPartsEcommerce.Application.Common.Interfaces;
+using HKPartsEcommerce.Application.Features.Checkout;
+using HKPartsEcommerce.Application.Features.Customers;
 using HKPartsEcommerce.Domain.Enums;
 
 namespace HKPartsEcommerce.Application.Features.CustomerAuth;
@@ -23,12 +25,14 @@ public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand>
     private readonly IApplicationDbContext _db;
     private readonly IJwtTokenService _tokens;
     private readonly IDateTimeProvider _clock;
+    private readonly ISettingsService? _settings;
 
-    public VerifyEmailCommandHandler(IApplicationDbContext db, IJwtTokenService tokens, IDateTimeProvider clock)
+    public VerifyEmailCommandHandler(IApplicationDbContext db, IJwtTokenService tokens, IDateTimeProvider clock, ISettingsService? settings = null)
     {
         _db = db;
         _tokens = tokens;
         _clock = clock;
+        _settings = settings;
     }
 
     public async Task Handle(VerifyEmailCommand request, CancellationToken cancellationToken)
@@ -48,6 +52,20 @@ public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand>
 
         token.User!.EmailVerified = true;
         token.ConsumedOnUtc = now;
+
+        // Guest checkout U-71 / N-07: the mailbox is now proven, so this email's past guest orders move onto the
+        // account (unless the admin chose to link them by hand, A-18).
+        var guestSettings = await GuestCheckoutSettingsStore.LoadAsync(_settings, cancellationToken);
+        if (guestSettings.AutoLinkOrdersOnVerify)
+        {
+            var customerId = await _db.Customers
+                .Where(c => c.UserId == token.UserId)
+                .Select(c => (Guid?)c.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (customerId is Guid cid)
+                await GuestRecords.LinkOrdersAsync(_db, token.User.Email, cid, now, cancellationToken);
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
     }
 }

@@ -1202,6 +1202,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uniqueidentifier");
 
@@ -1234,6 +1238,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("LastCheckoutActivityUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("MarketingOptIn")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("PlacementLockUntilUtc")
                         .HasColumnType("datetime2");
@@ -1839,6 +1846,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("Source")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -2060,6 +2071,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<int>("PricingRuleType")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TaxMethod")
                         .HasColumnType("int");
 
                     b.Property<Guid?>("UpdatedById")
@@ -3283,6 +3297,102 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("GroupedProductMembers", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Guest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AnonymizedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EmailNormalized")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("LastOrderOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("LinkedCustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("LinkedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("MarketingOptIn")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("OptInOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmailNormalized")
+                        .IsUnique();
+
+                    b.HasIndex("LastOrderOnUtc");
+
+                    b.HasIndex("LinkedCustomerId");
+
+                    b.ToTable("Guests", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GuestOrderAccessLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("IpAddress", "AtUtc");
+
+                    b.ToTable("GuestOrderAccessLogs", (string)null);
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.InventoryAuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3654,6 +3764,13 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("BillingAddressId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CancelRequestReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("CancelRequestedOnUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("CompanyName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -3710,6 +3827,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<Guid?>("GiftCertificateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("GuestId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("HasFflItems")
@@ -3804,11 +3924,28 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<string>("TaxBreakdownJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("TaxDocumentCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("TaxDocumentVoidedOnUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<bool>("TaxFlaggedForReview")
                         .HasColumnType("bit");
 
                     b.Property<string>("TaxProviderCalculationRef")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("TaxRefundedTotal")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<string>("TaxReturnDocumentCodes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<decimal>("TaxTotal")
                         .HasPrecision(18, 2)
@@ -3839,6 +3976,8 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasFilter("[EbayOrderId] IS NOT NULL");
 
                     b.HasIndex("GiftCertificateId");
+
+                    b.HasIndex("GuestId");
 
                     b.HasIndex("IsInquiry");
 
@@ -4107,8 +4246,26 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Active")
                         .HasColumnType("bit");
 
+                    b.Property<string>("AllowedCustomerGroupIds")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ApiPassword")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ApiSignature")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ApiUsername")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("BaseUrl")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BrandName")
+                        .HasMaxLength(127)
+                        .HasColumnType("nvarchar(127)");
 
                     b.Property<string>("ClientId")
                         .HasMaxLength(300)
@@ -4120,6 +4277,10 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DefaultOrderStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<bool>("Deleted")
                         .HasColumnType("bit");
 
@@ -4128,6 +4289,14 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsProduction")
                         .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaxOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -4140,6 +4309,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("SecretKey")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
 
                     b.Property<decimal?>("TransactionFeePercent")
                         .HasPrecision(5, 2)
@@ -4591,6 +4763,9 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AccountRequired")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("AllowBackorder")
                         .HasColumnType("bit");
@@ -7020,8 +7195,15 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<string>("AccessToken")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("AccessTokenExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<bool>("Active")
                         .HasColumnType("bit");
+
+                    b.Property<string>("AllowedCustomerGroupIds")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("ApplicationId")
                         .HasMaxLength(200)
@@ -7039,11 +7221,19 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DefaultOrderStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<bool>("Deleted")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsProduction")
                         .HasColumnType("bit");
@@ -7052,14 +7242,32 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<decimal?>("MaxOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("RefreshToken")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("TransactionFeePercent")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("TransactionType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<Guid?>("UpdatedById")
                         .HasColumnType("uniqueidentifier");
@@ -7302,14 +7510,29 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AcceptedCardTypes")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<bool>("Active")
                         .HasColumnType("bit");
+
+                    b.Property<string>("AllowedCustomerGroupIds")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("CustomerProfilesEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("DefaultOrderStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("Deleted")
                         .HasColumnType("bit");
@@ -7319,6 +7542,14 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsProduction")
                         .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaxOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinOrderAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -7336,9 +7567,16 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<string>("SecretKey")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("TransactionFeePercent")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("TransactionType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<Guid?>("UpdatedById")
                         .HasColumnType("uniqueidentifier");
@@ -7702,6 +7940,58 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("Credentials_TaxJar", (string)null);
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.TaxLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OrderNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("RequestJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ResponseJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedOnUtc");
+
+                    b.ToTable("TaxLogs", (string)null);
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.TaxProviderConfiguration", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7709,6 +7999,25 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("ActiveProvider")
                         .HasColumnType("int");
+
+                    b.Property<bool>("AvalaraCommitDocuments")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("AvalaraLoggingEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("AvalaraShippingTaxCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("AvalaraTimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(10);
 
                     b.Property<int>("CacheTtlMinutes")
                         .HasColumnType("int");
@@ -7726,6 +8035,11 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("TaxShipping")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<Guid?>("UpdatedById")
                         .HasColumnType("uniqueidentifier");
 
@@ -7735,6 +8049,84 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("TaxProviderConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.TaxStateRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("RatePercent")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<string>("StateCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("StateName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CountryCode", "StateCode")
+                        .IsUnique();
+
+                    b.ToTable("TaxStateRates", (string)null);
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.TaxZipRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("RatePercent")
+                        .HasPrecision(9, 4)
+                        .HasColumnType("decimal(9,4)");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PostalCode")
+                        .IsUnique();
+
+                    b.ToTable("TaxZipRates", (string)null);
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.TenantBranding", b =>
@@ -8933,6 +9325,16 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("MemberProduct");
                 });
 
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Guest", b =>
+                {
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Customer", "LinkedCustomer")
+                        .WithMany()
+                        .HasForeignKey("LinkedCustomerId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("LinkedCustomer");
+                });
+
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.InventoryAuditLog", b =>
                 {
                     b.HasOne("HKPartsEcommerce.Domain.Entities.Product", "Product")
@@ -9011,6 +9413,11 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("HKPartsEcommerce.Domain.Entities.Guest", "Guest")
+                        .WithMany("Orders")
+                        .HasForeignKey("GuestId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("HKPartsEcommerce.Domain.Entities.Address", "ShippingAddress")
                         .WithMany()
                         .HasForeignKey("ShippingAddressId")
@@ -9021,6 +9428,8 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
                     b.Navigation("BillingAddress");
 
                     b.Navigation("Customer");
+
+                    b.Navigation("Guest");
 
                     b.Navigation("ShippingAddress");
                 });
@@ -9819,6 +10228,11 @@ namespace HKPartsEcommerce.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.GiftCertificate", b =>
                 {
                     b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Guest", b =>
+                {
+                    b.Navigation("Orders");
                 });
 
             modelBuilder.Entity("HKPartsEcommerce.Domain.Entities.Manufacturer", b =>

@@ -1,7 +1,7 @@
 <template>
   <q-card flat bordered class="q-pa-md">
     <div class="row items-center q-mb-md">
-      <q-btn flat round dense icon="o_arrow_back" class="q-mr-sm" :to="{ name: 'shop-account-orders' }" />
+      <q-btn flat round dense icon="o_arrow_back" class="q-mr-sm" :to="backTo" />
       <div>
         <div class="text-h6">Return items</div>
         <div v-if="data" class="text-caption text-grey-7">
@@ -94,7 +94,7 @@
       </q-checkbox>
 
       <div class="row justify-end q-gutter-sm q-mt-md">
-        <q-btn flat no-caps label="Cancel" :to="{ name: 'shop-account-orders' }" />
+        <q-btn flat no-caps label="Cancel" :to="backTo" />
         <q-btn unelevated color="primary" no-caps label="Submit return request" :loading="submitting" :disable="!canSubmit" @click="submit" />
       </div>
     </template>
@@ -102,17 +102,30 @@
 </template>
 
 <script setup>
-/* Storefront return request form (docs/order-return-requirements.bak.md section 6.2). */
+/*
+ * Storefront return request form (docs/order-return-requirements.bak.md section 6.2). Also used by guests
+ * (docs/guest-checkout-requirements.md U-63): with a `guestToken` the order comes from the signed guest order link
+ * instead of the signed-in account, and the request is submitted to the guest endpoint. Same return rules.
+ */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { returnsApi } from 'modules/storefront/account-api'
-import { formatPrice } from 'modules/storefront/api'
+import { formatPrice, guestOrderApi } from 'modules/storefront/api'
 import { getApiErrorMessage } from 'services/api'
+
+const props = defineProps({
+  guestToken: { type: String, default: '' }
+})
 
 const route = useRoute()
 const router = useRouter()
 const $q = useQuasar()
+
+const isGuest = computed(() => !!props.guestToken)
+const backTo = computed(() => isGuest.value
+  ? { name: 'shop-guest-order', query: { token: props.guestToken } }
+  : { name: 'shop-account-orders' })
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -180,7 +193,7 @@ async function load () {
   loading.value = true
   try {
     const [d, c, r] = await Promise.all([
-      returnsApi.returnable(route.params.orderId),
+      isGuest.value ? guestOrderApi.returnable(props.guestToken) : returnsApi.returnable(route.params.orderId),
       returnsApi.config(),
       returnsApi.reasons()
     ])
@@ -206,8 +219,8 @@ async function load () {
 async function submit () {
   submitting.value = true
   try {
-    const rma = await returnsApi.submit({
-      orderId: route.params.orderId,
+    const payload = {
+      orderId: isGuest.value ? (data.value?.orderId || null) : route.params.orderId,
       lines: selected.value.map((l) => ({
         orderLineItemId: l.orderLineItemId,
         quantity: l.quantity,
@@ -219,9 +232,14 @@ async function submit () {
       returnMethod: returnMethod.value,
       comment: comment.value.trim() || null,
       acceptPolicy: acceptPolicy.value
-    }, photos.value)
+    }
+    const rma = isGuest.value
+      ? await guestOrderApi.submitReturn(props.guestToken, payload, photos.value)
+      : await returnsApi.submit(payload, photos.value)
     $q.notify({ type: 'positive', message: `Return ${rma.rmaNumber} submitted. We've emailed you the next steps.` })
-    router.replace({ name: 'shop-account-return-detail', params: { id: rma.id } })
+    // Guests have no account return pages: back to the order page, which lists the return and its status.
+    if (isGuest.value) router.replace(backTo.value)
+    else router.replace({ name: 'shop-account-return-detail', params: { id: rma.id } })
   } catch (e) {
     $q.notify({ type: 'negative', message: getApiErrorMessage(e), multiLine: true })
   } finally {

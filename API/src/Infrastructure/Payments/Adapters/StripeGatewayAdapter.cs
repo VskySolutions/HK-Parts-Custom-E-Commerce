@@ -1,10 +1,12 @@
 using System.Net.Http;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Stripe;
 using Stripe.Checkout;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
+using HKPartsEcommerce.Application.Features.IntegrationCredentials;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
 // Stripe.net also declares a PaymentRecord type — alias ours so the adapter signatures resolve unambiguously.
@@ -18,11 +20,22 @@ namespace HKPartsEcommerce.Infrastructure.Payments.Adapters;
 /// (<see cref="PaymentResult.Redirect"/>); Stripe collects the card on its own page, so no card token is
 /// needed here. On the buyer's return, <see cref="VerifyRedirectAsync"/> confirms the session was paid.
 /// Credentials (secret key + return URL) come from the active Credentials_Stripe row.
+/// <para>
+/// PHP parity, the Stripe method settings on that row: <b>Transaction Type</b> (AuthOnly = the PaymentIntent is
+/// created with manual capture, the funds are held and captured later through <see cref="CaptureAsync"/>),
+/// <b>Customer Profile Enabled</b> (a Stripe Customer is created for a signed-in buyer and the card saved to it; its
+/// id is kept on the payment) and <b>Accepted Card Types</b> (Stripe Checkout cannot restrict brands up front, so a
+/// card of another brand is voided or refunded on return and the buyer asked for a different card).
+/// </para>
 /// </summary>
 public class StripeGatewayAdapter : PaymentGatewayAdapterBase
 {
-    public StripeGatewayAdapter(ICredentialVault vault, IHttpClientFactory httpClientFactory, ILogger<StripeGatewayAdapter> logger)
-        : base(vault, httpClientFactory, logger) { }
+    private readonly IApplicationDbContext? _db;
+
+    public StripeGatewayAdapter(ICredentialVault vault, IHttpClientFactory httpClientFactory, ILogger<StripeGatewayAdapter> logger,
+        IApplicationDbContext? db = null)
+        : base(vault, httpClientFactory, logger)
+        => _db = db;
 
     public override PaymentMethodType Method => PaymentMethodType.Stripe;
 
@@ -52,6 +65,12 @@ public class StripeGatewayAdapter : PaymentGatewayAdapterBase
             // Human-readable label for the Stripe page + dashboard; keep the raw id in metadata for lookup.
             var orderLabel = string.IsNullOrWhiteSpace(req.OrderNumber) ? $"Order {req.OrderId:N}" : $"Order {req.OrderNumber}";
 
+            var settings = await MethodSettingsAsync(ct);
+            // Transaction Type on the row wins; without one, the gateway's capture-mode setting decides.
+            var authOnly = settings?.TransactionType is { Length: > 0 } t
+                ? string.Equals(t, "AuthOnly", StringComparison.OrdinalIgnoreCase)
+                : mode == CaptureMode.AuthorizeOnly;
+
             var options = new SessionCreateOptions
             {
                 Mode = "payment",
@@ -59,6 +78,11 @@ public class StripeGatewayAdapter : PaymentGatewayAdapterBase
                 Metadata = new Dictionary<string, string> { ["orderId"] = req.OrderId.ToString() },
                 SuccessUrl = successUrl,
                 CancelUrl = cancelUrl,
+                PaymentIntentData = new SessionPaymentIntentDataOptions
+                {
+                    CaptureMethod = authOnly ? "manual" : "automatic",
+                    Metadata = new Dictionary<string, string> { ["orderId"] = req.OrderId.ToString() },
+                },
                 LineItems = new List<SessionLineItemOptions>
                 {
                     new()
@@ -74,6 +98,19 @@ public class StripeGatewayAdapter : PaymentGatewayAdapterBase
                 },
             };
 
+            // Customer Profile Enabled: signed-in buyers get a Stripe Customer with the card saved for later use.
+            var email = req.Customer?.Email;
+            if (settings?.CustomerProfilesEnabled == true && req.Customer?.CustomerId is not null && !string.IsNullOrWhiteSpace(email))
+            {
+                options.CustomerCreation = "always";
+                options.CustomerEmail = email.Trim();
+                options.PaymentIntentData.SetupFutureUsage = "off_session";
+            }
+            else if (!string.IsNullOrWhiteSpace(email))
+            {
+                options.CustomerEmail = email.Trim(); // receipt + prefill only
+            }
+
             try
             {
                 var session = await new SessionService(new StripeClient(secretKey)).CreateAsync(options, cancellationToken: ct);
@@ -88,10 +125,30 @@ public class StripeGatewayAdapter : PaymentGatewayAdapterBase
             }
         });
 
-    // Checkout Sessions in payment mode capture on completion, so there is nothing to capture separately.
+    /// <summary>
+    /// Automatic-capture sessions are already captured on completion. An authorize-only payment (manual capture)
+    /// is captured now through the PaymentIntent, for the amount asked (Stripe allows less than authorized).
+    /// </summary>
     public override Task<PaymentResult> CaptureAsync(PaymentRecord payment, decimal amount, CancellationToken ct)
-        => Task.FromResult(PaymentResult.Captured(payment.TransactionId ?? payment.GatewayReference, amount, payment.AuthorizationId, payment.GatewayReference));
+        => GuardAsync("capture", async () =>
+        {
+            var paymentIntentId = payment.AuthorizationId ?? payment.TransactionId;
+            if (payment.Status != PaymentStatus.Authorized || string.IsNullOrWhiteSpace(paymentIntentId) || !paymentIntentId.StartsWith("pi_", StringComparison.Ordinal))
+                return PaymentResult.Captured(payment.TransactionId ?? payment.GatewayReference, amount, payment.AuthorizationId, payment.GatewayReference);
 
+            var cred = await ResolveStripeAsync(ct);
+            if (cred is null || string.IsNullOrWhiteSpace(cred.Value.SecretKey))
+                return PaymentResult.Failed("Stripe is not configured.");
+
+            var service = new PaymentIntentService(new StripeClient(cred.Value.SecretKey));
+            var intent = await service.CaptureAsync(paymentIntentId,
+                new PaymentIntentCaptureOptions { AmountToCapture = ToMinorUnits(amount) }, cancellationToken: ct);
+            return intent.Status == "succeeded"
+                ? PaymentResult.Captured(intent.Id, amount, intent.Id, payment.GatewayReference)
+                : PaymentResult.Failed($"Stripe capture returned status '{intent.Status}'.", PaymentStatus.Authorized);
+        });
+
+    /// <summary>A captured payment is refunded; a payment still only authorized is voided (Stripe cannot refund it).</summary>
     public override Task<PaymentResult> RefundAsync(PaymentRecord payment, decimal amount, CancellationToken ct)
         => GuardAsync("refund", async () =>
         {
@@ -103,7 +160,16 @@ public class StripeGatewayAdapter : PaymentGatewayAdapterBase
             if (string.IsNullOrWhiteSpace(paymentIntentId))
                 return PaymentResult.Failed("Stripe refund requires the settled PaymentIntent id.");
 
-            var refund = await new RefundService(new StripeClient(cred.Value.SecretKey)).CreateAsync(
+            var client = new StripeClient(cred.Value.SecretKey);
+            if (payment.Status == PaymentStatus.Authorized && paymentIntentId.StartsWith("pi_", StringComparison.Ordinal))
+            {
+                var cancelled = await new PaymentIntentService(client).CancelAsync(paymentIntentId, cancellationToken: ct);
+                return cancelled.Status == "canceled"
+                    ? new PaymentResult(true, PaymentStatus.Voided, TransactionId: cancelled.Id, GatewayReference: cancelled.Id)
+                    : PaymentResult.Failed($"Stripe void returned status '{cancelled.Status}'.");
+            }
+
+            var refund = await new RefundService(client).CreateAsync(
                 new RefundCreateOptions { PaymentIntent = paymentIntentId, Amount = ToMinorUnits(amount) },
                 cancellationToken: ct);
 
@@ -123,12 +189,64 @@ public class StripeGatewayAdapter : PaymentGatewayAdapterBase
             if (string.IsNullOrWhiteSpace(sessionId))
                 return PaymentResult.Failed("No Stripe checkout session to verify.", PaymentStatus.Pending);
 
-            var session = await new SessionService(new StripeClient(cred.Value.SecretKey)).GetAsync(sessionId, cancellationToken: ct);
+            var client = new StripeClient(cred.Value.SecretKey);
+            var session = await new SessionService(client).GetAsync(sessionId,
+                new SessionGetOptions { Expand = new List<string> { "payment_intent.latest_charge" } }, cancellationToken: ct);
+            var intent = session.PaymentIntent;
+            var piId = session.PaymentIntentId ?? intent?.Id;
 
-            return string.Equals(session.PaymentStatus, "paid", StringComparison.OrdinalIgnoreCase)
-                ? PaymentResult.Captured(session.PaymentIntentId ?? sessionId, payment.Amount, session.PaymentIntentId, sessionId)
-                : PaymentResult.Failed($"Payment not completed (status '{session.PaymentStatus}').", PaymentStatus.Pending);
+            var paid = string.Equals(session.PaymentStatus, "paid", StringComparison.OrdinalIgnoreCase);
+            var held = intent?.Status == "requires_capture"; // authorize-only: the card is approved, funds held
+            if (!paid && !held)
+                return PaymentResult.Failed($"Payment not completed (status '{session.PaymentStatus}').", PaymentStatus.Pending);
+
+            var card = intent?.LatestCharge?.PaymentMethodDetails?.Card;
+            var details = new PaymentGatewayDetails
+            {
+                CardType = card?.Brand,
+                CardLastFour = card?.Last4,
+                CustomerProfileId = session.CustomerId,
+            };
+
+            // Accepted Card Types: refuse a brand the store doesn't take, releasing the money straight away.
+            var settings = await MethodSettingsAsync(ct);
+            var accepted = StripeCardTypes.Split(settings?.AcceptedCardTypes)
+                .Select(t => StripeCardTypes.StripeBrandByType.TryGetValue(t, out var b) ? b : t.ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (accepted.Count > 0 && card?.Brand is { Length: > 0 } brand && !accepted.Contains(brand) && piId is not null)
+            {
+                if (held)
+                    await new PaymentIntentService(client).CancelAsync(piId, cancellationToken: ct);
+                else
+                    await new RefundService(client).CreateAsync(new RefundCreateOptions { PaymentIntent = piId }, cancellationToken: ct);
+                return PaymentResult.Failed(
+                    $"Sorry, we don't accept {BrandLabel(brand)} cards. Your card was not charged. Please pay with a different card.",
+                    PaymentStatus.Pending) with { Details = details };
+            }
+
+            var result = held
+                ? PaymentResult.Authorized(piId, sessionId)
+                : PaymentResult.Captured(piId ?? sessionId, payment.Amount, piId, sessionId);
+            return result with { Details = details };
         });
+
+    private static string BrandLabel(string stripeBrand) =>
+        StripeCardTypes.StripeBrandByType.FirstOrDefault(kv => string.Equals(kv.Value, stripeBrand, StringComparison.OrdinalIgnoreCase)).Key
+        ?? stripeBrand;
+
+    /// <summary>The active Stripe row's method settings (transaction type, customer profiles, accepted cards).</summary>
+    private async Task<StripeMethodSettings?> MethodSettingsAsync(CancellationToken ct)
+    {
+        if (_db is null)
+            return null;
+        return await _db.StripeCredentials.AsNoTracking()
+            .Where(c => c.Active)
+            .OrderByDescending(c => c.UpdatedOnUtc)
+            .Select(c => new StripeMethodSettings(c.TransactionType, c.CustomerProfilesEnabled, c.AcceptedCardTypes))
+            .FirstOrDefaultAsync(ct);
+    }
+
+    private sealed record StripeMethodSettings(string? TransactionType, bool CustomerProfilesEnabled, string? AcceptedCardTypes);
 
     /// <summary>Resolves the active Stripe credential ({ secretKey, returnUrl } JSON) from the vault.</summary>
     private async Task<(string? SecretKey, string? ReturnUrl)?> ResolveStripeAsync(CancellationToken ct)

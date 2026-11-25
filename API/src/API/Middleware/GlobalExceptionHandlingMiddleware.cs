@@ -43,6 +43,7 @@ public class GlobalExceptionHandlingMiddleware
             ConflictException => (StatusCodes.Status409Conflict, ex.Message, null),
             ExternalBusinessException => (StatusCodes.Status422UnprocessableEntity, ex.Message, null),
             ServiceUnavailableException => (StatusCodes.Status503ServiceUnavailable, ex.Message, null),
+            TooManyRequestsException => (StatusCodes.Status429TooManyRequests, ex.Message, null),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", null),
         };
 

@@ -39,9 +39,16 @@ public class CredentialVault : ICredentialVault
             // Payment gateways. Stripe passes no baseUrl: the Stripe.net SDK owns the host, and the key
             // prefix (sk_test_/sk_live_) decides the mode — there is no endpoint for an admin to choose.
             "stripe"       => Resolve(await ActiveAsync(_db.StripeCredentials, cancellationToken), c => Json(new { secretKey = c.SecretKey, returnUrl = c.ReturnUrl })),
-            "paypal"       => Resolve(await ActiveAsync(_db.PayPalCredentials, cancellationToken), c => Pair(c.ClientId, c.SecretKey), c => c.BaseUrl, c => c.ReturnUrl),
+            // REST "clientId:secret", or (PHP parity) the classic API username/password/signature: then the value is
+            // the marker "classic" and the endpoint comes from the Sandbox / Production switch.
+            "paypal"       => Resolve(await ActiveAsync(_db.PayPalCredentials, cancellationToken),
+                                  c => Pair(c.ClientId, c.SecretKey) ?? (c.HasClassicCredentials ? PayPalClassic : null),
+                                  c => c.BaseUrl ?? (c.IsProduction ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com"),
+                                  c => c.ReturnUrl),
             "razorpay"     => Resolve(await ActiveAsync(_db.RazorpayCredentials, cancellationToken), c => Pair(c.KeyId, c.KeySecret), c => c.BaseUrl),
-            "square"       => Resolve(await ActiveAsync(_db.SquareCredentials, cancellationToken), SquareValue, c => c.BaseUrl),
+            // Base URL: empty = the endpoint for the credential's Mode (Sandbox / Production), PHP parity.
+            "square"       => Resolve(await ActiveAsync(_db.SquareCredentials, cancellationToken), SquareValue,
+                                  c => c.BaseUrl ?? (c.IsProduction ? "https://connect.squareup.com/v2" : "https://connect.squareupsandbox.com/v2")),
             "authorizenet" => Resolve(await ActiveAsync(_db.AuthorizeNetCredentials, cancellationToken), c => Pair(c.ApplicationLoginId, c.TransactionKey), c => c.BaseUrl),
             // Tax providers
             "taxjar"       => Resolve(await ActiveAsync(_db.TaxJarCredentials, cancellationToken), c => c.SecretKey, c => c.BaseUrl),
@@ -92,6 +99,9 @@ public class CredentialVault : ICredentialVault
     }
 
     /// <summary>Colon-joined "id:secret" pair; null unless both halves are present.</summary>
+    /// <summary>The resolved PayPal value when only the classic NVP credentials are set (PHP "PayPal Express").</summary>
+    public const string PayPalClassic = "classic";
+
     private static string? Pair(string? left, string? right)
         => string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right) ? null : $"{left}:{right}";
 

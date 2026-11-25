@@ -132,6 +132,8 @@ public interface IApplicationDbContext
     DbSet<CustomerBlacklistEntry> CustomerBlacklistEntries { get; }
     DbSet<CustomerBlacklistHit> CustomerBlacklistHits { get; }
     DbSet<CustomerBlacklistEvent> CustomerBlacklistEvents { get; }
+    DbSet<Guest> Guests { get; }
+    DbSet<GuestOrderAccessLog> GuestOrderAccessLogs { get; }
     DbSet<StoreManagerAssignment> StoreManagerAssignments { get; }
     DbSet<Shipment> Shipments { get; }
     DbSet<ShipmentLineItem> ShipmentLineItems { get; }
@@ -159,6 +161,9 @@ public interface IApplicationDbContext
     DbSet<PaymentRecord> PaymentRecords { get; }
     DbSet<PaymentTransaction> PaymentTransactions { get; }
     DbSet<TaxProviderConfiguration> TaxProviderConfigurations { get; }
+    DbSet<TaxStateRate> TaxStateRates { get; }
+    DbSet<TaxZipRate> TaxZipRates { get; }
+    DbSet<TaxLog> TaxLogs { get; }
     DbSet<StateNexusAccumulator> StateNexusAccumulators { get; }
     DbSet<OrderStatusHistory> OrderStatusHistory { get; }
 

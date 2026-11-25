@@ -28,14 +28,17 @@ public class RefundOrderCommandHandler : IRequestHandler<RefundOrderCommand, Pay
     private readonly IEmailTemplateSender _templates;
     private readonly IInventoryService _inventory;
     private readonly IRewardPointsService _points;
+    private readonly ITaxCalculationService? _tax;
 
-    public RefundOrderCommandHandler(IApplicationDbContext db, ISender mediator, IEmailTemplateSender templates, IInventoryService inventory, IRewardPointsService points)
+    public RefundOrderCommandHandler(IApplicationDbContext db, ISender mediator, IEmailTemplateSender templates, IInventoryService inventory,
+        IRewardPointsService points, ITaxCalculationService? tax = null)
     {
         _db = db;
         _mediator = mediator;
         _templates = templates;
         _inventory = inventory;
         _points = points;
+        _tax = tax;
     }
 
     public async Task<PaymentDto> Handle(RefundOrderCommand request, CancellationToken cancellationToken)
@@ -53,17 +56,43 @@ public class RefundOrderCommandHandler : IRequestHandler<RefundOrderCommand, Pay
             ?? throw new ConflictException("This order has no captured payment available to refund.");
 
         var amount = request.Amount;
+        var lineTax = 0m;
         if (amount is null && request.OrderLineItemIds is { Count: > 0 } lineIds)
         {
             var ids = lineIds.ToHashSet();
-            amount = order.Lines.Where(l => ids.Contains(l.Id)).Sum(l => l.LineTotal);
-            if (amount <= 0)
+            var lineValue = order.Lines.Where(l => ids.Contains(l.Id)).Sum(l => l.LineTotal);
+            if (lineValue <= 0)
                 throw new ConflictException("The selected lines have no refundable amount.");
+            // PHP parity (EcommOrder::applyCredit): the tax charged on the refunded lines goes back with them.
+            lineTax = OrderRefundTax.ForLines(order, lineValue);
+            amount = lineValue + lineTax;
         }
 
         // RefundPaymentCommand validates the amount against the remaining refundable balance, calls the
         // originating gateway, and records the cumulative refund + payment status.
+        var refundedBefore = payment.RefundedAmount;
         var result = await _mediator.Send(new RefundPaymentCommand(payment.Id, amount, request.Reason), cancellationToken);
+        var refunded = result.RefundedAmount - refundedBefore;
+
+        // Record the tax given back (net tax on the Tax Report) and report the return to Avalara when the sale was
+        // committed there. A line refund carries its lines' tax; a full or amount refund carries the order's tax in
+        // proportion to the money refunded (the remaining tax for a full refund).
+        var refundedLines = request.OrderLineItemIds is { Count: > 0 } && request.Amount is null
+            ? request.OrderLineItemIds.ToHashSet()
+            : null;
+        var taxRefunded = refundedLines is not null ? lineTax : OrderRefundTax.ForAmount(order, refunded, full: request.Amount is null);
+        if (taxRefunded > 0m)
+        {
+            order.TaxRefundedTotal += taxRefunded;
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        if (_tax is not null && refunded > 0m)
+        {
+            var returnRequest = refundedLines is not null
+                ? OrderRefundTax.LinesReturn(order, refundedLines, taxRefunded, request.Reason ?? "Refund")
+                : OrderRefundTax.ProportionalReturn(order, refunded, taxRefunded, request.Reason ?? "Refund");
+            await _tax.ReturnTransactionAsync(returnRequest, cancellationToken);
+        }
 
         // Claw back the loyalty points this order earned (WO-27, AC-PRP-004.4). No-op when loyalty is off or
         // the order has no customer; the service clamps so it never drives the balance negative.

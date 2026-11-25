@@ -88,7 +88,7 @@ public class BlacklistCustomerCommandHandler : IRequestHandler<BlacklistCustomer
                 .FirstOrDefaultAsync(e => e.CustomerId == customer.Entity.Id, ct);
             if (listEntry is null)
             {
-                listEntry = new CustomerBlacklistEntry { CustomerId = customer.Entity.Id };
+                listEntry = new CustomerBlacklistEntry { CustomerId = customer.Entity.Id, Source = Checkout.BlacklistSources.Customer };
                 _db.CustomerBlacklistEntries.Add(listEntry);
             }
             listEntry.FirstName = Clean(customer.FirstName);

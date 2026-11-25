@@ -59,10 +59,13 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResponse>
 
         var (roles, modules) = AccessScope.From(user.UserRoles);
 
-        // Unified login (WO-112): a pure customer (Customer profile, no assigned role) must verify their
-        // email before signing in (AC-CUS-001.3). Staff/admin accounts carry roles and are exempt — they
-        // may be created unverified — so enforcing this here never locks an admin out.
-        if (!user.EmailVerified && user.Customer is not null && roles.Count == 0)
+        // Unified login (WO-112): a pure customer (Customer profile, no role other than "Customer") must verify
+        // their email before signing in (AC-CUS-001.3). Every storefront sign-up path assigns the Customer role,
+        // so checking for "no roles" let unverified customers straight in — and a guest-created account then
+        // never had its guest orders linked, since that happens on verification (U-71). Staff/admin accounts
+        // carry other roles and stay exempt (they may be created unverified), so no admin is locked out.
+        var isStaff = roles.Any(r => !string.Equals(r, nameof(Domain.Enums.RoleType.Customer), StringComparison.OrdinalIgnoreCase));
+        if (!user.EmailVerified && user.Customer is not null && !isStaff)
             throw new UnauthorizedException("Please verify your email address before signing in.");
 
         user.LastLoginOnUtc = _clock.UtcNow;

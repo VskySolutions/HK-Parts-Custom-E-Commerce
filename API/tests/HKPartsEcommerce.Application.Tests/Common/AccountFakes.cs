@@ -73,6 +73,8 @@ internal sealed class FakeUrlBuilder : IStorefrontUrlBuilder
     public string EmailVerificationUrl(string token) => "https://app.test/shop/verify-email?token=" + token;
     public string PasswordResetUrl(string token) => "https://app.test/shop/reset-password?token=" + token;
     public string AdminPasswordResetUrl(string token) => "https://app.test/auth/reset-password?token=" + token;
+    public string GuestOrderUrl(string token) => "https://app.test/shop/order/view?token=" + token;
+    public string GuestOrderLookupUrl() => "https://app.test/shop/order/lookup";
 }
 
 internal sealed class FakeCurrentUser : ICurrentUserService

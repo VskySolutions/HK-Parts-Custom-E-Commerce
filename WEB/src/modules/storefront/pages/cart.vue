@@ -4,6 +4,13 @@
 
     <q-inner-loading :showing="loading && !cart" color="primary" />
 
+    <!-- PHP parity (cartMessage): why checkout sent the shopper back here, e.g. an item now out of stock. -->
+    <q-banner v-if="cartMessage" dense class="bg-red-1 text-red-9 rounded-borders q-mb-md" role="alert">
+      <template #avatar><q-icon name="o_error_outline" color="red-9" /></template>
+      {{ cartMessage }}
+      <template #action><q-btn flat dense round icon="o_close" aria-label="Dismiss" @click="cartMessage = ''" /></template>
+    </q-banner>
+
     <!-- Empty cart -->
     <q-banner v-if="cart && !items.length" class="bg-grey-2 rounded-borders q-my-md">
       Your cart is empty.
@@ -255,6 +262,16 @@ const isInquiryCart = computed(() =>
   isInquiryOnly.value || items.value.some((i) => i.isInquiryOnly === true)
 )
 const notify = useNotify()
+
+// Set by checkout when it sends the shopper back (out of stock, expired, locked); shown once, then cleared.
+function takeCartMessage () {
+  try {
+    const m = sessionStorage.getItem('sf-cart-message')
+    sessionStorage.removeItem('sf-cart-message')
+    return m || ''
+  } catch (e) { return '' }
+}
+const cartMessage = ref(takeCartMessage())
 
 const rowBusy = reactive({})
 const couponCode = ref('')

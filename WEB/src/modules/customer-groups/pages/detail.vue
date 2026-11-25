@@ -88,6 +88,18 @@
           </div>
         </div>
 
+        <div class="row q-col-gutter-sm items-start">
+          <div class="col-12 col-md-6">
+            <AppSelect
+              v-model="form.taxMethod"
+              label="Tax method"
+              :options="groupTaxMethodOptions"
+              :disable="!canWrite"
+              hint="Overrides the store's tax method for members. Tax Exempt charges them no tax."
+            />
+          </div>
+        </div>
+
         <q-separator class="q-my-sm" />
         <div class="row q-col-gutter-sm items-center">
           <div class="col-6 col-md-3">
@@ -209,7 +221,7 @@
  */
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { customerGroupApi, pricingRuleOptions } from '../api'
+import { customerGroupApi, pricingRuleOptions, groupTaxMethodOptions } from '../api'
 import { productApi } from 'modules/catalog/api'
 import { getApiErrorMessage } from 'services/api'
 import { useNotify } from 'composables/useNotify'
@@ -241,7 +253,9 @@ function buildPayload (form) {
     // A percentage only applies to the PercentageDiscount rule; null it out otherwise.
     discountPercent: form.pricingRuleType === 'PercentageDiscount' ? toNumberOrNull(form.discountPercent) : null,
     isActive: form.isActive,
-    displayOrder: Number(form.displayOrder) || 0
+    displayOrder: Number(form.displayOrder) || 0,
+    // '' = use the store's tax method (sent as null).
+    taxMethod: form.taxMethod || null
   }
 }
 
@@ -281,7 +295,8 @@ const {
   api: customerGroupApi,
   buildPayload,
   empty: {
-    name: '', description: '', pricingRuleType: 'None', discountPercent: null, isActive: true, displayOrder: 0
+    name: '', description: '', pricingRuleType: 'None', discountPercent: null, isActive: true, displayOrder: 0,
+    taxMethod: ''
   },
   rules: {
     name: { required, maxLength: maxLength(200) },

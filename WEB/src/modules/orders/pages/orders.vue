@@ -21,7 +21,7 @@
           </template>
         </q-input>
         <q-btn outline color="primary" no-caps icon="o_tune" label="Advanced" @click="filtersOpen = true">
-          <q-badge v-if="statusFilter" color="red" floating>1</q-badge>
+          <q-badge v-if="activeFilterCount" color="red" floating>{{ activeFilterCount }}</q-badge>
         </q-btn>
       </template>
     </AppListHeader>
@@ -33,6 +33,13 @@
         clearable
         placeholder="Any status"
         :options="statusOptions"
+        @update:model-value="reload"
+      />
+      <AppSelect
+        v-model="customerTypeFilter"
+        label="Customer type"
+        class="q-mt-md"
+        :options="customerTypeOptions"
         @update:model-value="reload"
       />
     </AppFilterDrawer>
@@ -52,6 +59,12 @@
       <template #body-cell-orderNumber="cell">
         <q-td :props="cell">
           <a class="text-primary cursor-pointer text-weight-medium" @click="openOrder(cell.row)">{{ cell.row.orderNumber }}</a>
+          <q-badge v-if="cell.row.cancelRequested" color="orange-8" label="Cancel requested" class="q-ml-xs">
+            <q-tooltip>The customer asked to cancel this order</q-tooltip>
+          </q-badge>
+          <q-badge v-if="cell.row.isGuest" color="grey-7" outline label="Guest" class="q-ml-xs">
+            <q-tooltip>Placed without an account (guest checkout)</q-tooltip>
+          </q-badge>
           <q-badge v-if="cell.row.ebayOrderId" color="indigo-7" label="eBay" class="q-ml-xs">
             <q-tooltip>eBay Order Number: {{ cell.row.ebayOrderId }}</q-tooltip>
           </q-badge>
@@ -84,7 +97,7 @@
  * (AdminOrdersController supports status + page only); the quick-search box filters
  * the loaded page client-side by order number / customer as a convenience.
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getApiErrorMessage } from 'services/api'
 import { useNotify } from 'composables/useNotify'
@@ -113,6 +126,14 @@ const rows = ref([])
 const loading = ref(false)
 const search = ref('')
 const statusFilter = ref(null)
+// Guest checkout A-20: All / Guest / Registered.
+const customerTypeFilter = ref('All')
+const customerTypeOptions = [
+  { label: 'All customers', value: 'All' },
+  { label: 'Guest', value: 'Guest' },
+  { label: 'Registered', value: 'Registered' }
+]
+const activeFilterCount = computed(() => (statusFilter.value ? 1 : 0) + (customerTypeFilter.value !== 'All' ? 1 : 0))
 const filtersOpen = ref(false)
 const pagination = ref({ page: 1, rowsPerPage: 20, rowsNumber: 0 })
 
@@ -124,6 +145,7 @@ async function fetch (props) {
       page: p.page,
       pageSize: p.rowsPerPage,
       status: statusFilter.value || undefined,
+      customerType: customerTypeFilter.value !== 'All' ? customerTypeFilter.value : undefined,
       search: search.value || undefined,
       sortBy: p.sortBy || undefined,
       sortDescending: !!p.descending
@@ -141,7 +163,7 @@ async function fetch (props) {
 
 function onRequest (props) { fetch(props) }
 function reload () { fetch({ pagination: { ...pagination.value, page: 1 } }) }
-function clearFilters () { statusFilter.value = null; reload() }
+function clearFilters () { statusFilter.value = null; customerTypeFilter.value = 'All'; reload() }
 function openOrder (row) { router.push({ name: 'admin-order-detail', params: { id: row.id } }) }
 
 onMounted(() => fetch())

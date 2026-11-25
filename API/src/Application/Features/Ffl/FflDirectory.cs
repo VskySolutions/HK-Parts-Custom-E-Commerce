@@ -114,7 +114,13 @@ public static partial class FflDirectory
 
     /// <summary>
     /// Why the dealer cannot receive a checkout shipment (FFL-26/59), or null when it can: it must still be in
-    /// the directory, hold a transfer licence type, have an unexpired licence and not refuse transfers.
+    /// the directory, hold a transfer licence type and not refuse transfers.
+    /// <para>
+    /// The licence expiry code is deliberately NOT checked (PHP parity: the legacy radius search never filtered on
+    /// it). The directory is a periodic ATF snapshot, and a licence renewed after the snapshot keeps its old expiry
+    /// code until the next import, so filtering on it hid a large share of valid dealers. The dealer confirms the
+    /// licence when the firearm is transferred; admins still see the expiry in the directory.
+    /// </para>
     /// </summary>
     public static string? IneligibleReason(FflDealer d, DateTime todayUtc)
     {
@@ -122,8 +128,6 @@ public static partial class FflDirectory
             return "This dealer is no longer listed in the licensed dealer directory. Please choose another dealer.";
         if (d.AllowsTransfers == false || !TransferLicenseTypes.Contains(d.LicType))
             return FflMessages.DealerNotEligible;
-        if (IsExpired(d, todayUtc))
-            return "This dealer's license has expired. Please choose another dealer.";
         return null;
     }
 
@@ -297,7 +301,6 @@ public static partial class FflDirectory
             .ToListAsync(ct);
 
         var found = candidates
-            .Where(d => !IsExpired(d, todayUtc))
             .Select(d => (Dealer: d, Distance: HaversineMiles(c.Latitude, c.Longitude, d.Latitude!.Value, d.Longitude!.Value)))
             .Where(x => x.Distance <= radius)
             .OrderBy(x => x.Distance)

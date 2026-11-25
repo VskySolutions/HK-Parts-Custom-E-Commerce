@@ -22,6 +22,13 @@ public class Order : AuditableEntity, ISoftDeletable
     public Guid? SourceCartId { get; set; }
     public Customer? Customer { get; set; }
 
+    /// <summary>
+    /// The guest record of an order placed without an account (guest checkout §5.2), keyed by the normalized
+    /// contact email. Kept when the order is later linked to an account (then <see cref="CustomerId"/> is set).
+    /// </summary>
+    public Guid? GuestId { get; set; }
+    public Guest? Guest { get; set; }
+
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
 
     // Delivery target (drives routing) — the postal address is a shared Address row (WO: address centralization).
@@ -89,6 +96,21 @@ public class Order : AuditableEntity, ISoftDeletable
     /// <summary>Provider calculation reference captured at placement, used for transaction reporting (e.g. Stripe Tax calculation id; WO-37).</summary>
     public string? TaxProviderCalculationRef { get; set; }
 
+    /// <summary>The committed Avalara document code (PHP avalara_doc_code; the order number). Null = nothing committed.</summary>
+    public string? TaxDocumentCode { get; set; }
+
+    /// <summary>When the committed Avalara document was voided (order cancelled). Null = not voided.</summary>
+    public DateTime? TaxDocumentVoidedOnUtc { get; set; }
+
+    /// <summary>
+    /// Tax handed back by refunds that leave the order totals as they are (admin Refund, returns). Apply credit lowers
+    /// <see cref="TaxTotal"/> itself instead. Net tax collected = <see cref="TaxTotal"/> − this.
+    /// </summary>
+    public decimal TaxRefundedTotal { get; set; }
+
+    /// <summary>The Avalara ReturnInvoice codes posted for this order's refunds, ';'-separated. Voided with the order on cancel.</summary>
+    public string? TaxReturnDocumentCodes { get; set; }
+
     public string? AppliedCouponCode { get; set; }
 
     /// <summary>Loyalty points redeemed against this order at placement, and the discount value they bought
@@ -151,6 +173,13 @@ public class Order : AuditableEntity, ISoftDeletable
 
     /// <summary>When the inquiry was answered with a quote (stamped by the send-quote action).</summary>
     public DateTime? QuotedOnUtc { get; set; }
+
+    /// <summary>
+    /// Guest checkout U-63 / cancel spec "request" mode: the buyer asked to cancel (staff decide). Cleared by nothing:
+    /// the order history shows what staff did next.
+    /// </summary>
+    public DateTime? CancelRequestedOnUtc { get; set; }
+    public string? CancelRequestReason { get; set; }
 
     public DateTime? ShippedOnUtc { get; set; }
     public DateTime? DeliveredOnUtc { get; set; }

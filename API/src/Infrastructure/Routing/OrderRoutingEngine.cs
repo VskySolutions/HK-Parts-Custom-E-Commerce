@@ -20,17 +20,20 @@ public class OrderRoutingEngine : IOrderRoutingEngine
     private readonly IInventoryService _inventory;
     private readonly IAdminAlertService _alerts;
     private readonly IPublisher _publisher;
+    private readonly ISettingsService? _settings;
 
     public OrderRoutingEngine(
         IApplicationDbContext db,
         IInventoryService inventory,
         IAdminAlertService alerts,
-        IPublisher publisher)
+        IPublisher publisher,
+        ISettingsService? settings = null)
     {
         _db = db;
         _inventory = inventory;
         _alerts = alerts;
         _publisher = publisher;
+        _settings = settings;
     }
 
     public async Task<RoutingResult> RouteAsync(RoutingRequest request, CancellationToken cancellationToken = default)
@@ -58,6 +61,7 @@ public class OrderRoutingEngine : IOrderRoutingEngine
 
         var evaluations = new List<StoreEvaluation>();
         var eligible = new List<(Store Store, double? Distance)>();
+        var shortOfStock = new List<(Store Store, double? Distance)>();
 
         foreach (var store in stores)
         {
@@ -98,12 +102,30 @@ public class OrderRoutingEngine : IOrderRoutingEngine
 
             if (!stockOk)
             {
-                evaluations.Add(new StoreEvaluation(store.Id, store.Name, false, "Insufficient stock for one or more line items", distance));
+                shortOfStock.Add((store, distance));
                 continue;
             }
 
             eligible.Add((store, distance));
             evaluations.Add(new StoreEvaluation(store.Id, store.Name, true, null, distance));
+        }
+
+        // PHP parity: the old site had ONE stock number per product, so an order is never refused because no single
+        // store holds it all. A store with all the stock is preferred; failing that, the nearest store that serves the
+        // address takes it when the product's total over every store covers it, or when "Use inventory" is off (no
+        // stock check, as on the old site). Its stock may then go below zero; the total stays right.
+        var fallbackAllowed = eligible.Count == 0 && shortOfStock.Count > 0 && await TotalStockCoversAsync(request, cancellationToken);
+        foreach (var (store, distance) in shortOfStock)
+        {
+            if (fallbackAllowed)
+            {
+                eligible.Add((store, distance));
+                evaluations.Add(new StoreEvaluation(store.Id, store.Name, true, null, distance));
+            }
+            else
+            {
+                evaluations.Add(new StoreEvaluation(store.Id, store.Name, false, "Insufficient stock for one or more line items", distance));
+            }
         }
 
         // Nearest eligible: known distances first (ascending), unknown-distance stores last.
@@ -125,7 +147,12 @@ public class OrderRoutingEngine : IOrderRoutingEngine
             await _alerts.RaiseAsync(
                 "OrderUnroutable",
                 "Order could not be routed to any store",
-                "No active store satisfied the stock, delivery-zone, and capacity checks for this order.",
+                // Name each store and why it was refused, so staff can fix the cause (zones, stock, capacity).
+                chain.Count == 0
+                    ? "No store is enabled (or every store is in maintenance mode)."
+                    : "No active store satisfied the stock, delivery-zone, and capacity checks for this order. " +
+                      string.Join("; ", chain.Select(e => $"{e.StoreName}: {e.IneligibleReason}")) +
+                      $". Ship-to: {request.Region ?? "?"} {request.PostalCode ?? "?"} {request.CountryCode ?? "?"}.",
                 "Error",
                 "OrderRoutingEngine",
                 cancellationToken);
@@ -153,8 +180,9 @@ public class OrderRoutingEngine : IOrderRoutingEngine
             if (!string.Equals(zone.CountryCode, request.CountryCode, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            if (!string.IsNullOrWhiteSpace(zone.Region) &&
-                !string.Equals(zone.Region, request.Region, StringComparison.OrdinalIgnoreCase))
+            // A US state matches whatever its spelling: a zone saved as "California" serves an address in "CA"
+            // (FFL dealer addresses and most checkout forms send the two-letter code).
+            if (!string.IsNullOrWhiteSpace(zone.Region) && !SameRegion(zone.Region, request.Region, request.CountryCode))
                 continue;
 
             if (!string.IsNullOrWhiteSpace(zone.PostalCodeStart) &&
@@ -170,6 +198,34 @@ public class OrderRoutingEngine : IOrderRoutingEngine
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// PHP parity: true when "Use inventory" is off (no stock check) or every item is covered by its product's total
+    /// stock over all stores (or allows backorders), the same rule checkout applies.
+    /// </summary>
+    private async Task<bool> TotalStockCoversAsync(RoutingRequest request, CancellationToken ct)
+    {
+        var settings = await Application.Features.Checkout.CheckoutSettingsStore.LoadAsync(_settings, ct);
+        if (!settings.UseInventory)
+            return true;
+        var lines = request.Items
+            .Select(i => new Application.Features.Inventory.StockCheckLine(i.ProductId, i.ProductVariantId, i.Quantity, i.ProductId.ToString()))
+            .ToList();
+        return await Application.Features.Inventory.TotalStockCheck.FirstShortItemAsync(_db, lines, ct) is null;
+    }
+
+    private static bool SameRegion(string zoneRegion, string? region, string? countryCode)
+    {
+        if (string.IsNullOrWhiteSpace(region))
+            return false;
+        if (string.Equals(zoneRegion.Trim(), region.Trim(), StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (!string.Equals(countryCode, "US", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var a = Application.Features.Shipping.ShippingRulesEngine.NormalizeUsState(zoneRegion);
+        var b = Application.Features.Shipping.ShippingRulesEngine.NormalizeUsState(region);
+        return a is not null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
     }
 
     private static double? Distance(Store store, RoutingRequest request)

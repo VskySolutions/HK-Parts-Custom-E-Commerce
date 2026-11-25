@@ -25,6 +25,9 @@ public class ProductDto
     /// <summary>Quote-only product (REQ-INQ-001): the storefront requests a quote instead of selling it.</summary>
     public bool IsInquiryOnly { get; set; }
 
+    /// <summary>Guest checkout A-02: buying this product needs an account.</summary>
+    public bool AccountRequired { get; set; }
+
     /// <summary>Per-product override for the inquiry call-to-action; null uses the tenant default.</summary>
     public string? InquiryButtonLabel { get; set; }
     public int DisplayOrder { get; set; }
@@ -92,6 +95,7 @@ public class ProductDto
         IsPublished = p.IsPublished,
         ReviewsEnabled = p.ReviewsEnabled,
         IsInquiryOnly = p.IsInquiryOnly,
+        AccountRequired = p.AccountRequired,
         InquiryButtonLabel = p.InquiryButtonLabel,
         DisplayOrder = p.DisplayOrder,
         IsFeatured = p.IsFeatured,

@@ -70,6 +70,7 @@ public class CopyProductCommandHandler : IRequestHandler<CopyProductCommand, Pro
             IsPublished = false,
             ReviewsEnabled = src.ReviewsEnabled,
             IsInquiryOnly = src.IsInquiryOnly,
+            AccountRequired = src.AccountRequired,
             InquiryButtonLabel = src.InquiryButtonLabel,
             DisplayOrder = src.DisplayOrder,
             IsFeatured = false,

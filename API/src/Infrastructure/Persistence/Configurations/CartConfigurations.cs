@@ -11,6 +11,7 @@ public class CartConfiguration : IEntityTypeConfiguration<Cart>
         b.ToTable("Carts");
         b.HasKey(x => x.Id);
         b.Property(x => x.SessionId).HasMaxLength(128);
+        b.Property(x => x.ContactEmail).HasMaxLength(256);
         b.Property(x => x.AppliedCouponCode).HasMaxLength(64);
         b.Property(x => x.CurrencyCode).HasMaxLength(3);
         b.Property(x => x.PointsDiscountAmount).HasPrecision(18, 2);

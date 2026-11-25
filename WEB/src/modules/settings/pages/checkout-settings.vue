@@ -49,6 +49,15 @@
         </div>
       </AppSection>
 
+      <AppSection title="Inventory">
+        <q-toggle v-model="form.useInventory" :disable="!canWrite" label="Use inventory (check stock at checkout)" />
+        <div class="text-body2 text-muted">
+          On: an item short of stock is refused and the shopper goes back to the cart with "some item(s) in your cart
+          are now out of stock", naming it. Stock is the product's total across all stores. Items set to allow
+          backorders are never refused. Off: no stock check, as on the old site with "Use inventory" off.
+        </div>
+      </AppSection>
+
       <AppSection title="Terms and conditions">
         <q-toggle v-model="form.termsRequired" :disable="!canWrite" label="Buyers must accept the terms to place an order" />
         <div class="row q-col-gutter-md q-mt-xs">
@@ -146,6 +155,7 @@
           @click="save"
         />
       </div>
+      <GuestCheckoutSettingsSection :can-write="canWrite" />
     </template>
   </q-page>
 </template>
@@ -158,6 +168,7 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { checkoutSettingsApi, blacklistMatchModeOptions } from 'modules/settings/checkout-api'
+import GuestCheckoutSettingsSection from 'modules/settings/components/GuestCheckoutSettingsSection.vue'
 import { usePermissions, Permissions } from 'composables/usePermissions'
 import { useNotify } from 'composables/useNotify'
 import { getApiErrorMessage } from 'services/api'
@@ -182,7 +193,8 @@ function blank () {
     termsUrl: '',
     stateNotices: [],
     blacklistMatchMode: 'NameOrEmail',
-    blacklistAlertEmail: ''
+    blacklistAlertEmail: '',
+    useInventory: true
   }
 }
 
@@ -207,7 +219,8 @@ function apply (dto) {
     termsUrl: dto.termsUrl || '',
     stateNotices: (dto.stateNotices || []).map((n) => ({ state: n.state || '', message: n.message || '', active: n.active !== false })),
     blacklistMatchMode: dto.blacklistMatchMode || 'NameOrEmail',
-    blacklistAlertEmail: dto.blacklistAlertEmail || ''
+    blacklistAlertEmail: dto.blacklistAlertEmail || '',
+    useInventory: dto.useInventory !== false
   }
   original.value = JSON.parse(JSON.stringify(form.value))
 }

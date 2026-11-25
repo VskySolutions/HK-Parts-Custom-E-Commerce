@@ -16,7 +16,9 @@ public class SalesTrendPointDto
 /// Order count + captured revenue grouped by day over the selected period (AC-ADM-001.2). Days with no
 /// recognised orders are returned as zero-valued points so the series is contiguous for charting.
 /// </summary>
-public record GetSalesTrendQuery(string? Period = null, DateTime? From = null, DateTime? To = null)
+public record GetSalesTrendQuery(string? Period = null, DateTime? From = null, DateTime? To = null,
+    /// <summary>Guest checkout A-41: "Guest", "Registered", or null / "All".</summary>
+    string? CustomerType = null)
     : IRequest<IReadOnlyList<SalesTrendPointDto>>;
 
 public class GetSalesTrendQueryHandler : IRequestHandler<GetSalesTrendQuery, IReadOnlyList<SalesTrendPointDto>>
@@ -37,6 +39,7 @@ public class GetSalesTrendQueryHandler : IRequestHandler<GetSalesTrendQuery, IRe
         var byDay = await _db.Orders.AsNoTracking()
             .Where(o => o.PlacedOnUtc >= period.StartUtc && o.PlacedOnUtc < period.EndUtc)
             .WithRecognisedRevenue()
+            .OfCustomerType(request.CustomerType)
             .GroupBy(o => o.PlacedOnUtc.Date)
             .Select(g => new SalesTrendPointDto
             {

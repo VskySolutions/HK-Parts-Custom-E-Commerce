@@ -38,7 +38,10 @@ public record CheckoutQuoteRequest(
     /// <summary>The buyer's preferred method for the FFL shipment (the cart's firearms, rated to the dealer).</summary>
     string? FflShippingMethodId = null,
     /// <summary>Signature / insurance answers for the FFL shipment.</summary>
-    ShippingAddOnSelection? FflAddOns = null);
+    ShippingAddOnSelection? FflAddOns = null,
+    /// <summary>Guest checkout U-14 / A-43: the guest's "Email me news and offers" box, kept on the cart so an abandoned
+    /// cart is only followed up by email when they opted in.</summary>
+    bool MarketingOptIn = false);
 
 /// <summary>
 /// The buyer's shipping add-on answers for the shipment (SR-80): Require Signature and Shipping Insurance.
@@ -117,7 +120,19 @@ public class CheckoutQuote
     public decimal Total { get; set; }
     public Guid? AssignedStoreId { get; set; }
     public bool IsRoutable { get; set; }
+
+    /// <summary>
+    /// Why no store can take the order, in buyer words, when <see cref="IsRoutable"/> is false: the address is
+    /// outside every store's delivery area, the items are short in stock, or no store is taking orders. Null when routable.
+    /// </summary>
+    public string? UnroutableReason { get; set; }
     public bool GuestOrderingAllowed { get; set; }
+
+    /// <summary>Guest checkout U-05: why a signed-out buyer cannot check out as a guest (a <c>GuestBlockReasons</c> code), or null.</summary>
+    public string? GuestBlockedCode { get; set; }
+
+    /// <summary>The one-line, buyer-facing reason for <see cref="GuestBlockedCode"/>.</summary>
+    public string? GuestBlockedReason { get; set; }
 
     /// <summary>
     /// Payment methods offered for this order — the active/enabled + credential-configured gateways, plus
@@ -275,7 +290,9 @@ public record PlaceCheckoutRequest(
     /// (<see cref="ShipTo"/>; older clients). Pickup and FFL-only orders send it explicitly, because their
     /// ship-to carries no buyer postal address.
     /// </summary>
-    CheckoutAddress? BillTo = null);
+    CheckoutAddress? BillTo = null,
+    /// <summary>Guest checkout U-14: a guest ticked "Email me news and offers" (unchecked by default). Ignored for signed-in buyers.</summary>
+    bool MarketingOptIn = false);
 
 /// <summary>Identifies the buyer's cart for a checkout call that needs nothing else (e.g. releasing the checkout lock).</summary>
 public record CheckoutCartRef(Guid? CartId, string? SessionId);
@@ -301,6 +318,12 @@ public class CheckoutResult
     /// screen. Null for pending/redirect/failed outcomes and for methods that produce no transaction id.
     /// </summary>
     public string? TransactionId { get; set; }
+
+    /// <summary>
+    /// Guest checkout U-53/U-60: for a successful guest order, a signed token that opens the read-only order page
+    /// (and offers account creation). Null for signed-in buyers and unsuccessful placements.
+    /// </summary>
+    public string? GuestOrderToken { get; set; }
 
     /// <summary>
     /// For redirect gateways (Stripe Checkout): the URL to send the buyer to. When set, the storefront

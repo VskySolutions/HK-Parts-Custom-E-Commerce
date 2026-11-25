@@ -33,13 +33,18 @@ public record SubmitRmaCommand(
     RmaReturnMethod ReturnMethod = RmaReturnMethod.SelfShip,
     string? Comment = null,
     bool AcceptPolicy = false,
-    IReadOnlyList<RmaUpload>? Photos = null) : IRequest<RmaDto>;
+    IReadOnlyList<RmaUpload>? Photos = null,
+    /// <summary>
+    /// Guest checkout U-63: a guest asks for a return from the guest order page. The signed guest order token
+    /// replaces sign-in and names the order (<see cref="OrderId"/> is then ignored); the same return rules apply.
+    /// </summary>
+    string? GuestToken = null) : IRequest<RmaDto>;
 
 public class SubmitRmaCommandValidator : AbstractValidator<SubmitRmaCommand>
 {
     public SubmitRmaCommandValidator()
     {
-        RuleFor(x => x.OrderId).NotEmpty();
+        RuleFor(x => x.OrderId).NotEmpty().When(x => string.IsNullOrWhiteSpace(x.GuestToken));
         RuleFor(x => x.Lines).NotEmpty().WithMessage("Select at least one item to return.");
         RuleForEach(x => x.Lines).ChildRules(l =>
         {
@@ -63,10 +68,12 @@ public class SubmitRmaCommandHandler : IRequestHandler<SubmitRmaCommand, RmaDto>
     private readonly ISettingsService _settings;
     private readonly IPrivateFileStore _files;
     private readonly IDateTimeProvider _clock;
+    private readonly IGuestOrderTokenService? _guestTokens;
 
     public SubmitRmaCommandHandler(
         IApplicationDbContext db, ICurrentUserService current, IEmailTemplateSender templates,
-        ISettingsService settings, IPrivateFileStore files, IDateTimeProvider clock)
+        ISettingsService settings, IPrivateFileStore files, IDateTimeProvider clock,
+        IGuestOrderTokenService? guestTokens = null)
     {
         _db = db;
         _current = current;
@@ -74,16 +81,36 @@ public class SubmitRmaCommandHandler : IRequestHandler<SubmitRmaCommand, RmaDto>
         _settings = settings;
         _files = files;
         _clock = clock;
+        _guestTokens = guestTokens;
     }
 
     public async Task<RmaDto> Handle(SubmitRmaCommand request, CancellationToken cancellationToken)
     {
-        var customer = await RmaSupport.CurrentCustomerAsync(_db, _current, cancellationToken);
+        Guid? customerId;
+        Order order;
+        RmaSource source;
+        RmaActor actor;
+        if (!string.IsNullOrWhiteSpace(request.GuestToken))
+        {
+            // Guest checkout U-63: the signed token opens exactly one guest order; nothing else is reachable.
+            order = await Orders.GuestOrderAccess.LoadGuestOrderAsync(_db, _guestTokens, request.GuestToken,
+                        q => q.Include(o => o.Lines).Include(o => o.ShippingAddress), tracking: true, cancellationToken);
+            customerId = null;
+            source = RmaSource.Guest;
+            actor = new RmaActor(RmaActorType.Customer, null, order.ContactEmail, _current.IpAddress);
+        }
+        else
+        {
+            var customer = await RmaSupport.CurrentCustomerAsync(_db, _current, cancellationToken);
 
-        // Buyer scoping: a foreign order simply isn't found.
-        var order = await _db.Orders.Include(o => o.Lines).Include(o => o.ShippingAddress)
-            .FirstOrDefaultAsync(o => o.Id == request.OrderId && o.CustomerId == customer.Id, cancellationToken)
-            ?? throw new NotFoundException(nameof(Order), request.OrderId);
+            // Buyer scoping: a foreign order simply isn't found.
+            order = await _db.Orders.Include(o => o.Lines).Include(o => o.ShippingAddress)
+                .FirstOrDefaultAsync(o => o.Id == request.OrderId && o.CustomerId == customer.Id, cancellationToken)
+                ?? throw new NotFoundException(nameof(Order), request.OrderId);
+            customerId = customer.Id;
+            source = RmaSource.Customer;
+            actor = RmaActor.Customer(customer.Id, _current);
+        }
 
         var settings = await ReturnSettingsStore.LoadAsync(_settings, cancellationToken);
         if (request.RequestedResolution == RmaResolution.StoreCredit && !settings.AllowStoreCredit)
@@ -100,9 +127,8 @@ public class SubmitRmaCommandHandler : IRequestHandler<SubmitRmaCommand, RmaDto>
         if (!eligibility.Eligible)
             throw new ConflictException(eligibility.Reason ?? "This order cannot be returned.");
 
-        var actor = RmaActor.Customer(customer.Id, _current);
         var rma = await RmaFactory.BuildAsync(_db, order, eligibility, request.Lines, request.RequestedResolution, request.ReturnMethod,
-            request.Comment, RmaSource.Customer, customer.Id, forStaff: false, now, cancellationToken);
+            request.Comment, source, customerId, forStaff: false, now, cancellationToken);
 
         // Reasons that need photos (Damaged / Defective) when the policy asks for them.
         var photos = request.Photos ?? Array.Empty<RmaUpload>();
@@ -119,7 +145,7 @@ public class SubmitRmaCommandHandler : IRequestHandler<SubmitRmaCommand, RmaDto>
         RmaWorkflow.Note(_db, rma, actor, "Return requested by the customer.", now);
 
         foreach (var photo in photos)
-            await RmaFiles.SaveAsync(_db, _files, rma, null, photo, RmaActorType.Customer, customer.Id, now, cancellationToken);
+            await RmaFiles.SaveAsync(_db, _files, rma, null, photo, RmaActorType.Customer, customerId, now, cancellationToken);
 
         // RT-25: auto-approve small, unrestricted requests whose every reason allows it.
         var autoApproved = false;
@@ -143,7 +169,8 @@ public class SubmitRmaCommandHandler : IRequestHandler<SubmitRmaCommand, RmaDto>
             await RmaApproval.NotifyApprovedAsync(_templates, settings, order, rma, cancellationToken);
         await RmaSupport.SendStaffAsync(_templates, settings, order, rma,
             autoApproved ? "New return (auto-approved)" : "New return request",
-            rma.RequiresFfl ? "Contains a firearm: dealer details are needed before approval." : "A customer requested a return.",
+            rma.RequiresFfl ? "Contains a firearm: dealer details are needed before approval."
+                : source == RmaSource.Guest ? "A guest (no account) requested a return from the order page." : "A customer requested a return.",
             cancellationToken);
 
         return (await RmaSupport.ToDtoAsync(_db, _settings, rma, order, now, cancellationToken)).ForCustomer();

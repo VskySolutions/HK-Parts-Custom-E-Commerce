@@ -98,6 +98,12 @@ public class Product : AuditableEntity, ISoftDeletable
     /// </summary>
     public bool IsInquiryOnly { get; set; }
 
+    /// <summary>
+    /// Guest checkout A-02: buying this product needs an account. Any such item in the cart hides
+    /// "Checkout as Guest", and a guest placement is refused.
+    /// </summary>
+    public bool AccountRequired { get; set; }
+
     /// <summary>Storefront call-to-action for an inquiry-only product; falls back to the tenant default.</summary>
     public string? InquiryButtonLabel { get; set; }
 

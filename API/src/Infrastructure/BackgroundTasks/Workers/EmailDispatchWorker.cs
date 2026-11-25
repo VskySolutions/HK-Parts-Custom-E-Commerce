@@ -86,6 +86,28 @@ public class EmailDispatchWorker : IScheduledTask
             return;
         }
 
+        // Decrypt each account's password once. A password this machine cannot decrypt (it was saved by an instance
+        // with a different Data Protection key ring — every developer PC has its own) must not be sent as blank:
+        // Office 365 answers "535 5.7.139" and every email burns its retries. Such an account is skipped, and the
+        // emails stay queued for an instance that holds the key (or until the password is re-entered here).
+        var passwords = new Dictionary<Guid, string?>();
+        var unreadable = new List<SmtpAccount>();
+        foreach (var a in accounts)
+        {
+            if (string.IsNullOrEmpty(a.Username) || string.IsNullOrEmpty(a.EncryptedPassword))
+            {
+                passwords[a.Id] = null;
+                continue;
+            }
+            var password = vault.Decrypt(a.EncryptedPassword);
+            if (password is null)
+                unreadable.Add(a);
+            else
+                passwords[a.Id] = password;
+        }
+        var usable = accounts.Where(a => passwords.ContainsKey(a.Id)).ToList();
+        var skipped = 0;
+
         foreach (var email in due)
         {
             // WO-87 (AC-ENT-006.4): never dispatch Marketing mail to a suppressed recipient. Mark and skip
@@ -98,7 +120,13 @@ public class EmailDispatchWorker : IScheduledTask
                 continue;
             }
 
-            var account = SelectAccount(accounts, email.Category);
+            var account = SelectAccount(usable, email.Category);
+            if (account is null && unreadable.Count > 0)
+            {
+                // Left exactly as it is (no attempt counted) for an instance that can decrypt the password.
+                skipped++;
+                continue;
+            }
             email.AttemptCount++;
             email.LastAttemptOnUtc = now;
 
@@ -115,7 +143,7 @@ public class EmailDispatchWorker : IScheduledTask
                 var unsubscribeUrl = email.Category == NotificationCategory.Marketing
                     ? MarketingEmailContent.BuildUnsubscribeUrl(publicBaseUrl, unsubscribeTokens.Generate(email.RecipientEmail))
                     : null;
-                await SendAsync(email, account, vault, unsubscribeUrl, cancellationToken);
+                await SendAsync(email, account, passwords[account.Id], unsubscribeUrl, cancellationToken);
                 email.Status = EmailStatus.Sent;
                 // Gift certificate email: stamp EmailSentAt only once it really went out.
                 if (email.TemplateKey == GiftCertificateEmailTemplate.Key && email.RelatedEntityId is Guid giftCertificateId)
@@ -133,7 +161,13 @@ public class EmailDispatchWorker : IScheduledTask
         }
 
         await db.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("{Task} ran; processed {Count} email(s).", Name, due.Count);
+        if (skipped > 0)
+            logger.LogWarning(
+                "{Task}: left {Count} email(s) queued. The password of SMTP account(s) {Accounts} cannot be decrypted on {Machine}: " +
+                "it was saved with a Data Protection key that is not in this machine's key ring. An instance holding that key will " +
+                "send them; to send from here, re-enter the password under Integrations / SMTP.",
+                Name, skipped, string.Join(", ", unreadable.Select(a => $"'{a.DisplayName}'")), Environment.MachineName);
+        logger.LogInformation("{Task} ran; processed {Count} email(s).", Name, due.Count - skipped);
     }
 
     // Prefer the enabled account dedicated to this category, then a general (no-category) account, then any.
@@ -142,7 +176,7 @@ public class EmailDispatchWorker : IScheduledTask
            ?? accounts.FirstOrDefault(a => a.Category == null)
            ?? accounts.FirstOrDefault();
 
-    private static async Task SendAsync(EmailQueue email, SmtpAccount account, ICredentialVault vault, string? unsubscribeUrl, CancellationToken cancellationToken)
+    private static async Task SendAsync(EmailQueue email, SmtpAccount account, string? password, string? unsubscribeUrl, CancellationToken cancellationToken)
     {
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(account.FromName, account.FromEmail));
@@ -200,7 +234,6 @@ public class EmailDispatchWorker : IScheduledTask
 
         if (!string.IsNullOrEmpty(account.Username))
         {
-            var password = string.IsNullOrEmpty(account.EncryptedPassword) ? null : vault.Decrypt(account.EncryptedPassword);
             await client.AuthenticateAsync(account.Username, password ?? string.Empty, cancellationToken);
         }
 

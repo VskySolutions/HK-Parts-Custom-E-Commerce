@@ -54,8 +54,29 @@
           <div class="text-body2 text-weight-medium sf-txn-id">{{ orderResult.transactionId }}</div>
         </div>
         <div class="text-caption text-grey-6 q-mt-lg">
-          A confirmation email with your order details is on its way.
+          A confirmation email with your order details is on its way<template v-if="email"> to <strong>{{ email }}</strong></template>.
         </div>
+
+        <!-- Guest checkout U-53 / U-60: a guest can open the order without signing in, and save an account. -->
+        <template v-if="orderResult.guestOrderToken">
+          <div class="row justify-center q-mt-md">
+            <q-btn
+              flat
+              no-caps
+              color="primary"
+              icon="o_receipt_long"
+              label="View your order"
+              :to="{ name: 'shop-guest-order', query: { token: orderResult.guestOrderToken } }"
+            />
+          </div>
+          <div class="q-mx-auto q-mt-md text-left" style="max-width: 420px">
+            <GuestCreateAccountCard
+              :token="orderResult.guestOrderToken"
+              :email="email"
+              :account-exists="emailHasAccount"
+            />
+          </div>
+        </template>
 
         <!-- Backordered items ship separately (WO-86 confirmation notice) -->
         <q-banner
@@ -130,6 +151,17 @@
       </template>
     </q-banner>
 
+    <!-- Checkout method (guest checkout U-01): signed-out shoppers sign in, check out as a guest, or create an
+         account before the checkout steps. Inquiries skip it: a quote request is always open to guests. -->
+    <CheckoutMethodPanel
+      v-else-if="items.length && showMethodStep"
+      :guest-allowed="guestAllowedNow"
+      :guest-blocked-reason="guestBlockedReasonNow"
+      :register-to="registerTo"
+      @guest="chooseGuestCheckout"
+      @signed-in="onSignedInAtCheckout"
+    />
+
     <!-- Checkout form -->
     <div v-else-if="items.length" class="row q-col-gutter-lg">
       <!-- Left: address, shipping, payment -->
@@ -167,6 +199,26 @@
                   <template v-else>{{ steps.contact }}</template>
                 </span>
                 {{ contactSectionTitle }}
+              </div>
+
+              <!-- Guest checkout U-01 / U-05 / U-07: how a signed-out shopper checks out. Signing in or joining keeps
+                   the cart and the details typed so far (they are saved in the browser and restored on return). -->
+              <div v-if="!isAuthed && !isInquiry" class="sf-guest-method rounded-borders q-pa-sm q-mb-md" role="region" aria-label="Checkout method">
+                <div v-if="guestAllowedNow" class="row items-center q-gutter-sm">
+                  <q-icon name="o_person_outline" size="22px" color="primary" />
+                  <div class="col text-body2">
+                    <span class="text-weight-medium">Checking out as a guest.</span>
+                    No account needed. Have one? Sign in to use your saved details.
+                  </div>
+                  <q-btn flat dense no-caps color="primary" label="Sign in" @click="changeCheckoutMethod" />
+                  <q-btn flat dense no-caps color="primary" label="Create an account" :to="registerTo" />
+                </div>
+                <div v-else class="row items-center q-gutter-sm">
+                  <q-icon name="o_lock" size="22px" color="amber-9" />
+                  <div class="col text-body2" role="status">{{ guestBlockedReasonNow }}</div>
+                  <q-btn unelevated dense no-caps color="primary" label="Sign in" @click="changeCheckoutMethod" />
+                  <q-btn flat dense no-caps color="primary" label="Create an account" :to="registerTo" />
+                </div>
               </div>
 
               <!-- Deliver vs collect — only offered when a store actually opts in to pickup -->
@@ -317,6 +369,7 @@
                       :v="emailV"
                       placeholder="you@example.com"
                       @update:model-value="email = $event"
+                      @blur="checkGuestEmail"
                     />
                   </div>
                   <div class="col-12 col-sm-6">
@@ -329,6 +382,29 @@
                     />
                   </div>
                 </div>
+                <!-- Guest checkout U-11: the domain can't receive mail (no MX / address); placement is refused until fixed. -->
+                <div v-if="!isAuthed && emailUndeliverable" class="text-negative text-body2 q-mb-sm" role="alert">
+                  <q-icon name="o_error_outline" size="18px" class="q-mr-xs" />
+                  This email address can't receive mail. Please check it so we can send your receipt.
+                </div>
+                <!-- Guest checkout U-13 (PHP parity): an email that already has an account can't order as a guest;
+                     the buyer signs in or uses another email. Inquiries are still accepted from it. -->
+                <div v-if="!isAuthed && emailHasAccount && !isInquiry" class="text-negative text-body2 q-mb-sm" role="alert">
+                  <q-icon name="o_error_outline" size="18px" class="q-mr-xs" />
+                  An account with this email address already exists. Please <router-link :to="loginTo">log in</router-link> to continue, or use a different email address.
+                </div>
+                <div v-else-if="!isAuthed && emailHasAccount" class="text-body2 text-grey-8 q-mb-sm" role="status" aria-live="polite">
+                  <q-icon name="o_info" color="primary" size="18px" class="q-mr-xs" />
+                  You have an account. <router-link :to="loginTo">Sign in</router-link> to use your saved details.
+                </div>
+                <!-- Guest checkout U-14: unchecked by default. -->
+                <q-checkbox
+                  v-if="!isAuthed && !isInquiry"
+                  v-model="marketingOptIn"
+                  dense
+                  class="q-mb-sm"
+                  label="Email me news and offers"
+                />
                 <!-- Pickup and contact-only inquiries need just who is asking; delivery takes the names
                      from the address form. -->
                 <div v-if="isPickup || contactOnly || fflOnly" class="row q-col-gutter-x-md">
@@ -600,7 +676,7 @@
           class="bg-orange-1 text-orange-9 rounded-borders q-mb-lg"
         >
           <template #avatar><q-icon name="o_local_shipping" color="orange-9" /></template>
-          We're unable to deliver to this address right now. Please try a different address.
+          {{ quote.unroutableReason || "We're unable to deliver to this address right now. Please try a different address." }}
         </q-banner>
 
         <!-- Guest ordering not permitted — offer express account creation (AC-CHK-003.2 / AC-STR-001.5) -->
@@ -616,7 +692,8 @@
               <div class="col">
                 <div class="text-subtitle2 text-weight-bold">One quick step to place your order</div>
                 <div class="text-body2 text-grey-8">
-                  This store requires an account. We'll create one from the details above and email you a password —
+                  {{ quote.guestBlockedReason || 'This store requires an account.' }}
+                  We'll create one from the details above and email you a password —
                   sign in and your cart &amp; details will be right here to finish, no re-typing.
                 </div>
               </div>
@@ -1456,6 +1533,8 @@ import AppPhoneInput from 'components/common/AppPhoneInput.vue'
 import SummaryHint from 'modules/storefront/components/SummaryHint.vue'
 import ApplyGiftCertificate from 'modules/storefront/components/ApplyGiftCertificate.vue'
 import FflDealerPanel from 'modules/storefront/components/FflDealerPanel.vue'
+import CheckoutMethodPanel from 'modules/storefront/components/CheckoutMethodPanel.vue'
+import GuestCreateAccountCard from 'modules/storefront/components/GuestCreateAccountCard.vue'
 import { isPossiblePhoneNumber } from 'libphonenumber-js'
 import { emptyAddress, useAddress } from 'composables/useAddress'
 import { checkoutApi } from 'modules/storefront/api'
@@ -1778,6 +1857,8 @@ function restoreContact () {
 }
 function clearContact () {
   try { LocalStorage.remove(CHECKOUT_KEY) } catch (e) { /* ignore */ }
+  // The next checkout asks for the method again (guest checkout U-01).
+  try { sessionStorage.removeItem(METHOD_KEY) } catch (e) { /* ignore */ }
   // Order completed — clear the persisted backorder flag and any redeemed reward points (callers that
   // need the backorder flag for the confirmation notice read it before calling this).
   try { LocalStorage.remove(BACKORDER_FLAG_KEY) } catch (e) { /* ignore */ }
@@ -2161,6 +2242,102 @@ function editSelectedAddress () {
 // signs in and returns here (details preserved) to place the order.
 const registering = ref(false)
 const loginTo = computed(() => ({ name: 'shop-login', query: { redirect: route.fullPath } }))
+const registerTo = computed(() => ({ name: 'shop-register', query: { redirect: route.fullPath } }))
+
+// ---- Guest checkout (docs/guest-checkout-requirements.md) ------------------------------------
+// U-05: before a quote exists, the cart-level answer (admin switch, account-required items) comes from
+// /checkout/options; once quoted, the quote is the full answer (it adds the order limit and store policy).
+const guestOptions = ref(null)
+const guestAllowedNow = computed(() => {
+  if (quote.value) return quote.value.guestOrderingAllowed !== false
+  return !guestOptions.value || guestOptions.value.guestAllowed !== false
+})
+const guestBlockedReasonNow = computed(() =>
+  (quote.value && quote.value.guestBlockedReason) ||
+  (guestOptions.value && guestOptions.value.guestBlockedReason) ||
+  'This order needs an account. Please sign in or create an account to continue.'
+)
+async function loadGuestOptions () {
+  if (isAuthed.value) return
+  try {
+    guestOptions.value = await checkoutApi.options({ sessionId: sessionId.value || undefined })
+  } catch (e) { /* non-fatal: the quote reports the same rules */ }
+}
+
+// U-01 / U-03: the Checkout Methods screen. The choice is kept for the browser session, so a guest who reloads or
+// comes back from another page goes straight to the checkout steps; signing in replaces it (U-02).
+const METHOD_KEY = 'sf-checkout-method'
+function readMethod () {
+  try { return sessionStorage.getItem(METHOD_KEY) } catch (e) { return null }
+}
+const checkoutMethod = ref(readMethod())
+const showMethodStep = computed(() =>
+  !isAuthed.value && !isInquiry.value && checkoutMethod.value !== 'guest' && !orderResult.value && !inquiryResult.value)
+
+function chooseGuestCheckout () {
+  checkoutMethod.value = 'guest'
+  try { sessionStorage.setItem(METHOD_KEY, 'guest') } catch (e) { /* the choice just isn't remembered */ }
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+// Signed in on the Checkout Methods screen: carry on with this cart and load the account's saved details.
+function onSignedInAtCheckout () {
+  try { sessionStorage.removeItem(METHOD_KEY) } catch (e) { /* ignore */ }
+  checkoutMethod.value = null
+  guestOptions.value = null
+  emailHasAccount.value = false
+  notify.success('Signed in. Your cart is ready to check out.')
+  loadAccountAddresses()
+  loadPoints()
+}
+
+// Back to the Checkout Methods screen from the guest banner (sign in or join instead, U-07: details are kept).
+function changeCheckoutMethod () {
+  try { sessionStorage.removeItem(METHOD_KEY) } catch (e) { /* ignore */ }
+  checkoutMethod.value = null
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+// U-13: does the typed email belong to an account? Checked once per distinct valid email.
+const emailHasAccount = ref(false)
+// U-11: the email's domain has no mail server, so the receipt would bounce (checked once per email).
+const emailUndeliverable = ref(false)
+let lastCheckedEmail = ''
+// The check in flight (or last finished), so Continue can wait for it instead of racing the blur.
+let emailCheck = null
+async function checkGuestEmail () {
+  if (isAuthed.value) return
+  const value = email.value.trim().toLowerCase()
+  if (!emailValid.value || value === lastCheckedEmail) return
+  lastCheckedEmail = value
+  emailCheck = runEmailCheck(value)
+  await emailCheck
+}
+async function runEmailCheck (value) {
+  try {
+    const check = await checkoutApi.contactCheck(value)
+    emailHasAccount.value = !!check?.accountExists
+    emailUndeliverable.value = check ? check.deliverable === false : false
+  } catch (e) {
+    emailHasAccount.value = false
+  }
+}
+watch(email, () => {
+  if (email.value.trim().toLowerCase() !== lastCheckedEmail) { emailHasAccount.value = false; emailUndeliverable.value = false }
+})
+// PHP parity: a guest whose email is already registered must log in before the order goes on (inquiries excepted).
+async function guestEmailBlocked () {
+  if (isAuthed.value || isInquiry.value) return false
+  await checkGuestEmail()
+  if (emailCheck) await emailCheck
+  if (!emailHasAccount.value) return false
+  emailTouched.value = true
+  notify.error('An account with this email address already exists. Please log in to continue.')
+  return true
+}
+
+// U-14: "Email me news and offers", unchecked by default; sent with the order.
+const marketingOptIn = ref(false)
 
 async function registerAndContinue () {
   if (!canQuote.value || registering.value) return
@@ -2247,7 +2424,9 @@ async function runQuote () {
       pickupStoreId: isPickup.value ? pickupStoreId.value : null,
       addOns: isPickup.value ? null : addOnSelection(),
       fflShippingMethodId: isPickup.value ? null : (selectedFflMethodId.value || null),
-      fflAddOns: isPickup.value ? null : fflAddOnSelection()
+      fflAddOns: isPickup.value ? null : fflAddOnSelection(),
+      // Guest checkout A-43: kept on the cart so an abandoned cart is only emailed when the guest opted in.
+      marketingOptIn: !isAuthed.value && marketingOptIn.value
     })
     quote.value = q
     // Mirror the server's FFL method pick (requested, else recommended, else cheapest).
@@ -2608,7 +2787,7 @@ const placeBlockers = computed(() => {
       b.push({ key: 'quote', text: `Click "${quoteLabel.value}" to see delivery options and totals`, target: 'contact' })
     }
   } else if (!isRoutable.value) {
-    b.push({ key: 'route', text: "We can't deliver to this address. Try a different address", target: 'contact' })
+    b.push({ key: 'route', text: q.unroutableReason || "We can't deliver to this address. Try a different address", target: 'contact' })
   }
 
   if (billingMissing.value.length) {
@@ -2704,6 +2883,7 @@ const continuing = ref(false)
 async function goNext () {
   const key = wizardStep.value
   if (key === 'billing') {
+    if (await guestEmailBlocked()) return
     billingAttempted.value = true
     const ok = billingUsesShipping.value || !billingFormRef.value || await billingFormRef.value.validate()
     if (!ok || billingMissing.value.length) return
@@ -2724,6 +2904,7 @@ async function goNext () {
 
 // "Save & calculate shipping" (contact step): price the order, then move on to the billing address.
 async function onContactContinue () {
+  if (await guestEmailBlocked()) return
   if (fflOnly.value) {
     // Nothing to price until the dealer is chosen: just check the contact details and continue.
     quoteAttempted.value = true
@@ -2914,6 +3095,7 @@ async function placeOrder () {
         recaptchaToken: await getRecaptchaToken('guestCheckout'),
         pickupInStore: isPickup.value,
         pickupStoreId: isPickup.value ? pickupStoreId.value : null,
+        marketingOptIn: !isAuthed.value && marketingOptIn.value,
         ...shownPrices()
       })
       if (result && result.success) {
@@ -2971,6 +3153,7 @@ async function placeOrder () {
       pickupStoreId: isPickup.value ? pickupStoreId.value : null,
       // UI-only preference for mixed carts (AC-CHK-005.2); harmless extra field the backend may ignore.
       splitShipment: hasMixedFulfilment.value ? splitShipment.value : false,
+      marketingOptIn: !isAuthed.value && marketingOptIn.value,
       ...shownPrices()
     })
     if (result && result.redirectUrl) {
@@ -3044,12 +3227,15 @@ function shownPrices () {
 const termsAccepted = ref(false)
 const termsRequired = computed(() => !!quote.value?.termsRequired)
 
-// The cart was idle too long (CHECKOUT_EXPIRED) or a low-stock item is held by another buyer
-// (CHECKOUT_LOCKED): back to the cart with the server message, as the legacy checkout did.
+// The cart was idle too long (CHECKOUT_EXPIRED), a low-stock item is held by another buyer (CHECKOUT_LOCKED), or an
+// item is short of stock (OUT_OF_STOCK, PHP parity: "We are sorry, but some item(s) in your cart are now out of
+// stock: <item>"): back to the cart with the server message, as the legacy checkout did. The cart page shows it too.
 function handleCheckoutSessionError (err) {
   const code = err?.response?.data?.code
-  if (code !== 'CHECKOUT_EXPIRED' && code !== 'CHECKOUT_LOCKED') return false
-  notify.error(getApiErrorMessage(err))
+  if (code !== 'CHECKOUT_EXPIRED' && code !== 'CHECKOUT_LOCKED' && code !== 'OUT_OF_STOCK') return false
+  const message = getApiErrorMessage(err)
+  notify.error(message)
+  try { sessionStorage.setItem('sf-cart-message', message) } catch (e) { /* the toast still says it */ }
   router.push({ name: 'shop-cart' })
   return true
 }
@@ -3270,7 +3456,7 @@ onMounted(() => {
   authNet.isConfigured().catch(() => {})
   // Signed-in buyers get their profile + saved addresses (pick-or-add); guests restore any draft.
   if (isAuthed.value) loadAccountAddresses()
-  else restoreContact()
+  else { restoreContact(); loadGuestOptions(); nextTick(checkGuestEmail) }
   // Reward-points balance for signed-in buyers (WO-27) — no-op/hidden for guests or a disabled programme.
   loadPoints()
 })
@@ -3286,6 +3472,15 @@ onMounted(() => {
 }
 .address-choice--suggested {
   border-color: var(--q-primary);
+}
+/* Guest checkout method banner (U-01 / U-05). */
+.sf-guest-method {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fafafa;
+}
+.body--dark .sf-guest-method {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
 }
 .storefront-container {
   max-width: 1200px;

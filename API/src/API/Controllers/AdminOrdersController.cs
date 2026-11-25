@@ -15,8 +15,8 @@ public class AdminOrdersController : ApiControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedList<OrderSummaryDto>>> List(
         [FromQuery] string? status = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
-        [FromQuery] string? search = null)
-        => Ok(await Mediator.Send(new ListOrdersQuery(status, page, pageSize, search)));
+        [FromQuery] string? search = null, [FromQuery] string? customerType = null)
+        => Ok(await Mediator.Send(new ListOrdersQuery(status, page, pageSize, search, CustomerType: customerType)));
 
     /// <summary>Get a single order including its line items.</summary>
     [HttpGet("{id:guid}")]
@@ -27,4 +27,9 @@ public class AdminOrdersController : ApiControllerBase
     [HttpPut("{id:guid}/reroute")]
     public async Task<ActionResult<OrderDto>> Reroute(Guid id, [FromBody] RerouteOrderCommand command)
         => Ok(await Mediator.Send(command with { OrderId = id }));
+
+    /// <summary>Guest checkout A-22: fix a guest order's email and optionally resend the confirmation (logged in the order history).</summary>
+    [HttpPatch("{id:guid}/email")]
+    public async Task<ActionResult<OrderDto>> UpdateGuestEmail(Guid id, [FromBody] UpdateGuestOrderEmailCommand command)
+        => Ok(await Mediator.Send(command with { Id = id }));
 }

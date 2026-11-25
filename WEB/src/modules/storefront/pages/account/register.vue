@@ -49,7 +49,7 @@
             <q-btn type="submit" color="primary" no-caps unelevated label="Create account" :loading="loading" class="full-width" />
             <div class="text-center text-grey-7 text-caption">
               Already have an account?
-              <router-link class="text-primary" :to="{ name: 'shop-login' }">Sign in</router-link>
+              <router-link class="text-primary" :to="loginTo">Sign in</router-link>
             </div>
           </q-card-actions>
         </q-form>
@@ -61,14 +61,15 @@
         <div class="text-grey-7">
           We sent a verification link to <strong>{{ email }}</strong>. Confirm your email, then sign in.
         </div>
-        <q-btn color="primary" flat no-caps label="Go to sign in" :to="{ name: 'shop-login' }" />
+        <q-btn color="primary" flat no-caps label="Go to sign in" :to="loginTo" />
       </q-card-section>
     </q-card>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useCustomerAuthStore } from 'stores/customerAuth'
 import { getApiErrorMessage } from 'services/api'
@@ -85,6 +86,11 @@ const phoneNumber = ref('')
 const password = ref('')
 const loading = ref(false)
 const done = ref(false)
+// Came from checkout (or another page): signing in afterwards returns there, cart intact.
+const route = useRoute()
+const loginTo = computed(() => (typeof route.query.redirect === 'string' && route.query.redirect
+  ? { name: 'shop-login', query: { redirect: route.query.redirect } }
+  : { name: 'shop-login' }))
 
 async function onSubmit () {
   loading.value = true

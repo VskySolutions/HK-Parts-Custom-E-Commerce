@@ -41,6 +41,13 @@ public class CheckoutSettingsDto
 
     /// <summary>PY-15: who is alerted when a blocked buyer tries to order (comma separated). Null = the assigned store's notification address.</summary>
     public string? BlacklistAlertEmail { get; set; }
+
+    /// <summary>
+    /// PHP parity (legacy Settings → Catalog → "Use inventory", <c>catalog_use_inventory</c>): check stock at checkout.
+    /// On = an item short of stock (and not on backorder) is refused, naming it. Off = no stock check at all.
+    /// Stock is the product's total over every store, like the old site's single stock number.
+    /// </summary>
+    public bool UseInventory { get; set; } = true;
 }
 
 /// <summary>One per-state checkout notice (SH-23), e.g. the Washington notice.</summary>
@@ -59,6 +66,7 @@ public static class CheckoutSettingsStore
     public const string StateNoticesKey = "Checkout.StateNotices";
     public const string BlacklistMatchModeKey = "Checkout.BlacklistMatchMode";
     public const string BlacklistAlertEmailKey = "Checkout.BlacklistAlertEmail";
+    public const string UseInventoryKey = "Catalog.UseInventory";
 
     public const int DefaultSessionTimeoutSeconds = 1800;
     public const int DefaultLockQtyThreshold = 10;
@@ -94,6 +102,7 @@ public static class CheckoutSettingsStore
             && Enum.IsDefined(mode))
             dto.BlacklistMatchMode = mode;
         if (await settings.GetValueAsync(BlacklistAlertEmailKey, ct) is { Length: > 0 } alert) dto.BlacklistAlertEmail = alert;
+        if (Bool(await settings.GetValueAsync(UseInventoryKey, ct)) is bool useInventory) dto.UseInventory = useInventory;
         return dto;
     }
 
@@ -109,6 +118,7 @@ public static class CheckoutSettingsStore
         await settings.SetAsync(StateNoticesKey, JsonSerializer.Serialize(s.StateNotices, Json), ct);
         await settings.SetAsync(BlacklistMatchModeKey, s.BlacklistMatchMode.ToString(), ct);
         await settings.SetAsync(BlacklistAlertEmailKey, s.BlacklistAlertEmail?.Trim() ?? string.Empty, ct);
+        await settings.SetAsync(UseInventoryKey, s.UseInventory ? "true" : "false", ct);
     }
 
     /// <summary>The active notice for a ship-to state (case-insensitive two-letter code or full name), or null.</summary>
@@ -151,7 +161,11 @@ public static class CheckoutErrorCodes
     public const string TermsRequired = "TERMS_REQUIRED";
     public const string CustomerBlocked = "CUSTOMER_BLOCKED";
     public const string PaymentMethodNotAllowed = "PAYMENT_METHOD_NOT_ALLOWED";
+    /// <summary>PHP parity: an item is short of stock; the storefront returns to the cart with the message.</summary>
+    public const string OutOfStock = "OUT_OF_STOCK";
     public const string TotalChanged = "TOTAL_CHANGED";
+    /// <summary>PHP parity: a guest used an email that already has an account and must log in instead.</summary>
+    public const string AccountExists = "ACCOUNT_EXISTS";
 
     public static ConflictException Conflict(string code, string message, IReadOnlyDictionary<string, object?>? extra = null)
     {
@@ -184,7 +198,8 @@ public record UpdateCheckoutSettingsCommand(
     string? TermsUrl,
     List<CheckoutStateNotice>? StateNotices,
     BlacklistMatchMode BlacklistMatchMode,
-    string? BlacklistAlertEmail) : IRequest<CheckoutSettingsDto>;
+    string? BlacklistAlertEmail,
+    bool UseInventory = true) : IRequest<CheckoutSettingsDto>;
 
 public class UpdateCheckoutSettingsCommandValidator : AbstractValidator<UpdateCheckoutSettingsCommand>
 {
@@ -242,6 +257,7 @@ public class UpdateCheckoutSettingsCommandHandler : IRequestHandler<UpdateChecko
                 .ToList(),
             BlacklistMatchMode = r.BlacklistMatchMode,
             BlacklistAlertEmail = string.IsNullOrWhiteSpace(r.BlacklistAlertEmail) ? null : r.BlacklistAlertEmail,
+            UseInventory = r.UseInventory,
         }, ct);
         return await CheckoutSettingsStore.LoadAsync(_settings, ct);
     }

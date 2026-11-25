@@ -61,6 +61,8 @@
           new-value-mode="add-unique"
           placeholder="Select or type"
           @filter="filterCities"
+          @input-value="cityTyped = $event"
+          @blur="commitTypedCity"
           @update:model-value="update('city', $event)"
         />
       </div>
@@ -178,5 +180,18 @@ function onState (val) {
   if (!val) { patch({ stateProvince: '', city: '' }); return }
   const opt = stateList.value.find((o) => o.value === val)
   patch({ stateProvince: opt ? opt.label : String(val), city: '' })
+}
+
+// The city list (country-state-city) does not hold every town — many US cities are missing — so the buyer
+// types their own. Quasar only keeps typed text on Enter; tabbing or clicking away dropped it and checkout
+// then said "Please add your billing city". Keep whatever was typed when the field loses focus, using the
+// list's spelling when it matches a known city.
+const cityTyped = ref('')
+function commitTypedCity () {
+  const typed = (cityTyped.value || '').trim()
+  if (!typed) return
+  const known = cityList.value.find((o) => o.label.toLowerCase() === typed.toLowerCase())
+  const city = known ? known.label : typed
+  if (city !== value.value.city) update('city', city)
 }
 </script>

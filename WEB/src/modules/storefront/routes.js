@@ -88,6 +88,27 @@ export default [
         meta: { title: 'Checkout' },
         component: () => import('modules/storefront/pages/checkout.vue')
       },
+      // Guest order lookup + read-only order page (guest checkout U-60/U-61). Public: no sign-in.
+      {
+        path: 'shop/order/lookup',
+        name: 'shop-order-lookup',
+        meta: { title: 'Find your order' },
+        component: () => import('modules/storefront/pages/order-lookup.vue')
+      },
+      { path: 'order/lookup', redirect: { name: 'shop-order-lookup' } },
+      {
+        path: 'shop/order/view',
+        name: 'shop-guest-order',
+        meta: { title: 'Your order' },
+        component: () => import('modules/storefront/pages/guest-order.vue')
+      },
+      // Guest return request from the guest order page (U-63), same form as the account one.
+      {
+        path: 'shop/order/return',
+        name: 'shop-guest-return',
+        meta: { title: 'Return items' },
+        component: () => import('modules/storefront/pages/guest-return.vue')
+      },
 
       // ---- CMS content pages + blog (public) — WO-54 ----------------------
       {

@@ -40,6 +40,9 @@ public class CustomerBlacklistEntry : AuditableEntity
     public string? Reason { get; set; }
     public CustomerBlacklistStatus Status { get; set; } = CustomerBlacklistStatus.Blocked;
 
+    /// <summary>Which admin screen created the entry (guest checkout A-31): "Guest", "Customer" or "Manual"; null for older rows.</summary>
+    public string? Source { get; set; }
+
     public ICollection<CustomerBlacklistHit> Hits { get; set; } = new List<CustomerBlacklistHit>();
 }
 

@@ -24,6 +24,23 @@ public class AdminCheckoutSettingsController : ApiControllerBase
         => Ok(await Mediator.Send(command, ct));
 }
 
+/// <summary>
+/// Guest checkout settings (docs/guest-checkout-requirements.md §4.1, A-01..A-05): the on/off switch, guest payment
+/// methods, guest order limit, link lifetime and order linking. Audited platform settings (A-06).
+/// </summary>
+[Route("api/admin/checkout/guest-settings")]
+[RequireModule(Modules.Settings)]
+public class AdminGuestCheckoutSettingsController : ApiControllerBase
+{
+    [HttpGet]
+    public async Task<ActionResult<GuestCheckoutSettingsDto>> Get(CancellationToken ct)
+        => Ok(await Mediator.Send(new GetGuestCheckoutSettingsQuery(), ct));
+
+    [HttpPut]
+    public async Task<ActionResult<GuestCheckoutSettingsDto>> Update([FromBody] UpdateGuestCheckoutSettingsCommand command, CancellationToken ct)
+        => Ok(await Mediator.Send(command, ct));
+}
+
 /// <summary>Customer blacklist (PY-10 / PY-15): blocked names and emails, and the log of refused attempts.</summary>
 [Route("api/admin/blacklist")]
 [RequireModule(Modules.Customers)]

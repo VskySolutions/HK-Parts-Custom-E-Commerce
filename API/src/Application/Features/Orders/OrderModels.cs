@@ -19,6 +19,14 @@ public class OrderDto
     public List<GiftCertificates.IssuedGiftCertificateDto> IssuedGiftCertificates { get; set; } = new();
     public string Status { get; set; } = string.Empty;
     public Guid? CustomerId { get; set; }
+
+    /// <summary>Guest checkout A-21: placed through guest checkout (stays true after the order is moved to an account).</summary>
+    public bool IsGuest { get; set; }
+    public Guid? GuestId { get; set; }
+
+    /// <summary>Guest checkout U-63: the buyer asked to cancel (staff decide); null when not requested.</summary>
+    public DateTime? CancelRequestedOnUtc { get; set; }
+    public string? CancelRequestReason { get; set; }
     public string? ContactName { get; set; }
     public string? ContactEmail { get; set; }
     public string? ContactPhone { get; set; }
@@ -60,6 +68,8 @@ public class OrderDto
 
     public decimal ShippingTotal { get; set; }
     public decimal TaxTotal { get; set; }
+    /// <summary>Tax handed back by refunds/returns that left the totals unchanged.</summary>
+    public decimal TaxRefundedTotal { get; set; }
 
     /// <summary>Payment-gateway transaction fee added to the order (% applied + resulting amount); 0 when none. Included in <see cref="TotalAmount"/>.</summary>
     public decimal PaymentFeePercent { get; set; }
@@ -108,6 +118,10 @@ public class OrderDto
         GiftCertificateAppliedAmount = o.GiftCertificateAppliedAmount,
         Status = o.Status.ToString(),
         CustomerId = o.CustomerId,
+        IsGuest = !o.IsInquiry && (o.GuestId != null || (o.CustomerId == null && o.EbayOrderId == null)),
+        GuestId = o.GuestId,
+        CancelRequestedOnUtc = o.CancelRequestedOnUtc,
+        CancelRequestReason = o.CancelRequestReason,
         ContactName = o.ContactName,
         ContactEmail = o.ContactEmail,
         ContactPhone = o.ContactPhone,
@@ -136,6 +150,7 @@ public class OrderDto
         GroupDiscountTotal = o.Lines.Sum(l => l.DiscountAmount),
         ShippingTotal = o.ShippingTotal,
         TaxTotal = o.TaxTotal,
+        TaxRefundedTotal = o.TaxRefundedTotal,
         PaymentFeePercent = o.PaymentFeePercent,
         PaymentFeeTotal = o.PaymentFeeTotal,
         TotalAmount = o.TotalAmount,
@@ -300,9 +315,17 @@ public class OrderSummaryDto
     /// <summary>FFL-90: shown as "FFL Required" in the order list.</summary>
     public bool HasFflItems { get; set; }
 
+    /// <summary>Guest checkout U-63: the buyer asked to cancel; shown as a badge in the order list.</summary>
+    public bool CancelRequested { get; set; }
+
+    /// <summary>Guest checkout A-20: shown as a "Guest" badge in the order list.</summary>
+    public bool IsGuest { get; set; }
+
     public static OrderSummaryDto From(Order o) => new()
     {
         HasFflItems = o.HasFflItems,
+        IsGuest = o.GuestId != null || (o.CustomerId == null && o.EbayOrderId == null),
+        CancelRequested = o.CancelRequestedOnUtc != null && o.Status != Domain.Enums.OrderStatus.Cancelled,
         Id = o.Id,
         OrderNumber = o.OrderNumber,
         EbayOrderId = o.EbayOrderId,

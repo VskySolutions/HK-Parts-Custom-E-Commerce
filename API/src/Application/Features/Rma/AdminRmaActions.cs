@@ -599,10 +599,13 @@ public class RefundRmaCommandHandler : RmaAdminHandlerBase, IRequestHandler<Refu
     private readonly IStoreCreditService _storeCredit;
     private readonly IRewardPointsService _points;
 
+    private readonly ITaxCalculationService? _tax;
+
     public RefundRmaCommandHandler(IApplicationDbContext db, ICurrentUserService current, ISettingsService settings, IEmailTemplateSender templates, IDateTimeProvider clock,
-        ISender mediator, IStoreCreditService storeCredit, IRewardPointsService points)
+        ISender mediator, IStoreCreditService storeCredit, IRewardPointsService points, ITaxCalculationService? tax = null)
         : base(db, current, settings, templates, clock)
     {
+        _tax = tax;
         _mediator = mediator;
         _storeCredit = storeCredit;
         _points = points;
@@ -668,7 +671,23 @@ public class RefundRmaCommandHandler : RmaAdminHandlerBase, IRequestHandler<Refu
             ? RmaSupport.Money(rma.StoreCreditIssued ?? 0m, order.CurrencyCode)
             : RmaSupport.Money(rma.TotalRefund, order.CurrencyCode);
         RmaWorkflow.Transition(Db, rma, RmaStatus.Refunded, actor, $"Refunded {amountText} as {methodText}.", now);
+        // The return's tax went back with it (whatever the refund route): it counts against the order's tax collected.
+        if (rma.TaxRefund > 0m)
+            order.TaxRefundedTotal = Math.Min(order.TaxTotal, order.TaxRefundedTotal + rma.TaxRefund);
         await SaveAsync(ct);
+
+        // PHP applyCreditAvalara: the returned goods, shipping and tax as a committed Avalara return (no-op unless the
+        // sale was committed there; never throws).
+        if (_tax is not null)
+            await _tax.ReturnTransactionAsync(new Common.Models.TaxReturnRequest(
+                order.Id,
+                rma.Lines
+                    .Where(l => l.LineRefund > 0m)
+                    .Select(l => new Common.Models.TaxReturnLine(l.OrderLineItemId, RmaRefundCalculator.QuantityForRefund(l, RmaStatus.Inspected), l.LineRefund))
+                    .ToList(),
+                rma.ShippingRefund,
+                rma.TaxRefund,
+                "Return " + rma.RmaNumber), ct);
 
         // Loyalty points earned by the order are clawed back once its payment is fully refunded.
         if (order.CustomerId is Guid cid && order.PaymentStatus is PaymentStatus.Refunded)

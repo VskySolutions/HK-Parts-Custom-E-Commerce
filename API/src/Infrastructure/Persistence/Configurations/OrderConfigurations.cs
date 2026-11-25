@@ -12,6 +12,9 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         b.HasKey(x => x.Id);
         b.Property(x => x.OrderNumber).HasMaxLength(40).IsRequired();
         b.Property(x => x.EbayOrderId).HasMaxLength(50);
+        b.Property(x => x.TaxDocumentCode).HasMaxLength(50);
+        b.Property(x => x.TaxReturnDocumentCodes).HasMaxLength(2000);
+        b.Property(x => x.TaxRefundedTotal).HasPrecision(18, 2).HasDefaultValue(0m);
         b.HasIndex(x => x.EbayOrderId).IsUnique().HasFilter("[EbayOrderId] IS NOT NULL");
         b.Property(x => x.Status).HasConversion<int>();
         b.Property(x => x.TotalAmount).HasPrecision(18, 2);
@@ -37,6 +40,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         b.Property(x => x.CustomerNote).HasMaxLength(4000);
         b.Property(x => x.InternalNotes).HasMaxLength(4000);
         b.Property(x => x.CompanyName).HasMaxLength(200);
+        b.Property(x => x.CancelRequestReason).HasMaxLength(500);
 
         // Inquiries are listed on their own admin page and excluded from every order/revenue query;
         // both sides of the flag are queried, so index it.
@@ -46,6 +50,13 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .WithMany()
             .HasForeignKey(x => x.CustomerId)
             .OnDelete(DeleteBehavior.NoAction);
+
+        // Guest checkout §5.2: the guest record (lookup FK, never cascades).
+        b.HasOne(x => x.Guest)
+            .WithMany(g => g.Orders)
+            .HasForeignKey(x => x.GuestId)
+            .OnDelete(DeleteBehavior.NoAction);
+        b.HasIndex(x => x.GuestId);
 
         b.HasOne(x => x.AssignedStore)
             .WithMany()

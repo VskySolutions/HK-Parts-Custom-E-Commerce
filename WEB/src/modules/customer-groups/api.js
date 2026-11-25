@@ -26,4 +26,16 @@ export const pricingRuleOptions = [
   { label: 'Fixed group prices', value: 'FixedGroupPrice' }
 ]
 
-export default { customerGroupApi, pricingRuleOptions }
+// PHP group tax_method: '' = use the store's tax method (Tax → Settings).
+export const groupTaxMethodOptions = [
+  { label: 'Store default', value: '' },
+  { label: 'Tax Exempt', value: 'None' },
+  { label: 'By State', value: 'ByState' },
+  { label: 'By ZIP/Postal Code', value: 'ByZip' },
+  { label: 'Avalara', value: 'Avalara' },
+  { label: 'Flat rate', value: 'FlatRate' },
+  { label: 'TaxJar', value: 'TaxJar' },
+  { label: 'Stripe Tax', value: 'StripeTax' }
+]
+
+export default { customerGroupApi, pricingRuleOptions, groupTaxMethodOptions }

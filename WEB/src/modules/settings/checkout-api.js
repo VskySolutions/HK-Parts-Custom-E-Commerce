@@ -51,3 +51,27 @@ export const blacklistMatchModeOptions = [
   { label: 'Name and email', value: 'NameAndEmail', description: 'Both the billing name and the email must match.' },
   { label: 'Name or email', value: 'NameOrEmail', description: 'Either matches. This is how the old site worked.' }
 ]
+
+/*
+ * Guest checkout settings (docs/guest-checkout-requirements.md §4.1, A-01..A-05).
+ *   GET/PUT /api/admin/checkout/guest-settings -> GuestCheckoutSettingsDto
+ */
+export const guestCheckoutSettingsApi = {
+  get () {
+    return api.get('/api/admin/checkout/guest-settings').then(unwrap)
+  },
+  update (payload) {
+    return api.put('/api/admin/checkout/guest-settings', payload).then(unwrap)
+  }
+}
+
+// The payment methods an admin can open to guests (A-03). Gift certificates and zero-total orders are always allowed.
+export const guestPaymentMethodOptions = [
+  { label: 'Credit card (Authorize.Net)', value: 'AuthorizeNet' },
+  { label: 'Stripe', value: 'Stripe' },
+  { label: 'PayPal', value: 'PayPal' },
+  { label: 'Square', value: 'Square' },
+  { label: 'Razorpay', value: 'Razorpay' },
+  { label: 'Cash on delivery', value: 'CashOnDelivery' },
+  { label: 'Bank transfer', value: 'BankTransfer' }
+]

@@ -6,8 +6,10 @@ using HKPartsEcommerce.Application.Common.Exceptions;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.Checkout;
+using HKPartsEcommerce.Application.Features.Customers;
 using HKPartsEcommerce.Application.Features.Ffl;
 using HKPartsEcommerce.Application.Features.GiftCertificates;
+using HKPartsEcommerce.Application.Features.Inventory;
 using HKPartsEcommerce.Application.Features.OrderRouting;
 using HKPartsEcommerce.Application.Features.Payments;
 using HKPartsEcommerce.Application.Features.Shipping;
@@ -102,8 +104,17 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             requestCouponCode: null, forPlacement: false, req.PickupInStore, req.PickupStoreId, req.AddOns, ct,
             req.FflShippingMethodId, req.FflAddOns);
 
+        // Guest checkout (U-05): the admin switch, account-required items, the guest order limit and the store's
+        // own policy, reported with one reason so the storefront can say why and offer sign-in instead.
+        var guestSettings = await GuestCheckoutSettingsStore.LoadAsync(_settings, ct);
+        var guestBlock = priced.Routing.IsRouted || priced.IsPickup || priced.IsInquiry
+            ? await GuestBlockReasonAsync(priced, guestSettings, ct)
+            : null;
+
         var quote = new CheckoutQuote
         {
+            GuestBlockedCode = guestBlock,
+            GuestBlockedReason = guestBlock is null ? null : GuestBlockReasons.Message(guestBlock, guestSettings.MaxOrderTotal),
             Subtotal = priced.Subtotal,
             BaseSubtotal = priced.BaseSubtotal,
             GroupDiscountTotal = priced.GroupDiscountTotal,
@@ -121,7 +132,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             Total = priced.Total,
             AssignedStoreId = priced.Routing.AssignedStoreId,
             IsRoutable = priced.Routing.IsRouted,
-            GuestOrderingAllowed = priced.GuestOrderingAllowed,
+            UnroutableReason = priced.Routing.IsRouted || priced.IsPickup || priced.IsInquiry ? null : UnroutableReason(priced.Routing),
+            GuestOrderingAllowed = priced.GuestOrderingAllowed && guestBlock is null,
             IsInquiry = priced.IsInquiry,
         };
 
@@ -150,15 +162,25 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         if (priced.Store is not null && !priced.IsInquiry)
         {
             var (methods, authNetName) = await ApplyMethodRulesAsync(
-                await FilterForGiftCertificatePurchaseAsync(await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct),
+                FilterForGuest(await FilterForGiftCertificatePurchaseAsync(await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct), guestSettings),
                 priced.Total, ct);
+            // PHP parity: Square's "Display Name" (e.g. "Credit Card") replaces the gateway name at checkout.
+            var squareName = methods.Any(m => m.Method == PaymentMethodType.Square)
+                ? await _db.SquareCredentials.AsNoTracking().Where(c => c.Active).OrderByDescending(c => c.UpdatedOnUtc)
+                    .Select(c => c.DisplayName).FirstOrDefaultAsync(ct)
+                : null;
             quote.AvailablePaymentMethods = methods
                 .Select(m => new PaymentMethodOption
                 {
                     Method = m.Method.ToString(),
                     IsProduction = m.IsProduction,
                     FeePercent = m.FeePercent,
-                    DisplayName = m.Method == PaymentMethodType.AuthorizeNet ? authNetName : null,
+                    DisplayName = m.Method switch
+                    {
+                        PaymentMethodType.AuthorizeNet => authNetName,
+                        PaymentMethodType.Square => string.IsNullOrWhiteSpace(squareName) ? null : squareName.Trim(),
+                        _ => null,
+                    },
                 })
                 .ToList();
         }
@@ -196,6 +218,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 quote.StateNotice = CheckoutSettingsStore.NoticeFor(settings, req.ShipTo?.Region);
 
             await TouchCheckoutActivityAsync(priced.Cart.Id, ct);
+            await CaptureGuestContactAsync(priced.Cart.Id, req.ShipTo?.Email, req.MarketingOptIn, ct);
             if (settings.SessionTimeoutSeconds > 0)
                 quote.CheckoutExpiresUtc = _clock.UtcNow.AddSeconds(settings.SessionTimeoutSeconds);
             quote.CheckoutLockExpiresUtc = await AcquireCheckoutLocksAsync(priced, ct);
@@ -244,6 +267,13 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         if (priced.IsInquiry)
             throw new ConflictException(
                 "This store does not accept online payment for these items. Please submit an inquiry instead.");
+
+        // Guest checkout (U-05, A-01/02/04): a guest placement the quote would not offer is refused with 401, so
+        // posting "guest" straight to the API cannot get round the admin switch (acceptance criterion 4).
+        var guestSettings = await GuestCheckoutSettingsStore.LoadAsync(_settings, ct);
+        if (await GuestBlockReasonAsync(priced, guestSettings, ct) is string guestBlock)
+            throw new UnauthorizedException(GuestBlockReasons.Message(guestBlock, guestSettings.MaxOrderTotal));
+        await EnsureGuestEmailHasNoAccountAsync(req, ct);
 
         // Address verification (AV-01/10/14): the buyer's ship-to, re-checked before anything is charged, so a
         // client that skipped the verify step cannot place an order to an address the provider rejected.
@@ -319,6 +349,21 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         var now = _clock.UtcNow;
         await _db.Carts.Where(c => c.Id == cartId)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.LastCheckoutActivityUtc, now), ct);
+    }
+
+    /// <summary>
+    /// Guest checkout A-43: remember the email a guest typed (and their opt-in) on the cart, so Abandoned Carts can
+    /// show who to follow up with. Signed-in carts are skipped: their account already has the email.
+    /// </summary>
+    private async Task CaptureGuestContactAsync(Guid cartId, string? email, bool marketingOptIn, CancellationToken ct)
+    {
+        if (_current.UserId is not null || !GuestEmail.IsValid(email))
+            return;
+        var normalized = Guest.NormalizeEmail(email);
+        await _db.Carts.Where(c => c.Id == cartId && c.CustomerId == null)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.ContactEmail, normalized)
+                .SetProperty(c => c.MarketingOptIn, marketingOptIn), ct);
     }
 
     /// <summary>CK-01: refuse a placement when the buyer was inactive on the checkout for longer than the timeout.</summary>
@@ -404,6 +449,109 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     /// <summary>CK-23: release on every successful placement path. Never fails the placement.</summary>
     private Task ReleaseCheckoutLocksAsync(Guid cartId) =>
         _checkoutLocks is null ? Task.CompletedTask : _checkoutLocks.ReleaseAsync(cartId, CancellationToken.None);
+
+    /// <summary>
+    /// The buyer-facing reason no store can take the order, from the routing chain. Stock comes first: a store that
+    /// delivers to the address but is short of an item means the address is fine, so blaming it would send the buyer
+    /// round in circles changing addresses.
+    /// </summary>
+    /// <summary>PHP parity: 409 OUT_OF_STOCK naming the first item short of stock, when "Use inventory" is on.</summary>
+    private async Task EnsureInStockAsync(IReadOnlyList<LineWork> lines, CancellationToken ct)
+    {
+        var settings = await CheckoutSettingsStore.LoadAsync(_settings, ct);
+        if (!settings.UseInventory)
+            return;
+        var shortItem = await TotalStockCheck.FirstShortItemAsync(_db,
+            lines.Where(l => !l.IsGiftCertificate)
+                .Select(l => new StockCheckLine(l.ProductId, l.ProductVariantId, l.Quantity, l.ProductName))
+                .ToList(), ct);
+        if (shortItem is not null)
+            throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.OutOfStock, TotalStockCheck.MessagePrefix + shortItem,
+                new Dictionary<string, object?> { ["item"] = shortItem });
+    }
+
+    public static string UnroutableReason(RoutingResult routing)
+    {
+        var reasons = routing.RoutingChain.Select(e => e.IneligibleReason ?? string.Empty).ToList();
+        if (reasons.Count == 0)
+            return "We aren't taking orders right now. Please try again later or contact us.";
+        if (reasons.Any(r => r.Contains("stock", StringComparison.OrdinalIgnoreCase)))
+            return "Some items in your cart aren't in stock in the quantity you chose. Lower the quantity, remove the item, or contact us.";
+        if (reasons.Any(r => r.Contains("capacity", StringComparison.OrdinalIgnoreCase)))
+            return "We can't take more orders right now. Please try again later.";
+        return "We can't deliver to this address. Try a different address.";
+    }
+
+    // ---- Guest checkout (docs/guest-checkout-requirements.md) ------------------------------------------
+
+    /// <summary>
+    /// Why this buyer may not check out as a guest (U-05, A-01, A-02, A-04), or null when they may. A signed-in
+    /// buyer and an inquiry are never blocked (a lead form that demanded an account would collect nothing). The
+    /// store's own guest policy (AC-STR-001.5) is checked in the pricing build and arrives as
+    /// <see cref="PricedCheckout.GuestOrderingAllowed"/>.
+    /// </summary>
+    private async Task<string?> GuestBlockReasonAsync(PricedCheckout priced, GuestCheckoutSettingsDto guest, CancellationToken ct)
+    {
+        if (_current.UserId is not null || priced.IsInquiry)
+            return null;
+        if (!guest.Enabled)
+            return GuestBlockReasons.Disabled;
+        var productIds = priced.Lines.Select(l => l.ProductId).Distinct().ToList();
+        if (await _db.Products.AsNoTracking().AnyAsync(p => productIds.Contains(p.Id) && p.AccountRequired, ct))
+            return GuestBlockReasons.AccountRequiredItem;
+        if (guest.MaxOrderTotal is decimal max && priced.Total > max)
+            return GuestBlockReasons.OverLimit;
+        if (!priced.GuestOrderingAllowed)
+            return GuestBlockReasons.StorePolicy;
+        return null;
+    }
+
+    /// <summary>
+    /// PHP parity: a guest order may not use an email that already belongs to an active account ("An account with
+    /// this email address already exists. Please log in."). The buyer signs in, or uses a different email.
+    /// Inquiries never reach placement, so a registered email can still send one.
+    /// </summary>
+    private async Task EnsureGuestEmailHasNoAccountAsync(PlaceCheckoutRequest req, CancellationToken ct)
+    {
+        if (_current.UserId is not null)
+            return;
+        var email = Guest.NormalizeEmail(req.ShipTo?.Email);
+        if (email.Length == 0)
+            return;
+        if (await _db.Users.AsNoTracking().AnyAsync(u => u.Email == email && u.IsActive, ct))
+            throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.AccountExists,
+                "An account with this email address already exists. Please log in to continue, or use a different email address.");
+    }
+
+    /// <summary>A-03: drop the payment methods the admin closed to guests. Signed-in buyers keep every method.</summary>
+    private IReadOnlyList<PaymentMethodAvailability> FilterForGuest(
+        IReadOnlyList<PaymentMethodAvailability> methods, GuestCheckoutSettingsDto guest) =>
+        _current.UserId is not null
+            ? methods
+            : methods.Where(m => GuestCheckoutSettingsStore.AllowsMethod(guest, m.Method)).ToList();
+
+    /// <summary>
+    /// Guest checkout §5.2 / U-46: a guest order (no account) gets its guest row, keyed by the normalized email,
+    /// refreshed with this order's name and phone; a ticked opt-in (U-14) also subscribes the email. Staged only.
+    /// </summary>
+    private async Task AttachGuestAsync(Order order, PlaceCheckoutRequest req, DateTime now, CancellationToken ct)
+    {
+        if (order.CustomerId is not null)
+            return;
+        // FFL-only and pickup orders carry the buyer's name on the billing address; prefer it when the ship-to has none.
+        var bill = req.BillTo;
+        var guest = await GuestRecords.UpsertAsync(_db, req.ShipTo.Email,
+            Coalesce(req.ShipTo.FirstName, bill?.FirstName), Coalesce(req.ShipTo.LastName, bill?.LastName),
+            Coalesce(req.ShipTo.PhoneNumber, bill?.PhoneNumber), req.MarketingOptIn, now, ct);
+        if (guest is null)
+            return;
+        order.Guest = guest;
+        if (req.MarketingOptIn)
+            await GuestRecords.SubscribeToNewsletterAsync(_db, guest.EmailNormalized, now, ct);
+
+        static string? Coalesce(string? a, string? b) => string.IsNullOrWhiteSpace(a) ? b : a;
+    }
+
 
     /// <summary>
     /// PY-10 / PY-11 / PY-15: refuse a blocked buyer before any gateway is contacted. The billing name is the
@@ -567,11 +715,13 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
 
         // Enforce the store's payment-method availability (e.g. COD switched off, or a deactivated gateway)
         // server-side — the storefront only ever offers these, but never trust the client. A cart that buys
-        // gift certificates is further limited to the methods allowed for that.
+        // gift certificates is further limited to the methods allowed for that, and a guest to the methods
+        // the admin opened to guests (A-03).
+        var guestSettings = await GuestCheckoutSettingsStore.LoadAsync(_settings, ct);
         var availableMethods = priced.Store is null
             ? (IReadOnlyList<PaymentMethodAvailability>)Array.Empty<PaymentMethodAvailability>()
             : (await ApplyMethodRulesAsync(
-                await FilterForGiftCertificatePurchaseAsync(await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct),
+                FilterForGuest(await FilterForGiftCertificatePurchaseAsync(await AvailablePaymentMethodsAsync(priced.Store, ct), priced.Lines, ct), guestSettings),
                 netTotal, ct)).Methods;
         if (priced.Store is not null && !availableMethods.Any(m => m.Method == req.PaymentMethod))
             throw CheckoutErrorCodes.Conflict(CheckoutErrorCodes.PaymentMethodNotAllowed,
@@ -607,7 +757,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             {
                 FirstName = req.ShipTo.FirstName,
                 LastName = req.ShipTo.LastName,
-                Email = req.ShipTo.Email,
+                Email = Guest.NormalizeEmail(req.ShipTo.Email),
                 PhoneNumber = req.ShipTo.PhoneNumber,
                 Latitude = req.ShipTo.Latitude,
                 Longitude = req.ShipTo.Longitude,
@@ -662,6 +812,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             Note = "Order created via checkout.",
         });
 
+        await AttachGuestAsync(order, req, now, ct);
         _db.Orders.Add(order);
         await _db.SaveChangesAsync(ct);
 
@@ -731,8 +882,9 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 Note = "Payment held for review by the gateway's fraud filters. Approve or decline it in the gateway, then check the gateway status on this order.",
             });
         }
-        else if (payResult.Success && req.PaymentMethod == PaymentMethodType.AuthorizeNet
-                 && await AuthorizeNetDefaultOrderStatusAsync(ct) is OrderStatus.Processing)
+        // §4 / PHP parity "Default order status": Authorize.Net and Square charge on the page, so it applies here.
+        else if (payResult.Success && payResult.Status != PaymentStatus.HeldForReview && req.PaymentMethod is PaymentMethodType.AuthorizeNet or PaymentMethodType.Square
+                 && (req.PaymentMethod == PaymentMethodType.AuthorizeNet ? await AuthorizeNetDefaultOrderStatusAsync(ct) : await MethodDefaultOrderStatusAsync(req.PaymentMethod, ct)) is OrderStatus.Processing)
         {
             // §4 "Default order status": the method row may place approved orders straight into Processing.
             order.Status = OrderStatus.Processing;
@@ -814,6 +966,78 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         return new PaymentCustomer(customerId, a.Email, billTo is null ? shipTo : ToPayment(billTo), shipTo, _current.IpAddress);
     }
 
+    /// <summary>
+    /// PHP parity, the Stripe and PayPal method settings: each offered only within its minimum / maximum amount due and to its allowed
+    /// customer groups (empty = everyone, guests included), and placed among the methods by its sort order (lower
+    /// first; the other methods count as 0 and keep their order).
+    /// </summary>
+    private async Task<IReadOnlyList<PaymentMethodAvailability>> ApplyStripeRulesAsync(
+        IReadOnlyList<PaymentMethodAvailability> methods, decimal amountDue, CancellationToken ct)
+    {
+        // PHP parity: the Stripe and PayPal method rows each carry min / max amount, allowed groups and a sort order.
+        var rules = new List<(PaymentMethodType Method, decimal? Min, decimal? Max, string? Groups, int Sort)>();
+        if (methods.Any(m => m.Method == PaymentMethodType.Stripe)
+            && await _db.StripeCredentials.AsNoTracking().Where(c => c.Active).OrderByDescending(c => c.UpdatedOnUtc)
+                .Select(c => new { c.MinOrderAmount, c.MaxOrderAmount, c.AllowedCustomerGroupIds, c.SortOrder })
+                .FirstOrDefaultAsync(ct) is { } stripe)
+            rules.Add((PaymentMethodType.Stripe, stripe.MinOrderAmount, stripe.MaxOrderAmount, stripe.AllowedCustomerGroupIds, stripe.SortOrder));
+        if (methods.Any(m => m.Method == PaymentMethodType.PayPal)
+            && await _db.PayPalCredentials.AsNoTracking().Where(c => c.Active).OrderByDescending(c => c.UpdatedOnUtc)
+                .Select(c => new { c.MinOrderAmount, c.MaxOrderAmount, c.AllowedCustomerGroupIds, c.SortOrder })
+                .FirstOrDefaultAsync(ct) is { } paypal)
+            rules.Add((PaymentMethodType.PayPal, paypal.MinOrderAmount, paypal.MaxOrderAmount, paypal.AllowedCustomerGroupIds, paypal.SortOrder));
+        if (methods.Any(m => m.Method == PaymentMethodType.Square)
+            && await _db.SquareCredentials.AsNoTracking().Where(c => c.Active).OrderByDescending(c => c.UpdatedOnUtc)
+                .Select(c => new { c.MinOrderAmount, c.MaxOrderAmount, c.AllowedCustomerGroupIds, c.SortOrder })
+                .FirstOrDefaultAsync(ct) is { } square)
+            rules.Add((PaymentMethodType.Square, square.MinOrderAmount, square.MaxOrderAmount, square.AllowedCustomerGroupIds, square.SortOrder));
+        if (rules.Count == 0)
+            return methods;
+
+        Guid? currentGroup = null;
+        var groupLoaded = false;
+        var hidden = new HashSet<PaymentMethodType>();
+        foreach (var r in rules)
+        {
+            var allowed = (r.Min is not decimal min || amountDue >= min) && (r.Max is not decimal max || amountDue <= max);
+            if (allowed && !string.IsNullOrWhiteSpace(r.Groups))
+            {
+                if (!groupLoaded)
+                {
+                    currentGroup = await _customerGroups.GetCurrentGroupIdAsync(ct);
+                    groupLoaded = true;
+                }
+                var groups = r.Groups.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                allowed = currentGroup is Guid g && groups.Any(x => Guid.TryParse(x, out var id) && id == g);
+            }
+            if (!allowed)
+                hidden.Add(r.Method);
+        }
+
+        // Stable sort: methods without a sort order count as 0 and keep their order.
+        var sort = rules.ToDictionary(r => r.Method, r => r.Sort);
+        return methods
+            .Where(m => !hidden.Contains(m.Method))
+            .OrderBy(m => sort.TryGetValue(m.Method, out var s) ? s : 0)
+            .ToList();
+    }
+
+    /// <summary>The Stripe or PayPal row's "default order status" for approved payments (null = Pending).</summary>
+    private async Task<OrderStatus?> MethodDefaultOrderStatusAsync(PaymentMethodType method, CancellationToken ct)
+    {
+        var raw = method switch
+        {
+            PaymentMethodType.Stripe => await _db.StripeCredentials.AsNoTracking().Where(c => c.Active)
+                .OrderByDescending(c => c.UpdatedOnUtc).Select(c => c.DefaultOrderStatus).FirstOrDefaultAsync(ct),
+            PaymentMethodType.PayPal => await _db.PayPalCredentials.AsNoTracking().Where(c => c.Active)
+                .OrderByDescending(c => c.UpdatedOnUtc).Select(c => c.DefaultOrderStatus).FirstOrDefaultAsync(ct),
+            PaymentMethodType.Square => await _db.SquareCredentials.AsNoTracking().Where(c => c.Active)
+                .OrderByDescending(c => c.UpdatedOnUtc).Select(c => c.DefaultOrderStatus).FirstOrDefaultAsync(ct),
+            _ => null,
+        };
+        return Enum.TryParse<OrderStatus>(raw, ignoreCase: true, out var s) ? s : null;
+    }
+
     /// <summary>The Authorize.Net row's "default order status" for approved payments (null = Pending).</summary>
     private async Task<OrderStatus?> AuthorizeNetDefaultOrderStatusAsync(CancellationToken ct)
     {
@@ -832,6 +1056,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     private async Task<(IReadOnlyList<PaymentMethodAvailability> Methods, string? AuthorizeNetDisplayName)> ApplyMethodRulesAsync(
         IReadOnlyList<PaymentMethodAvailability> methods, decimal amountDue, CancellationToken ct)
     {
+        methods = await ApplyStripeRulesAsync(methods, amountDue, ct);
         if (!methods.Any(m => m.Method == PaymentMethodType.AuthorizeNet))
             return (methods, null);
 
@@ -952,7 +1177,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             {
                 FirstName = req.ShipTo.FirstName,
                 LastName = req.ShipTo.LastName,
-                Email = req.ShipTo.Email,
+                Email = Guest.NormalizeEmail(req.ShipTo.Email),
                 PhoneNumber = req.ShipTo.PhoneNumber,
                 Latitude = req.ShipTo.Latitude,
                 Longitude = req.ShipTo.Longitude,
@@ -1016,6 +1241,7 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             });
         }
 
+        await AttachGuestAsync(order, req, now, ct);
         var ownsTransaction = _db.Database.CurrentTransaction is null;
         var tx = ownsTransaction ? await _db.Database.BeginTransactionAsync(ct) : null;
         try
@@ -1197,8 +1423,9 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         if (order.IsInquiry)
             throw new ConflictException("This record is an inquiry, not a paid order.");
 
-        // Idempotent: already confirmed (e.g. the buyer refreshed the return page or double-confirmed).
-        if (order.PaymentStatus == PaymentStatus.Captured)
+        // Idempotent: already confirmed (e.g. the buyer refreshed the return page or double-confirmed). An
+        // authorize-only Stripe payment (PHP parity "Transaction Type") confirms as Authorized.
+        if (order.PaymentStatus is PaymentStatus.Captured or PaymentStatus.Authorized)
             return OrderResult(order, success: true, error: null, redirectUrl: null,
                 transactionId: await CapturedTransactionIdAsync(orderId, ct));
 
@@ -1209,9 +1436,10 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         if (payment is null)
             return OrderResult(order, success: false, error: "No payment to confirm for this order.", redirectUrl: null);
 
-        // Ask the gateway whether the off-site payment actually completed (Stripe session paid?).
+        // Ask the gateway whether the off-site payment actually completed (Stripe session paid, or authorized).
         var result = await _payments.VerifyRedirectAsync(payment, ct);
-        if (!result.Success || result.Status != PaymentStatus.Captured)
+        PaymentLedger.ApplyDetails(payment, result);
+        if (!result.Success || result.Status is not (PaymentStatus.Captured or PaymentStatus.Authorized))
         {
             payment.ErrorMessage = result.ErrorMessage;
             await _db.SaveChangesAsync(ct);
@@ -1271,14 +1499,32 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         Order order, PaymentRecord payment, PaymentResult result, CancellationToken ct)
     {
         var now = _clock.UtcNow;
-        payment.Status = PaymentStatus.Captured;
+        // Authorize-only (Stripe "Transaction Type" = AuthOnly): the funds are held; staff capture later.
+        var captured = result.Status != PaymentStatus.Authorized;
+        payment.Status = captured ? PaymentStatus.Captured : PaymentStatus.Authorized;
         payment.TransactionId = result.TransactionId ?? payment.TransactionId;
         payment.AuthorizationId = result.AuthorizationId ?? payment.AuthorizationId;
         payment.GatewayReference = result.GatewayReference ?? payment.GatewayReference;
         payment.AuthorizedOnUtc ??= now;
-        payment.CapturedOnUtc = now;
+        if (captured)
+            payment.CapturedOnUtc = now;
         payment.ErrorMessage = null;
-        order.PaymentStatus = PaymentStatus.Captured;
+        order.PaymentStatus = payment.Status;
+
+        // PHP parity "Default Order Status": the Stripe / PayPal method may place approved orders straight into Processing.
+        if (payment.Method is PaymentMethodType.Stripe or PaymentMethodType.PayPal && order.Status == OrderStatus.Pending
+            && await MethodDefaultOrderStatusAsync(payment.Method, ct) is OrderStatus.Processing)
+        {
+            order.Status = OrderStatus.Processing;
+            _db.OrderStatusHistory.Add(new OrderStatusHistory
+            {
+                OrderId = order.Id,
+                FromStatus = OrderStatus.Pending,
+                ToStatus = OrderStatus.Processing,
+                ChangedOnUtc = now,
+                Note = $"Payment approved; moved to Processing by the {payment.Method} method's default order status.",
+            });
+        }
 
         if (order.SourceCartId is Guid cartId)
         {
@@ -1671,6 +1917,11 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
             return await BuildInquiryAsync(cart, lines, subtotal, baseSubtotal, groupDiscountTotal, groupName,
                 shipTo, commerce, requestCouponCode, ct);
 
+        // PHP parity (legacy EcommCart::checkInventory, setting "Use inventory"): refuse a cart holding an item short
+        // of stock, naming it, on the product's TOTAL over every store (the old site had one stock number). Off = no
+        // stock check. Gift certificates hold no stock; inquiries returned above (they take none).
+        await EnsureInStockAsync(lines, ct);
+
         // Pickup-in-store: skip routing + carrier rates entirely; fulfil at the chosen store (REQ-SHP-004).
         if (pickupInStore)
             return await BuildPickupAsync(cart, lines, subtotal, baseSubtotal, groupDiscountTotal, groupName,
@@ -1829,30 +2080,25 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
 
         // Tax exemption (AC-TAX-003.3): an authenticated, flagged customer is calculated at zero tax.
         // Resolved here in the shared build path so the quote and the placed order agree. Guests are never exempt.
-        TaxExemption? taxExemption = null;
-        if (_current.UserId is Guid taxUserId)
-        {
-            var exempt = await _db.Customers
-                .AsNoTracking()
-                .Where(c => c.UserId == taxUserId && c.IsTaxExempt)
-                .Select(c => new { c.TaxExemptionCertificate, c.VatId })
-                .FirstOrDefaultAsync(ct);
-            if (exempt is not null)
-                taxExemption = new TaxExemption(true, exempt.TaxExemptionCertificate, exempt.VatId);
-        }
+        var (taxExemption, exemptionNumber) = await LoadTaxExemptionAsync(ct);
 
         // 6. Tax (AC-CHK-003.5): origin = store address, destination = ship-to, plus the taxable shipping cost.
         // Each line is taxed on its discounted value: the discount engine's per-line allocation (order/product/
         // coupon reductions spread across the lines) is netted off before tax, so tax follows the price paid.
         // An FFL-only cart is delivered to the dealer, so it is taxed there; a mixed cart is taxed at the buyer's address.
+        // PHP parity: the customer's group may override the tax method (tax exempt / by state / by ZIP / Avalara).
         var taxTo = fflShipment is not null && otherRateLines.Count == 0 && dealerAddress is not null ? dealerAddress : shipTo;
         var tax = await _tax.CalculateAsync(
             new TaxCalculationRequest(
-                new TaxAddress(store.CountryCode ?? string.Empty, store.StateProvince, store.PostalCode, store.City),
-                new TaxAddress(taxTo.CountryCode, taxTo.Region, taxTo.PostalCode, taxTo.City),
+                StoreTaxAddress(store),
+                new TaxAddress(taxTo.CountryCode, taxTo.Region, taxTo.PostalCode, taxTo.City, taxTo.Line1, taxTo.Line2),
                 BuildTaxLines(lines, discountResult.LineDiscounts),
                 shippingTotal,
-                taxExemption),
+                taxExemption,
+                CustomerGroupId: groupId,
+                CustomerCode: FirstNonEmpty(shipTo.Email, _current.Email),
+                ExemptionNumber: exemptionNumber,
+                ShippingDescription: selected?.Name),
             ct);
 
         // 7. Grand total.
@@ -2090,25 +2336,17 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         var discountResult = await _discounts.EvaluateAsync(discountLines, subtotal, unlockedDiscountIds, ct);
 
         // Tax exemption + tax collected at the store (origin = destination = store).
-        TaxExemption? taxExemption = null;
-        if (_current.UserId is Guid taxUserId)
-        {
-            var exempt = await _db.Customers
-                .AsNoTracking()
-                .Where(c => c.UserId == taxUserId && c.IsTaxExempt)
-                .Select(c => new { c.TaxExemptionCertificate, c.VatId })
-                .FirstOrDefaultAsync(ct);
-            if (exempt is not null)
-                taxExemption = new TaxExemption(true, exempt.TaxExemptionCertificate, exempt.VatId);
-        }
-
-        var storeAddress = new TaxAddress(store.CountryCode ?? string.Empty, store.StateProvince, store.PostalCode, store.City);
+        var (taxExemption, exemptionNumber) = await LoadTaxExemptionAsync(ct);
+        var storeAddress = StoreTaxAddress(store);
         var tax = await _tax.CalculateAsync(
             new TaxCalculationRequest(
                 storeAddress, storeAddress,
                 BuildTaxLines(lines, discountResult.LineDiscounts),
                 0m,
-                taxExemption),
+                taxExemption,
+                CustomerGroupId: await _customerGroups.GetCurrentGroupIdAsync(ct),
+                CustomerCode: FirstNonEmpty(_current.Email, cart.ContactEmail),
+                ExemptionNumber: exemptionNumber),
             ct);
 
         var total = subtotal - discountResult.TotalDiscount + tax.TotalTax;
@@ -2264,7 +2502,8 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
                 CustomAttributesJson: item.CustomAttributesJson,
                 IsGiftCertificate: product?.ProductType == ProductType.GiftCard,
                 IsOnlineGiftCertificate: product?.ProductType == ProductType.GiftCard && product.GiftCertificateOnline,
-                Source: item));
+                Source: item,
+                ProductTaxCode: string.IsNullOrWhiteSpace(product?.TaxCode) ? null : product!.TaxCode!.Trim()));
         }
 
         return lines;
@@ -2313,8 +2552,31 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
     private static List<TaxLineInput> BuildTaxLines(IReadOnlyList<LineWork> lines, IReadOnlyList<decimal> lineDiscounts) =>
         lines.Select((l, i) => (Line: l, Discount: i < lineDiscounts.Count ? lineDiscounts[i] : 0m))
             .Where(x => !x.Line.IsGiftCertificate)
-            .Select(x => new TaxLineInput(x.Line.ProductId, x.Line.TaxCategoryCode, x.Line.UnitPrice, x.Line.Quantity, x.Discount))
+            .Select(x => new TaxLineInput(x.Line.ProductId, x.Line.TaxCategoryCode, x.Line.UnitPrice, x.Line.Quantity, x.Discount,
+                ItemCode: x.Line.Sku, Description: x.Line.ProductName, ProviderTaxCode: x.Line.ProductTaxCode))
             .ToList();
+
+    private static TaxAddress StoreTaxAddress(Store store) =>
+        new(store.CountryCode ?? string.Empty, store.StateProvince, store.PostalCode, store.City, store.AddressLine1, store.AddressLine2);
+
+    /// <summary>
+    /// The signed-in customer's tax exemption: flagged exempt = zero tax (AC-TAX-003.3); the tax-exempt reason is
+    /// also sent to Avalara as its exemption number (PHP parity), whether or not the flag is set.
+    /// </summary>
+    private async Task<(TaxExemption? Exemption, string? ExemptionNumber)> LoadTaxExemptionAsync(CancellationToken ct)
+    {
+        if (_current.UserId is not Guid taxUserId)
+            return (null, null);
+        var customer = await _db.Customers
+            .AsNoTracking()
+            .Where(c => c.UserId == taxUserId)
+            .Select(c => new { c.IsTaxExempt, c.TaxExemptionCertificate, c.VatId, c.TaxExemptReason })
+            .FirstOrDefaultAsync(ct);
+        if (customer is null)
+            return (null, null);
+        var exemption = customer.IsTaxExempt ? new TaxExemption(true, customer.TaxExemptionCertificate, customer.VatId) : null;
+        return (exemption, string.IsNullOrWhiteSpace(customer.TaxExemptReason) ? null : customer.TaxExemptReason.Trim());
+    }
 
     /// <summary>Coupon validation + discount evaluation (step 5 of the shared build), for paths that skip shipping.</summary>
     private async Task<(DiscountEvaluationResult Result, string? CouponCode, bool CouponValid)> EvaluateDiscountsAsync(
@@ -2459,7 +2721,9 @@ public class CheckoutOrchestrator : ICheckoutOrchestrator
         // Gift certificate product line: never taxed; an online one needs no shipping.
         bool IsGiftCertificate = false,
         bool IsOnlineGiftCertificate = false,
-        CartItem? Source = null)
+        CartItem? Source = null,
+        // The product's own tax code (PHP product tax_code), sent to Avalara ahead of the Tax Category.
+        string? ProductTaxCode = null)
     {
         public decimal LineTotal => UnitPrice * Quantity;
 

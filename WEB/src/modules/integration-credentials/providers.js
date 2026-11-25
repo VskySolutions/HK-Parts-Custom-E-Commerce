@@ -78,6 +78,7 @@ export const INTEGRATIONS = [
   {
     key: 'stripe', kind: 'credential', label: 'Stripe', category: 'Payments', icon: 'o_credit_card',
     description: 'Cards, wallets and more via Stripe (redirect Checkout).',
+    drawerWidth: 820,
     fields: [
       { key: 'publishableKey', label: 'Publishable Key', placeholder: 'pk_live_…' },
       { key: 'secretKey', label: 'Secret Key', secret: true, required: true, placeholder: 'sk_live_…' },
@@ -87,29 +88,123 @@ export const INTEGRATIONS = [
         placeholder: 'https://your-store.com/shop/checkout',
         hints: ['Storefront page Stripe returns buyers to after payment — the base URL is prefilled; edit the route as needed.']
       },
-      TRANSACTION_FEE_FIELD
+      // PHP parity: the legacy Stripe method settings.
+      {
+        key: 'transactionType',
+        label: 'Transaction type',
+        type: 'select',
+        col: 'half',
+        prefill: 'AuthCapture',
+        options: [
+          { label: 'Authorize and capture', value: 'AuthCapture' },
+          { label: 'Authorize only (capture later with "Charge")', value: 'AuthOnly' }
+        ],
+        hints: ['Authorize only holds the funds on the card; Stripe releases uncaptured holds after 7 days.']
+      },
+      {
+        key: 'defaultOrderStatus',
+        label: 'Default order status',
+        type: 'select',
+        col: 'half',
+        prefill: 'Pending',
+        options: [
+          { label: 'Pending', value: 'Pending' },
+          { label: 'Processing', value: 'Processing' }
+        ],
+        hints: ['Status of an order whose Stripe payment was approved.']
+      },
+      { key: 'minOrderAmount', label: 'Minimum order amount (USD)', col: 'half', type: 'number', min: 0, placeholder: 'No minimum' },
+      { key: 'maxOrderAmount', label: 'Maximum order amount (USD)', col: 'half', type: 'number', min: 0, placeholder: 'No maximum' },
+      {
+        key: 'acceptedCardTypes',
+        label: 'Accepted card types',
+        type: 'multiselect',
+        options: [
+          { label: 'Visa', value: 'Visa' },
+          { label: 'Mastercard', value: 'MasterCard' },
+          { label: 'American Express', value: 'AmericanExpress' },
+          { label: 'Discover', value: 'Discover' },
+          { label: 'JCB', value: 'JCB' },
+          { label: 'Diners Club', value: 'DinersClub' },
+          { label: 'UnionPay', value: 'UnionPay' }
+        ],
+        hints: ['Leave empty to accept every card. Stripe can\'t hide brands on its page, so a card of another brand is released straight away (not charged) and the buyer asked for a different card.']
+      },
+      {
+        key: 'allowedCustomerGroupIds',
+        label: 'Allowed customer groups',
+        type: 'multiselect',
+        optionsSource: 'customerGroups',
+        allOption: 'All customers (guests included)',
+        hints: ['Pick "All customers", or only the groups that may use this method. Guests are in no group.']
+      },
+      {
+        key: 'sortOrder',
+        label: 'Sort order',
+        type: 'number',
+        col: 'half',
+        prefill: 0,
+        hints: ['Position among the payment methods at checkout. Lower shows first; the other methods count as 0.']
+      },
+      { ...TRANSACTION_FEE_FIELD, col: 'half' },
+      { key: 'customerProfilesEnabled', label: 'Save customer profiles for signed-in customers', type: 'toggle', hints: ['Creates a Stripe Customer and saves the card to it; the Stripe customer ID is kept on the payment.'] }
     ]
   },
   {
     key: 'paypal', kind: 'credential', label: 'PayPal', category: 'Payments', icon: 'o_account_balance_wallet',
-    description: 'PayPal Checkout (REST app credentials).',
+    description: 'PayPal Express Checkout. Use the REST app keys (Client ID + Secret), or the classic API username, password and signature from the old site. Test Mode = the Sandbox environment switch above.',
+    drawerWidth: 820,
     fields: [
       {
         key: 'baseUrl',
-        label: 'Base URL',
-        required: true,
-        placeholder: 'https://api-m.sandbox.paypal.com',
-        hints: ['Sandbox: https://api-m.sandbox.paypal.com', 'Live: https://api-m.paypal.com']
+        label: 'REST base URL',
+        placeholder: 'Empty = picked from Sandbox / Production',
+        hints: ['Sandbox: https://api-m.sandbox.paypal.com', 'Live: https://api-m.paypal.com', 'Only for the REST keys; leave empty to follow the environment switch.']
       },
-      { key: 'clientId', label: 'Client ID', required: true },
-      { key: 'secretKey', label: 'Secret', secret: true, required: true },
+      { key: 'clientId', label: 'Client ID (REST)', col: 'half' },
+      { key: 'secretKey', label: 'Secret (REST)', secret: true, col: 'half' },
+      // PHP parity ("PayPal Express"): the classic NVP API credentials, used when the REST keys are empty.
+      { key: 'apiUsername', label: 'API Username (classic)', col: 'half', hints: ['PayPal → Account Settings → API access → NVP/SOAP API credentials.'] },
+      { key: 'apiPassword', label: 'API Password (classic)', secret: true, writeOnly: true, col: 'half' },
+      { key: 'apiSignature', label: 'API Signature (classic)', secret: true, writeOnly: true, hints: ['Write-only: shown masked; leave blank to keep the stored value.'] },
       {
         key: 'returnUrl', label: 'Return URL', required: true,
         prefill: '{origin}/shop/checkout',
         placeholder: 'https://your-store.com/shop/checkout',
         hints: ['Storefront page PayPal returns buyers to after approving payment — the base URL is prefilled; edit the route as needed.']
       },
-      TRANSACTION_FEE_FIELD
+      { key: 'brandName', label: 'Store name shown in PayPal', col: 'half', hints: ['The business name buyers see on PayPal\'s checkout page (up to 127 characters).'] },
+      {
+        key: 'defaultOrderStatus',
+        label: 'Default order status',
+        type: 'select',
+        col: 'half',
+        prefill: 'Pending',
+        options: [
+          { label: 'Pending', value: 'Pending' },
+          { label: 'Processing', value: 'Processing' }
+        ],
+        hints: ['Status of an order whose PayPal payment was approved.']
+      },
+      { key: 'minOrderAmount', label: 'Minimum order amount (USD)', col: 'half', type: 'number', min: 0, placeholder: 'No minimum' },
+      { key: 'maxOrderAmount', label: 'Maximum order amount (USD)', col: 'half', type: 'number', min: 0, placeholder: 'No maximum' },
+      {
+        key: 'allowedCustomerGroupIds',
+        label: 'Allowed customer groups',
+        type: 'multiselect',
+        optionsSource: 'customerGroups',
+        allOption: 'All customers (guests included)',
+        hints: ['Pick "All customers", or only the groups that may use this method. Guests are in no group.']
+      },
+      {
+        key: 'sortOrder',
+        label: 'Sort order',
+        type: 'number',
+        col: 'half',
+        prefill: 0,
+        hints: ['Position among the payment methods at checkout. Lower shows first; methods without one count as 0.']
+      },
+      { ...TRANSACTION_FEE_FIELD, col: 'half' }
     ]
   },
   {
@@ -130,26 +225,87 @@ export const INTEGRATIONS = [
   },
   {
     key: 'square', kind: 'credential', label: 'Square', category: 'Payments', icon: 'o_qr_code_2',
-    description: 'Square payments (on-site card entry via the Web Payments SDK).',
+    description: 'Square payments (on-site card entry via the Web Payments SDK). Mode = the Sandbox / Production switch above.',
+    drawerWidth: 820,
+    // PHP parity "View Locations": checks the token and lists the account's locations (copy the Location ID).
+    testable: true,
+    testLabel: 'View locations',
     fields: [
+      { key: 'displayName', label: 'Display name', col: 'half', placeholder: 'Square', prefill: 'Credit Card', hints: ['What the buyer sees at checkout.'] },
+      {
+        key: 'sortOrder',
+        label: 'Sort order',
+        type: 'number',
+        col: 'half',
+        prefill: 0,
+        hints: ['Position among the payment methods at checkout. Lower shows first; methods without one count as 0.']
+      },
       {
         key: 'baseUrl',
         label: 'Base URL',
-        required: true,
-        placeholder: 'https://connect.squareupsandbox.com/v2',
+        placeholder: 'Empty = picked from Mode (Sandbox / Production)',
         hints: ['Sandbox: https://connect.squareupsandbox.com/v2', 'Live: https://connect.squareup.com/v2']
       },
       {
-        key: 'applicationId', label: 'Application ID', placeholder: 'sandbox-sq0idb-… / sq0idp-…',
-        hints: ['Public app id the storefront card field (Web Payments SDK) uses — required to take card payments.']
+        key: 'applicationId', label: 'Application ID', col: 'half', placeholder: 'sandbox-sq0idb-… / sq0idp-…',
+        hints: ['The Square app that issued the tokens. The storefront card field (Web Payments SDK) uses it too.']
       },
       {
-        key: 'locationId', label: 'Location ID', placeholder: 'e.g. L1A2B3C4D5E6F',
-        hints: ['The Square Location payments are taken at — required by the storefront card field and stamped on each charge.']
+        key: 'applicationSecret', label: 'Application Secret', secret: true, col: 'half',
+        hints: ['That app\'s OAuth secret: needed to renew the access token with the refresh token.']
       },
-      { key: 'accessToken', label: 'Access Token', secret: true, required: true },
-      { key: 'applicationSecret', label: 'Application Secret', secret: true },
-      TRANSACTION_FEE_FIELD
+      // PHP parity: "Authenticate to Sandbox / Production" (Square OAuth). Square issues the access + refresh tokens
+      // to the redirect URL registered on the Square app; enter them below with their expiry.
+      {
+        key: 'squareAuth',
+        type: 'links',
+        label: 'Authenticate your Square account (needs the Application ID above)',
+        links: [
+          { label: 'Authenticate to Sandbox', href: 'https://connect.squareupsandbox.com/oauth2/authorize?client_id={applicationId}&scope=PAYMENTS_WRITE+PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS+MERCHANT_PROFILE_READ' },
+          { label: 'Authenticate to Production', href: 'https://connect.squareup.com/oauth2/authorize?client_id={applicationId}&scope=PAYMENTS_WRITE+PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS+MERCHANT_PROFILE_READ' }
+        ]
+      },
+      { key: 'accessToken', label: 'Access Token', secret: true, required: true, col: 'half' },
+      { key: 'refreshToken', label: 'Refresh Token', secret: true, writeOnly: true, col: 'half', hints: ['With the Application ID + Secret, the access token is renewed automatically before it expires.'] },
+      { key: 'accessTokenExpiresAtUtc', label: 'Token expires at (UTC)', type: 'datetime', col: 'half', hints: ['Renewed (and updated here) automatically. Empty = a personal access token that does not expire.'] },
+      {
+        key: 'locationId', label: 'Location ID', col: 'half', placeholder: 'e.g. L1A2B3C4D5E6F',
+        hints: ['The Square location payments are taken at. Save, then use "View locations" in the list to find it.']
+      },
+      {
+        key: 'transactionType',
+        label: 'Transaction type',
+        type: 'select',
+        col: 'half',
+        prefill: 'AuthCapture',
+        options: [
+          { label: 'Checkout (charge now)', value: 'AuthCapture' },
+          { label: 'Delayed (authorize, capture later with "Charge")', value: 'AuthOnly' }
+        ],
+        hints: ['Square releases uncaptured holds after 7 days.']
+      },
+      {
+        key: 'defaultOrderStatus',
+        label: 'Default order status',
+        type: 'select',
+        col: 'half',
+        prefill: 'Pending',
+        options: [
+          { label: 'Pending', value: 'Pending' },
+          { label: 'Processing', value: 'Processing' }
+        ]
+      },
+      { key: 'minOrderAmount', label: 'Minimum order amount (USD)', col: 'half', type: 'number', min: 0, placeholder: 'No minimum' },
+      { key: 'maxOrderAmount', label: 'Maximum order amount (USD)', col: 'half', type: 'number', min: 0, placeholder: 'No maximum' },
+      {
+        key: 'allowedCustomerGroupIds',
+        label: 'Allowed customer groups',
+        type: 'multiselect',
+        optionsSource: 'customerGroups',
+        allOption: 'All customers (guests included)',
+        hints: ['Pick "All customers", or only the groups that may use this method. Guests are in no group.']
+      },
+      { ...TRANSACTION_FEE_FIELD, col: 'half' }
     ]
   },
   {
@@ -223,7 +379,8 @@ export const INTEGRATIONS = [
         label: 'Allowed customer groups',
         type: 'multiselect',
         optionsSource: 'customerGroups',
-        hints: ['Leave empty for all customers (guests included).']
+        allOption: 'All customers (guests included)',
+        hints: ['Pick "All customers", or only the groups that may use this method. Guests are in no group.']
       },
       {
         key: 'defaultOrderStatus',
@@ -275,7 +432,7 @@ export const INTEGRATIONS = [
   },
   {
     key: 'avalara', kind: 'credential', label: 'Avalara', category: 'Tax', icon: 'o_fact_check',
-    description: 'Avalara AvaTax account, used for checkout address verification (Shipping → Verification).',
+    description: 'Avalara AvaTax account, used for Avalara tax (Tax → Avalara) and checkout address verification (Shipping → Verification).',
     fields: [
       {
         key: 'baseUrl',

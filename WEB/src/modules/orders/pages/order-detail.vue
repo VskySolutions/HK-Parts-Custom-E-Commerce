@@ -23,6 +23,13 @@
       <!-- Left: summary + lines + timeline + shipments -->
       <div class="col-12 col-md-8">
         <AppSection title="Summary">
+          <!-- Guest checkout U-63: the buyer asked to cancel. Staff cancel it with the status actions (payment voided / refunded there). -->
+          <q-banner v-if="order.cancelRequestedOnUtc && order.status !== 'Cancelled'" dense class="bg-orange-1 text-orange-10 rounded-borders q-mb-md">
+            <template #avatar><q-icon name="o_report" color="orange-10" /></template>
+            <span class="text-weight-medium">Cancellation requested</span> by the customer on {{ formatDate(order.cancelRequestedOnUtc) }}.
+            <span v-if="order.cancelRequestReason"> Reason: {{ order.cancelRequestReason }}.</span>
+            Cancel the order to void or refund the payment, or contact the customer.
+          </q-banner>
           <q-banner v-if="order.ebayOrderId" dense class="bg-indigo-1 text-indigo-10 rounded-borders q-mb-md">
             <template #avatar><q-badge color="indigo-7" label="eBay" /></template>
             <div><span class="text-weight-medium">eBay Order Number:</span> {{ order.ebayOrderId }}</div>
@@ -31,9 +38,44 @@
           <div class="row q-col-gutter-md text-body2">
             <div class="col-12 col-sm-6">
               <div class="text-caption text-grey-7">Customer</div>
-              <div class="text-weight-medium">{{ order.contactName || '—' }}</div>
-              <div class="text-grey-8">{{ order.contactEmail || '' }}</div>
+              <div class="text-weight-medium row items-center no-wrap">
+                <a
+                  v-if="order.customerId"
+                  class="text-primary cursor-pointer"
+                  @click="router.push({ name: 'admin-customer-detail', params: { id: order.customerId } })"
+                >{{ order.contactName || 'View customer' }}</a>
+                <span v-else>{{ order.contactName || '—' }}</span>
+                <!-- Guest checkout A-21: no account behind this order. -->
+                <q-badge v-if="order.isGuest" color="grey-7" outline label="Guest checkout" class="q-ml-sm" />
+              </div>
+              <div class="text-grey-8 row items-center no-wrap">
+                {{ order.contactEmail || '' }}
+                <q-btn
+                  v-if="order.isGuest && !order.customerId"
+                  flat
+                  dense
+                  round
+                  size="sm"
+                  icon="o_edit"
+                  color="primary"
+                  class="q-ml-xs"
+                  @click="guestEmailOpen = true"
+                >
+                  <q-tooltip>Change email / resend confirmation</q-tooltip>
+                </q-btn>
+              </div>
               <div v-if="order.contactPhone" class="text-grey-8">{{ order.contactPhone }}</div>
+              <a
+                v-if="order.isGuest && order.guestId && !order.customerId"
+                class="text-primary cursor-pointer text-caption"
+                @click="router.push({ name: 'admin-guest-customers' })"
+              >This guest's other orders</a>
+              <GuestOrderEmailDialog
+                v-model="guestEmailOpen"
+                :order-id="order.id"
+                :current-email="order.contactEmail || ''"
+                @saved="load"
+              />
             </div>
             <div class="col-12 col-sm-6">
               <div class="text-caption text-grey-7">Placed</div>
@@ -346,6 +388,9 @@
               <span class="text-grey-7">Tax <q-badge v-if="order.taxFlaggedForReview" color="orange" label="review" class="q-ml-xs" /></span>
               <span>{{ money(order.taxTotal) }}</span>
             </div>
+            <div v-if="order.taxRefundedTotal > 0" class="row justify-between q-py-xs">
+              <span class="text-grey-7">Tax refunded</span><span class="text-deep-orange">−{{ money(order.taxRefundedTotal) }}</span>
+            </div>
             <div v-if="order.paymentFeeTotal > 0" class="row justify-between q-py-xs">
               <span class="text-grey-7">Payment fee<span v-if="order.paymentFeePercent"> ({{ order.paymentFeePercent }}%)</span></span>
               <span>{{ money(order.paymentFeeTotal) }}</span>
@@ -479,12 +524,15 @@
             Refunds the full remaining balance and restocks every line item.
           </div>
           <template v-if="refundDialog.mode === 'partial'">
-            <div class="text-caption text-grey-7">Choose the line items to refund — their value is refunded and their stock restocked.</div>
+            <div class="text-caption text-grey-7">Choose the line items to refund — their value and the tax charged on them are refunded, and their stock restocked.</div>
             <q-option-group
               v-model="refundDialog.lineIds"
               type="checkbox"
               :options="order.lines.map((l) => ({ label: `${l.productName} — ${formatMoney(l.lineTotal)}`, value: l.id }))"
             />
+            <div v-if="partialRefundTax > 0" class="text-caption text-grey-8">
+              Items {{ formatMoney(partialRefundLines) }} + tax {{ formatMoney(partialRefundTax) }}
+            </div>
             <div class="text-body2 text-weight-medium">Refund total: {{ formatMoney(partialRefundTotal) }}</div>
           </template>
           <q-input v-model="refundDialog.reason" dense outlined label="Reason (optional)" />
@@ -567,6 +615,7 @@ import {
 import { fflAdminApi, FFL_EZ_CHECK_URL } from 'modules/shipping/ffl-api'
 import FflChangeDealerDialog from 'modules/shipping/components/FflChangeDealerDialog.vue'
 import FflDealerDataDialog from 'modules/shipping/components/FflDealerDataDialog.vue'
+import GuestOrderEmailDialog from 'modules/orders/components/GuestOrderEmailDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -574,6 +623,7 @@ const $q = useQuasar()
 const notify = useNotify()
 
 const order = ref(null)
+const guestEmailOpen = ref(false)
 const history = ref([])
 const shipments = ref([])
 const payments = ref([])
@@ -649,13 +699,23 @@ async function syncPayment (p) {
   }
 }
 
-// The value refunded/restocked by a partial refund = the sum of the chosen line items' totals.
-const partialRefundTotal = computed(() => {
+// A partial refund gives back the chosen lines' totals plus their share of the order's tax (PHP Apply credit):
+// order tax × chosen lines ÷ all lines, capped at the tax not yet refunded. Mirrors OrderRefundTax.ForLines.
+const partialRefundLines = computed(() => {
   const o = order.value
   if (!o) return 0
   const ids = new Set(refundDialog.lineIds)
   return o.lines.filter((l) => ids.has(l.id)).reduce((sum, l) => sum + (l.lineTotal || 0), 0)
 })
+const partialRefundTax = computed(() => {
+  const o = order.value
+  if (!o || !partialRefundLines.value) return 0
+  const all = o.lines.reduce((sum, l) => sum + (l.lineTotal || 0), 0)
+  if (all <= 0) return 0
+  const share = Math.round((o.taxTotal || 0) * Math.min(1, partialRefundLines.value / all) * 100) / 100
+  return Math.min(Math.max(0, (o.taxTotal || 0) - (o.taxRefundedTotal || 0)), share)
+})
+const partialRefundTotal = computed(() => partialRefundLines.value + partialRefundTax.value)
 
 const transitions = computed(() => (order.value ? allowedTransitions(order.value.status) : []))
 const shipAddress = computed(() => {

@@ -27,6 +27,7 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
     private readonly IPaymentGatewayRouter _payments;
     private readonly IInventoryService _inventory;
     private readonly GiftCertificates.IGiftCertificateService? _giftCertificates;
+    private readonly ITaxCalculationService? _tax;
 
     public AdvanceOrderStatusCommandHandler(
         IApplicationDbContext db,
@@ -35,7 +36,8 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         IDateTimeProvider clock,
         IPaymentGatewayRouter payments,
         IInventoryService inventory,
-        GiftCertificates.IGiftCertificateService? giftCertificates = null)
+        GiftCertificates.IGiftCertificateService? giftCertificates = null,
+        ITaxCalculationService? tax = null)
     {
         _db = db;
         _templates = templates;
@@ -44,6 +46,7 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         _payments = payments;
         _inventory = inventory;
         _giftCertificates = giftCertificates;
+        _tax = tax;
     }
 
     public async Task<OrderDto> Handle(AdvanceOrderStatusCommand request, CancellationToken cancellationToken)
@@ -117,6 +120,14 @@ public class AdvanceOrderStatusCommandHandler : IRequestHandler<AdvanceOrderStat
         // a partly spent one flags the order for manual review).
         if (target == OrderStatus.Cancelled && _giftCertificates is not null)
             await _giftCertificates.HandleOrderCancelledAsync(order.Id, cancellationToken);
+
+        // PHP parity (EcommOrder cancel): void the order's committed Avalara document. Best-effort: the order is
+        // already cancelled and paid back, so a provider failure is recorded in the tax log rather than raised.
+        if (target == OrderStatus.Cancelled && _tax is not null)
+        {
+            try { await _tax.VoidTransactionAsync(order.Id, cancellationToken); }
+            catch (Exception) { /* written to TaxLogs by the provider client */ }
+        }
 
         // Auto-capture an authorize-only payment when the order ships (AC-PAY-002.3). No-op for orders
         // paid up front, COD/bank-transfer, or already captured — the router only captures an open

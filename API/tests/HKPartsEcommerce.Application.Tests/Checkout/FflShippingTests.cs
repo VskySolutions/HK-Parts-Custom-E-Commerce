@@ -168,13 +168,13 @@ public class FflShippingTests : GiftCertificateTestBase
         SeedDealer("10002", "CARTERS GUNSMITHING", 35.41, -80.58);   // ~0.1 mi
         SeedDealer("10003", "COLLECTOR ONLY", 35.41, -80.58, type: "03");
         SeedDealer("10004", "NO TRANSFERS", 35.41, -80.58, allowsTransfers: false);
-        SeedDealer("10005", "EXPIRED ARMS", 35.41, -80.58, expiry: "5A");
+        SeedDealer("10005", "OLD SNAPSHOT ARMS", 35.42, -80.58, expiry: "5A"); // expiry code in the past: still listed (PHP parity)
         SeedDealer("10006", "OUT OF RANGE", 36.50, -80.60);          // ~75 mi
 
         var result = await Search(Zip, 15);
 
-        Assert.Equal(new[] { "CARTERS GUNSMITHING", "FAR SIDE ARMS" }, result.Dealers.Select(d => d.Name).ToArray());
-        Assert.Equal(2, result.TotalFound);
+        Assert.Equal(new[] { "CARTERS GUNSMITHING", "OLD SNAPSHOT ARMS", "FAR SIDE ARMS" }, result.Dealers.Select(d => d.Name).ToArray());
+        Assert.Equal(3, result.TotalFound);
         Assert.Null(result.Message);
         var nearest = result.Dealers[0];
         Assert.Equal("(704) 786-0751", nearest.PhoneDisplay);
@@ -182,7 +182,7 @@ public class FflShippingTests : GiftCertificateTestBase
         Assert.True(nearest.DistanceMiles < 1);
 
         var wider = await Search(Zip, 100);
-        Assert.Equal(3, wider.Dealers.Count);
+        Assert.Equal(4, wider.Dealers.Count);
     }
 
     [Fact]
@@ -216,12 +216,22 @@ public class FflShippingTests : GiftCertificateTestBase
     {
         var session = Session();
         await AddToCart(session, SeedFirearm(500m));
-        var expired = SeedDealer("10020", "EXPIRED ARMS", 35.41, -80.58, expiry: "5A");
         var refusing = SeedDealer("10021", "NO TRANSFERS", 35.41, -80.58, allowsTransfers: false);
 
-        await Assert.ThrowsAsync<ConflictException>(() => SelectDealer(session, expired.Key));
         await Assert.ThrowsAsync<ConflictException>(() => SelectDealer(session, refusing.Key));
         await Assert.ThrowsAsync<NotFoundException>(() => SelectDealer(session, "99999999"));
+    }
+
+    [Fact]
+    public async Task A_dealer_whose_snapshot_expiry_code_is_past_can_still_be_selected()
+    {
+        // The ATF directory is a snapshot: a licence renewed since the import keeps its old expiry code. PHP never
+        // filtered on it, so neither do we.
+        var session = Session();
+        await AddToCart(session, SeedFirearm(500m));
+        var dealer = SeedDealer("10022", "RENEWED ARMS", 35.41, -80.58, expiry: "5A");
+
+        await SelectDealer(session, dealer.Key);
     }
 
     // ---- checkout ----------------------------------------------------------------------------------------

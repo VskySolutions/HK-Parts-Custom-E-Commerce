@@ -59,6 +59,15 @@ public class Cart : AuditableEntity, ISoftDeletable
     /// <summary>When a recovery email was sent for this abandoned cart; null = not yet notified (WO-31).</summary>
     public DateTime? AbandonmentNotifiedOnUtc { get; set; }
 
+    /// <summary>
+    /// Guest checkout A-43: the email a guest typed at checkout (captured on quote), so Abandoned Carts can show who
+    /// to follow up with. Null for customer carts (the account has the email) and before the guest typed one.
+    /// </summary>
+    public string? ContactEmail { get; set; }
+
+    /// <summary>A-43 / N-06: the guest ticked "Email me news and offers"; only then may a recovery email be sent.</summary>
+    public bool MarketingOptIn { get; set; }
+
     public bool Deleted { get; set; }
     public DateTime? DeletedOnUtc { get; set; }
 

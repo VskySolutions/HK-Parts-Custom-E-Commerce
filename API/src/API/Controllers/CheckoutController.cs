@@ -16,6 +16,21 @@ namespace HKPartsEcommerce.API.Controllers;
 [AllowAnonymous]
 public class CheckoutController : ApiControllerBase
 {
+    /// <summary>
+    /// Guest checkout U-01/U-05: whether "Checkout as Guest" is open for this cart and, when not, why (admin switch,
+    /// account-required item). The order limit and the store policy are reported on the quote.
+    /// </summary>
+    [HttpGet("options")]
+    public async Task<ActionResult<CheckoutOptionsDto>> Options(
+        [FromQuery] Guid? cartId, [FromQuery] string? sessionId, CancellationToken cancellationToken)
+        => Ok(await Mediator.Send(new GetCheckoutOptionsQuery(cartId, sessionId), cancellationToken));
+
+    /// <summary>Guest checkout U-13: does the typed email belong to an account? (POST so the email stays out of URLs.)</summary>
+    [HttpPost("contact-check")]
+    public async Task<ActionResult<GuestEmailCheckDto>> ContactCheck(
+        [FromBody] CheckGuestEmailQuery request, CancellationToken cancellationToken)
+        => Ok(await Mediator.Send(request, cancellationToken));
+
     /// <summary>Price the caller's cart for a delivery address (subtotal, discounts, shipping, tax, total).</summary>
     [HttpPost("quote")]
     public async Task<ActionResult<CheckoutQuote>> Quote(

@@ -14,6 +14,15 @@
             style="min-width: 150px"
             @update:model-value="onPeriodChange"
           />
+          <AppSelect
+            v-model="customerType"
+            label=""
+            :options="customerTypeOptions"
+            hide-bottom-space
+            style="min-width: 150px"
+            aria-label="Customer type"
+            @update:model-value="refetch"
+          />
           <template v-if="period === 'custom'">
             <AppDateField v-model="from" label="" placeholder="From" style="min-width: 140px" @update:model-value="onCustomChange" />
             <AppDateField v-model="to" label="" placeholder="To" style="min-width: 140px" @update:model-value="onCustomChange" />
@@ -38,6 +47,26 @@
       </div>
       <div class="col-12 col-sm-6 col-md-3">
         <StatCard label="New customers" :value="summary ? summary.newCustomers : null" icon="o_person_add" :loading="loading" />
+      </div>
+    </div>
+
+    <!-- Guest checkout A-42: guest share of orders and revenue in the period (always against every order). -->
+    <div class="row q-col-gutter-md q-mb-md">
+      <div class="col-12 col-sm-6 col-md-3">
+        <StatCard
+          label="Guest share of orders"
+          :value="summary ? `${summary.guestOrderSharePercent}% (${summary.guestOrders})` : null"
+          icon="o_person_outline"
+          :loading="loading"
+        />
+      </div>
+      <div class="col-12 col-sm-6 col-md-3">
+        <StatCard
+          label="Guest share of revenue"
+          :value="summary ? `${summary.guestRevenueSharePercent}% (${money(summary.guestRevenue)})` : null"
+          icon="o_account_balance_wallet"
+          :loading="loading"
+        />
       </div>
     </div>
 
@@ -95,6 +124,14 @@ const period = ref('last30')
 const from = ref('')
 const to = ref('')
 
+// Guest checkout A-41: narrow the orders, revenue and trend to guest-checkout or registered orders.
+const customerType = ref('All')
+const customerTypeOptions = [
+  { label: 'All customers', value: 'All' },
+  { label: 'Guest', value: 'Guest' },
+  { label: 'Registered', value: 'Registered' }
+]
+
 const loading = ref(false)
 const summary = ref(null)
 const trend = ref([])
@@ -114,7 +151,10 @@ async function refetch () {
   // Custom period needs both bounds before we query the range-based endpoints.
   if (period.value === 'custom' && (!from.value || !to.value)) return
   loading.value = true
-  const params = periodParams(period.value, from.value, to.value)
+  const params = {
+    ...periodParams(period.value, from.value, to.value),
+    customerType: customerType.value !== 'All' ? customerType.value : undefined
+  }
   try {
     const [s, t, r] = await Promise.all([
       analyticsApi.summary(params),

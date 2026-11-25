@@ -130,9 +130,29 @@
           <template v-if="field.type === 'toggle'">
             <q-toggle v-model="form.fields[field.key]" :label="field.label" color="primary" />
           </template>
+          <!-- Links only (e.g. Square "Authenticate to Sandbox / Production"): {field} in an href is filled from the form. -->
+          <div v-else-if="field.type === 'links'">
+            <div class="text-caption text-grey-8 q-mb-xs">{{ field.label }}</div>
+            <div class="row q-gutter-sm">
+              <q-btn
+                v-for="link in field.links"
+                :key="link.label"
+                outline
+                no-caps
+                color="primary"
+                icon-right="o_open_in_new"
+                :label="link.label"
+                :href="linkHref(link.href)"
+                :disable="!linkHref(link.href)"
+                target="_blank"
+                rel="noopener"
+              />
+            </div>
+          </div>
           <AppSelect
             v-else-if="field.type === 'select' || field.type === 'multiselect'"
-            v-model="form.fields[field.key]"
+            :model-value="form.fields[field.key]"
+            @update:model-value="onSelectChange(field, $event)"
             :label="field.label"
             :options="fieldOptions(field)"
             :multiple="field.type === 'multiselect'"
@@ -232,6 +252,24 @@
             {{ testResult.code ? `${testResult.code}: ` : '' }}{{ testResult.message || 'Authentication failed.' }}
           </div>
           <div class="text-caption text-grey-7 q-mt-xs">{{ testResult.elapsedMs }} ms</div>
+          <!-- Square "View Locations": the account's locations, to copy the Location ID from. -->
+          <template v-if="testResult.connected && Array.isArray(testResult.locations)">
+            <div v-if="testResult.connected && testResult.message" class="text-warning q-mt-sm">{{ testResult.message }}</div>
+            <div class="text-subtitle2 q-mt-md q-mb-xs">Locations</div>
+            <div v-if="!testResult.locations.length" class="text-grey-7">No locations on this account.</div>
+            <q-list dense bordered separator class="rounded-borders">
+              <q-item v-for="loc in testResult.locations" :key="loc.id">
+                <q-item-section>
+                  <q-item-label class="text-weight-medium">{{ loc.name || loc.id }}</q-item-label>
+                  <q-item-label caption>{{ [loc.address, loc.currency, loc.status].filter(Boolean).join(' · ') }}</q-item-label>
+                  <q-item-label caption class="text-mono">ID: {{ loc.id }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-btn flat dense round icon="o_content_copy" @click="copyText(loc.id)"><q-tooltip>Copy Location ID</q-tooltip></q-btn>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </template>
         </q-card-section>
         <q-card-section v-else-if="testResult" class="q-pt-none">
           <div v-if="!testResult.tokenOk" class="text-negative">
@@ -286,6 +324,16 @@ const props = defineProps({
 })
 
 const notify = useNotify()
+
+// Copy a value (e.g. a Square Location ID) to the clipboard.
+async function copyText (text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    notify.success('Copied')
+  } catch (e) {
+    notify.error('Copy failed: select and copy it instead.')
+  }
+}
 const { has } = usePermissions()
 const canWrite = computed(() => has(Permissions.CredentialsWrite))
 
@@ -341,8 +389,21 @@ function writeOnlyPlaceholder (field) {
 
 // Options loaded from the API (`optionsSource`), e.g. the customer-group picker.
 const dynamicOptions = reactive({})
+// A multiselect with `allOption` (e.g. "All customers" for allowed customer groups) offers that choice first.
+// It stands alone: choosing it clears the others, choosing another clears it, and it is sent as an empty list
+// (which the API reads as "everyone").
+const ALL_VALUE = '__all__'
 function fieldOptions (field) {
-  return field.optionsSource ? (dynamicOptions[field.optionsSource] || []) : field.options
+  const options = field.optionsSource ? (dynamicOptions[field.optionsSource] || []) : field.options
+  return field.allOption ? [{ label: field.allOption, value: ALL_VALUE }, ...(options || [])] : options
+}
+function onSelectChange (field, value) {
+  if (field.allOption && Array.isArray(value)) {
+    const before = form.fields[field.key] || []
+    const pickedAll = value.includes(ALL_VALUE) && !before.includes(ALL_VALUE)
+    value = pickedAll || !value.length ? [ALL_VALUE] : value.filter((v) => v !== ALL_VALUE)
+  }
+  form.fields[field.key] = value
 }
 async function loadOptionSources () {
   const sources = new Set((props.item.fields || []).map((f) => f.optionsSource).filter(Boolean))
@@ -362,8 +423,20 @@ async function loadOptionSources () {
 function isNumericField (field) {
   return field.type === 'percent' || field.type === 'number'
 }
+// A links field's href with {key} filled from the form; null while a referenced field is empty.
+function linkHref (template) {
+  let missing = false
+  const href = String(template || '').replace(/{(w+)}/g, (_, k) => {
+    const v = String(form.fields[k] ?? '').trim()
+    if (!v) missing = true
+    return encodeURIComponent(v)
+  })
+  return missing ? null : href
+}
 function fieldInputType (field) {
   if (field.secret && !reveal[field.key]) return 'password'
+  // A UTC date + time (e.g. Square's OAuth token expiry), edited with the browser's date-time picker.
+  if (field.type === 'datetime') return 'datetime-local'
   return isNumericField(field) ? 'number' : 'text'
 }
 function fieldRules (field) {
@@ -495,6 +568,9 @@ function openForm (dto) {
     fields[f.key] = dto && dto[f.key] != null
       ? (Array.isArray(dto[f.key]) ? [...dto[f.key]] : dto[f.key])
       : (!dto && f.prefill ? prefillValue(f.prefill) : emptyValue(f))
+    // datetime-local wants "YYYY-MM-DDTHH:mm"; the API sends an ISO timestamp.
+    if (f.type === 'datetime' && typeof fields[f.key] === 'string') fields[f.key] = fields[f.key].slice(0, 16)
+    if (f.allOption && (!Array.isArray(fields[f.key]) || !fields[f.key].length)) fields[f.key] = [ALL_VALUE]
   }
   for (const f of props.item.fields) {
     if (f.type !== 'countryScope') continue
@@ -544,14 +620,14 @@ function buildPayload () {
   const payload = { name: form.name.trim(), active: form.active, isProduction: form.isProduction }
   for (const f of props.item.fields) {
     const v = form.fields[f.key]
-    if (f.type === 'countryScope') continue
+    if (f.type === 'countryScope' || f.type === 'links') continue
     if (!isVisible(f)) {
       // A hidden country list ("All Countries") is sent empty, which means every country.
       if (isListField(f)) payload[f.key] = []
       continue
     }
     if (isListField(f)) {
-      payload[f.key] = Array.isArray(v) ? v : []
+      payload[f.key] = Array.isArray(v) ? v.filter((x) => x !== ALL_VALUE) : []
     } else if (f.type === 'toggle') {
       payload[f.key] = !!v
     } else if (isNumericField(f)) {

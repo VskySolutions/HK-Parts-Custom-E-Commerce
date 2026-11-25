@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Exceptions;
 using HKPartsEcommerce.Application.Common.Interfaces;
+using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
 using ValidationException = HKPartsEcommerce.Application.Common.Exceptions.ValidationException;
@@ -159,11 +160,14 @@ public class ApplyQuickReturnCommandHandler : IRequestHandler<ApplyQuickReturnCo
     private readonly IRewardPointsService _points;
     private readonly ICurrentUserService _current;
     private readonly IDateTimeProvider _clock;
+    private readonly ITaxCalculationService? _tax;
 
     public ApplyQuickReturnCommandHandler(
         ISender mediator, IApplicationDbContext db, ISettingsService settings, IInventoryService inventory,
-        IStoreCreditService storeCredit, IRewardPointsService points, ICurrentUserService current, IDateTimeProvider clock)
+        IStoreCreditService storeCredit, IRewardPointsService points, ICurrentUserService current, IDateTimeProvider clock,
+        ITaxCalculationService? tax = null)
     {
+        _tax = tax;
         _mediator = mediator;
         _db = db;
         _settings = settings;
@@ -233,6 +237,20 @@ public class ApplyQuickReturnCommandHandler : IRequestHandler<ApplyQuickReturnCo
             ? (await RmaSupport.RefundablePaymentsAsync(_db, order.Id, ct)).Sum(p => p.Amount - p.RefundedAmount)
             : 0m;
 
+        // The Avalara return (PHP applyCreditAvalara): each returned unit at its discounted price, the shipping
+        // difference, and the tax difference credited.
+        var discountRatio = oldSubtotal > 0 ? Math.Clamp(oldBase / oldSubtotal, 0m, 1m) : 1m;
+        var taxReturn = new TaxReturnRequest(
+            order.Id,
+            returned.Select(r =>
+            {
+                var line = order.Lines.First(l => l.Id == r.OrderLineItemId);
+                return new TaxReturnLine(line.Id, r.Quantity, OrderCredit.Round(line.UnitPrice * r.Quantity * discountRatio));
+            }).ToList(),
+            Math.Max(0m, oldShipping - shippingAmount),
+            Math.Max(0m, oldTax - newTax),
+            "Apply credit");
+
         // ---- Update the order lines, restock, and the order totals ------------------------------------------------
         var settings = await ReturnSettingsStore.LoadAsync(_settings, ct);
         var storeId = order.AssignedStoreId ?? settings.DefaultRestockStoreId;
@@ -276,6 +294,11 @@ public class ApplyQuickReturnCommandHandler : IRequestHandler<ApplyQuickReturnCo
         };
         _db.OrderStatusHistory.Add(history);
         await _db.SaveChangesAsync(ct);
+
+        // The order adjustment stands whatever happens to the refund, so Avalara is told about it now. A no-op unless
+        // the sale was committed there; never throws.
+        if (_tax is not null && credit > 0)
+            await _tax.ReturnTransactionAsync(taxReturn, ct);
 
         // ---- Refund (OrderController@creditPost) -------------------------------------------------------------------
         var result = new QuickReturnResultDto { OrderId = order.Id, CreditAmount = credit };

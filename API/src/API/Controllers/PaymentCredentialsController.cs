@@ -104,6 +104,11 @@ public class PaymentCredentialsController : ApiControllerBase
     public async Task<ActionResult<SquareCredentialDto>> UpdateSquare(Guid id, [FromBody] SaveSquareCredentialCommand command)
         => Ok(await Mediator.Send(command with { Id = id }));
 
+    /// <summary>PHP parity "View Locations": tests the saved row's token and lists the Square account's locations.</summary>
+    [HttpPost("square/{id:guid}/test")]
+    public async Task<ActionResult<GatewayTestResult>> TestSquare(Guid id)
+        => Ok(await Mediator.Send(new TestSquareCredentialCommand(id)));
+
     [HttpDelete("square/{id:guid}")]
     public async Task<IActionResult> DeleteSquare(Guid id)
     {

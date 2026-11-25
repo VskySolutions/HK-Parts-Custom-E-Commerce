@@ -18,6 +18,10 @@ export const orderApi = {
   get (id) {
     return api.get(`${ORDERS}/${id}`).then(unwrap)
   },
+  // Guest checkout A-22: fix a guest order's email; payload { email, resendConfirmation }. Returns the order.
+  updateGuestEmail (id, payload) {
+    return api.patch(`${ORDERS}/${id}/email`, payload).then(unwrap)
+  },
   history (id) {
     return api.get(`${ORDERS}/${id}/history`).then(unwrap)
   },

@@ -33,8 +33,42 @@ export const operationalReportsApi = {
   },
   customersCsv (params = {}) {
     return api.get(`${BASE}/customers.csv`, { params, paramsSerializer: qsSerializer, responseType: 'blob' })
+  },
+
+  // Guest checkout A-40/A-41. GET /sales-by-state?period=&customerType= ->
+  //   [{ state, countryCode, orders, revenue, guestOrders, guestRevenue, registeredOrders, registeredRevenue }]
+  salesByState (params = {}) {
+    return api.get(`${BASE}/sales-by-state`, { params, paramsSerializer: qsSerializer }).then(unwrap)
+  },
+  salesByStateCsv (params = {}) {
+    return api.get(`${BASE}/sales-by-state.csv`, { params, paramsSerializer: qsSerializer, responseType: 'blob' })
+  },
+
+  // PHP "Tax Report". GET /taxes?period=&from=&to= ->
+  //   { totalTax, orderCount, taxedOrderCount, totalSales, fromUtc, toUtc, rows: [{ state, countryCode, orders, taxedOrders, sales, tax }] }
+  taxes (params = {}) {
+    return api.get(`${BASE}/taxes`, { params, paramsSerializer: qsSerializer }).then(unwrap)
+  },
+  taxesCsv (params = {}) {
+    return api.get(`${BASE}/taxes.csv`, { params, paramsSerializer: qsSerializer, responseType: 'blob' })
+  },
+
+  // Guest checkout A-40/A-43. GET /abandoned-carts?page=&pageSize=&idleHours=&customerType=&search=&onlyWithEmail= ->
+  //   PaginatedList<{ cartId, isGuest, name, email, marketingOptIn, itemCount, units, subtotal, currencyCode, lastActivityUtc, reachedCheckout, recoveryEmailSentUtc }>
+  abandonedCarts (params = {}) {
+    return api.get(`${BASE}/abandoned-carts`, { params, paramsSerializer: qsSerializer }).then(unwrap)
+  },
+  abandonedCartsCsv (params = {}) {
+    return api.get(`${BASE}/abandoned-carts.csv`, { params, paramsSerializer: qsSerializer, responseType: 'blob' })
   }
 }
+
+// Guest checkout A-41: the customer-type filter shared by the sales reports.
+export const customerTypeOptions = [
+  { label: 'All customers', value: 'All' },
+  { label: 'Guest', value: 'Guest' },
+  { label: 'Registered', value: 'Registered' }
+]
 
 // Period selector options + params builder (mirrors the analytics module; duplicated to keep the
 // reports module self-contained).

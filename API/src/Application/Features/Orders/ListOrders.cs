@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using HKPartsEcommerce.Application.Common.Extensions;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
+using HKPartsEcommerce.Application.Features.Analytics;
 using HKPartsEcommerce.Domain.Entities;
 using HKPartsEcommerce.Domain.Enums;
 
@@ -13,7 +14,9 @@ namespace HKPartsEcommerce.Application.Features.Orders;
 /// surface orders that no store could fulfil) and/or an order-number / contact search term.
 /// </summary>
 public record ListOrdersQuery(string? Status, int Page = 1, int PageSize = 20, string? Search = null,
-    string? SortBy = null, bool SortDescending = false)
+    string? SortBy = null, bool SortDescending = false,
+    /// <summary>Guest checkout A-20: "Guest", "Registered", or null / "All".</summary>
+    string? CustomerType = null)
     : IRequest<PaginatedList<OrderSummaryDto>>;
 
 public class ListOrdersQueryHandler : IRequestHandler<ListOrdersQuery, PaginatedList<OrderSummaryDto>>
@@ -45,6 +48,12 @@ public class ListOrdersQueryHandler : IRequestHandler<ListOrdersQuery, Paginated
         {
             query = query.Where(o => o.Status == status);
         }
+
+        // Guest checkout A-20: placed through guest checkout or with an account (eBay imports are neither).
+        if (string.Equals(request.CustomerType, "Guest", StringComparison.OrdinalIgnoreCase))
+            query = query.PlacedAsGuest();
+        else if (string.Equals(request.CustomerType, "Registered", StringComparison.OrdinalIgnoreCase))
+            query = query.PlacedAsRegistered();
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {

@@ -51,7 +51,8 @@ public class AbandonedCartWorker : IScheduledTask
         var candidates = await db.Carts
             .Include(c => c.Items)
             .Where(c => !c.IsCheckedOut
-                        && c.CustomerId != null
+                        // Customer carts, plus guest carts whose guest typed an email and opted in (guest checkout A-43 / N-06).
+                        && (c.CustomerId != null || (c.ContactEmail != null && c.MarketingOptIn))
                         && c.AbandonmentNotifiedOnUtc == null
                         && c.Items.Any()
                         && c.CreatedOnUtc < cutoff)
@@ -65,14 +66,22 @@ public class AbandonedCartWorker : IScheduledTask
             return;
         }
 
-        var customerIds = candidates.Select(c => c.CustomerId!.Value).Distinct().ToList();
+        var customerIds = candidates.Where(c => c.CustomerId != null).Select(c => c.CustomerId!.Value).Distinct().ToList();
         var customers = await db.Customers
             .Where(c => customerIds.Contains(c.Id) && c.User != null)
             .Select(c => new { c.Id, c.FirstName, c.LastName, Email = c.User!.Email })
             .ToDictionaryAsync(c => c.Id, cancellationToken);
 
+        var guestEmails = candidates.Where(c => c.CustomerId == null).Select(c => c.ContactEmail!).ToList();
+        var guestNames = (await db.Guests.AsNoTracking()
+                .Where(g => guestEmails.Contains(g.EmailNormalized))
+                .Select(g => new { g.EmailNormalized, g.FirstName, g.LastName })
+                .ToListAsync(cancellationToken))
+            .ToDictionary(g => g.EmailNormalized, g => $"{g.FirstName} {g.LastName}".Trim(), StringComparer.OrdinalIgnoreCase);
+
         var emails = customers.Values
             .Select(c => c.Email)
+            .Concat(guestEmails)
             .Where(e => !string.IsNullOrWhiteSpace(e))
             .Distinct()
             .ToList();
@@ -97,20 +106,33 @@ public class AbandonedCartWorker : IScheduledTask
             if (lastActivity >= cutoff)
                 continue;
 
-            if (!customers.TryGetValue(cart.CustomerId!.Value, out var customer)
-                || string.IsNullOrWhiteSpace(customer.Email)
-                || suppressed.Contains(customer.Email))
+            string toEmail;
+            string name;
+            if (cart.CustomerId is Guid customerId)
+            {
+                if (!customers.TryGetValue(customerId, out var customer) || string.IsNullOrWhiteSpace(customer.Email))
+                    continue;
+                toEmail = customer.Email;
+                name = $"{customer.FirstName} {customer.LastName}".Trim();
+            }
+            else
+            {
+                // Guest cart: only reached the candidate list with an email and a ticked opt-in.
+                toEmail = cart.ContactEmail!;
+                name = guestNames.TryGetValue(toEmail, out var guestName) ? guestName : string.Empty;
+            }
+            if (suppressed.Contains(toEmail))
                 continue;
 
-            var name = $"{customer.FirstName} {customer.LastName}".Trim();
-            var subject = Substitute(template?.SubjectLine ?? "You left items in your cart", name, cartUrl, brandName);
+            var greeting = string.IsNullOrWhiteSpace(name) ? "there" : name;
+            var subject = Substitute(template?.SubjectLine ?? "You left items in your cart", greeting, cartUrl, brandName);
             var body = Substitute(
                 !string.IsNullOrWhiteSpace(template?.HtmlBody)
                     ? template!.HtmlBody
                     : $"Hi {{{{customerName}}}}, you still have items waiting in your cart at {{{{brandName}}}}. Return any time: {{{{cartUrl}}}}",
-                name, cartUrl, brandName);
+                greeting, cartUrl, brandName);
 
-            await enqueuer.EnqueueAsync(TemplateKey, customer.Email, name, subject, body, NotificationCategory.Marketing, isHtml: true, cancellationToken: cancellationToken);
+            await enqueuer.EnqueueAsync(TemplateKey, toEmail, string.IsNullOrWhiteSpace(name) ? null : name, subject, body, NotificationCategory.Marketing, isHtml: true, cancellationToken: cancellationToken);
             cart.AbandonmentNotifiedOnUtc = now;
             sent++;
         }

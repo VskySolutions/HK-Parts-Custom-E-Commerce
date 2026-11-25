@@ -41,6 +41,33 @@ public class StripeCredential : IntegrationCredentialBase
 
     /// <summary>Full storefront URL Stripe Checkout returns the buyer to (success + cancel land here).</summary>
     public string? ReturnUrl { get; set; }
+
+    // ---- Payment-method settings (PHP parity: the legacy Stripe method settings) ----
+    // Kept on the credential row like Authorize.Net's, so a sandbox and a live row each carry their own.
+
+    /// <summary>"AuthCapture" (charge at checkout) or "AuthOnly" (hold the funds, capture later). Null = the gateway's capture-mode setting.</summary>
+    public string? TransactionType { get; set; }
+
+    /// <summary>Save a Stripe Customer (with the card for later use) for signed-in buyers; its id is kept on the payment.</summary>
+    public bool CustomerProfilesEnabled { get; set; }
+
+    /// <summary>Comma-separated card brands accepted (Visa, MasterCard, AmericanExpress, Discover, JCB, DinersClub, UnionPay). Null/empty = all.</summary>
+    public string? AcceptedCardTypes { get; set; }
+
+    /// <summary>Offer Stripe only when the amount due is at least this (null = no minimum).</summary>
+    public decimal? MinOrderAmount { get; set; }
+
+    /// <summary>Offer Stripe only when the amount due is at most this (null = no maximum).</summary>
+    public decimal? MaxOrderAmount { get; set; }
+
+    /// <summary>Comma-separated customer-group ids allowed to use Stripe. Null/empty = all customers.</summary>
+    public string? AllowedCustomerGroupIds { get; set; }
+
+    /// <summary>Order status after an approved payment: "Pending" (default) or "Processing".</summary>
+    public string? DefaultOrderStatus { get; set; }
+
+    /// <summary>Position among the payment methods at checkout: lower shows first; methods without one count as 0.</summary>
+    public int SortOrder { get; set; }
 }
 
 /// <summary>PayPal REST app credentials + endpoint (table <c>Credentials_PayPal</c>).</summary>
@@ -54,6 +81,37 @@ public class PayPalCredential : IntegrationCredentialBase
     /// <summary>Storefront URL PayPal returns the buyer to after approving/cancelling payment (the buyer lands
     /// here to confirm the order). Required for the redirect flow, mirroring the Stripe return URL.</summary>
     public string? ReturnUrl { get; set; }
+
+    // ---- PayPal Express classic API (PHP parity) ----
+    // The legacy site used PayPal's classic NVP API ("PayPal Express"), signed with an API username, password and
+    // signature. When the REST Client ID / Secret are empty, these are used instead. "Test Mode" = the credential's
+    // Sandbox environment (IsProduction = false), which picks the sandbox endpoints.
+
+    public string? ApiUsername { get; set; }
+    [Encrypted] public string? ApiPassword { get; set; }
+    [Encrypted] public string? ApiSignature { get; set; }
+
+    /// <summary>"Store Name Shown in PayPal": the business name on PayPal's checkout page (BRANDNAME / brand_name).</summary>
+    public string? BrandName { get; set; }
+
+    /// <summary>Offer PayPal only when the amount due is at least this (null = no minimum).</summary>
+    public decimal? MinOrderAmount { get; set; }
+
+    /// <summary>Offer PayPal only when the amount due is at most this (null = no maximum).</summary>
+    public decimal? MaxOrderAmount { get; set; }
+
+    /// <summary>Comma-separated customer-group ids allowed to use PayPal. Null/empty = all customers.</summary>
+    public string? AllowedCustomerGroupIds { get; set; }
+
+    /// <summary>Order status after an approved payment: "Pending" (default) or "Processing".</summary>
+    public string? DefaultOrderStatus { get; set; }
+
+    /// <summary>Position among the payment methods at checkout: lower shows first; methods without one count as 0.</summary>
+    public int SortOrder { get; set; }
+
+    /// <summary>The classic API username, password and signature are all set.</summary>
+    public bool HasClassicCredentials =>
+        !string.IsNullOrWhiteSpace(ApiUsername) && !string.IsNullOrWhiteSpace(ApiPassword) && !string.IsNullOrWhiteSpace(ApiSignature);
 }
 
 /// <summary>Razorpay key id/secret + endpoint (table <c>Credentials_Razorpay</c>).</summary>
@@ -86,6 +144,39 @@ public class SquareCredential : IntegrationCredentialBase
 
     [Encrypted] public string? AccessToken { get; set; }
     [Encrypted] public string? ApplicationSecret { get; set; }
+
+    // ---- Payment-method settings (PHP parity: the legacy Square method settings) ----
+    // "Mode" = the credential's Sandbox / Production environment (IsProduction), which also picks the endpoint.
+
+    /// <summary>"AuthCapture" (charge at checkout) or "AuthOnly" (hold the funds, capture later). Null = the gateway's capture-mode setting.</summary>
+    public string? TransactionType { get; set; }
+
+    /// <summary>
+    /// OAuth refresh token (when the access token came from Square's OAuth flow, as on the old site). With it and the
+    /// Application ID + Secret, the access token is renewed automatically before <see cref="AccessTokenExpiresAtUtc"/>.
+    /// </summary>
+    [Encrypted] public string? RefreshToken { get; set; }
+
+    /// <summary>"Token Expires At": when the OAuth access token stops working (UTC). Null = a personal access token that does not expire.</summary>
+    public DateTime? AccessTokenExpiresAtUtc { get; set; }
+
+    /// <summary>"Display Name": what the buyer sees at checkout (e.g. "Credit Card"); null = "Square".</summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>Offer Square only when the amount due is at least this (null = no minimum).</summary>
+    public decimal? MinOrderAmount { get; set; }
+
+    /// <summary>Offer Square only when the amount due is at most this (null = no maximum).</summary>
+    public decimal? MaxOrderAmount { get; set; }
+
+    /// <summary>Comma-separated customer-group ids allowed to use Square. Null/empty = all customers.</summary>
+    public string? AllowedCustomerGroupIds { get; set; }
+
+    /// <summary>Order status after an approved payment: "Pending" (default) or "Processing".</summary>
+    public string? DefaultOrderStatus { get; set; }
+
+    /// <summary>Position among the payment methods at checkout: lower shows first; methods without one count as 0.</summary>
+    public int SortOrder { get; set; }
 }
 
 /// <summary>Authorize.Net merchant credentials + endpoint (table <c>Credentials_AuthorizeNet</c>).</summary>

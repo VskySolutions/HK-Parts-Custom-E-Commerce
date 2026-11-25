@@ -218,6 +218,50 @@ export const checkoutApi = {
   // the choice is offered before any sign-in, and it carries no buyer identity.
   pickupStores () {
     return anonApi.get('/api/storefront/pickup-stores').then(unwrap)
+  },
+  // Guest checkout U-01/U-05: { signedIn, guestAllowed, guestBlockedCode, guestBlockedReason } for this cart.
+  options (params) {
+    return customerApi.get(CHECKOUT + '/options', { params, paramsSerializer: qsSerializer }).then(unwrap)
+  },
+  // Guest checkout U-13: { accountExists } for the typed email (POST: the email never goes in a URL).
+  contactCheck (email) {
+    return anonApi.post(CHECKOUT + '/contact-check', { email }).then(unwrap)
+  }
+}
+
+// ---- guest orders (docs/guest-checkout-requirements.md §3.7, §3.8) -----------
+// No sign-in: a signed token opens one order. Tokens travel in the query string / body, never a path segment.
+export const guestOrderApi = {
+  // U-60: { orderNumber, email, postalCode, recaptchaToken } → { token }. 404 on any mismatch; 429 after 5 failures.
+  lookup (payload) {
+    return anonApi.post('/api/orders/lookup', payload).then(unwrap)
+  },
+  // U-60/U-61: { order, email, accountExists }.
+  get (token) {
+    return anonApi.get('/api/orders/guest', { params: { token } }).then(unwrap)
+  },
+  // U-70: { token, password } → { email }; a verification email follows.
+  createAccount (token, password) {
+    return anonApi.post('/api/orders/guest/account', { token, password }).then(unwrap)
+  },
+  // U-63: the short list of cancel reasons.
+  cancelReasons () {
+    return anonApi.get('/api/orders/guest/cancel-reasons').then(unwrap)
+  },
+  // U-63: ask to cancel an unshipped order; returns the refreshed order view.
+  requestCancel (token, reason, comment) {
+    return anonApi.post('/api/orders/guest/cancel', { token, reason, comment: comment || null }).then(unwrap)
+  },
+  // U-63: what can be returned (same shape as the signed-in customer's /returnable).
+  returnable (token) {
+    return anonApi.get('/api/orders/guest/returnable', { params: { token } }).then(unwrap)
+  },
+  // U-63: request a return; the payload carries guestToken. Photos (File[]) go as multipart next to the JSON.
+  submitReturn (token, payload, photos = []) {
+    const form = new FormData()
+    form.append('payload', JSON.stringify({ ...payload, guestToken: token }))
+    photos.forEach((f) => form.append('photos', f))
+    return anonApi.post('/api/orders/guest/returns', form).then(unwrap)
   }
 }
 

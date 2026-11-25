@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
@@ -18,12 +19,23 @@ namespace HKPartsEcommerce.Infrastructure.Payments.Adapters;
 /// SDK and supplied as the request's <see cref="PaymentRequest.PaymentToken"/>. <see cref="CaptureMode"/>
 /// maps to the CreatePayment <c>autocomplete</c> flag.
 /// </summary>
-public class SquareGatewayAdapter : PaymentGatewayAdapterBase
+public class SquareGatewayAdapter : PaymentGatewayAdapterBase, ISquareClient
 {
     private const string SquareVersion = "2024-01-18";
 
-    public SquareGatewayAdapter(ICredentialVault vault, IHttpClientFactory httpClientFactory, ILogger<SquareGatewayAdapter> logger)
-        : base(vault, httpClientFactory, logger) { }
+    /// <summary>An OAuth access token is renewed once it is this close to its expiry (Square tokens last 30 days).</summary>
+    public static readonly TimeSpan RefreshWindow = TimeSpan.FromDays(7);
+
+    private readonly IApplicationDbContext? _db;
+    private readonly IDateTimeProvider? _clock;
+
+    public SquareGatewayAdapter(ICredentialVault vault, IHttpClientFactory httpClientFactory, ILogger<SquareGatewayAdapter> logger,
+        IApplicationDbContext? db = null, IDateTimeProvider? clock = null)
+        : base(vault, httpClientFactory, logger)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public override PaymentMethodType Method => PaymentMethodType.Square;
 
@@ -36,6 +48,12 @@ public class SquareGatewayAdapter : PaymentGatewayAdapterBase
             var (baseUrl, token, locationId) = ctx.Value;
             if (string.IsNullOrWhiteSpace(req.PaymentToken))
                 return PaymentResult.Failed("Square requires a card nonce / source id (PaymentToken).");
+
+            // PHP parity "Transaction Type": the row's setting wins; without one, the gateway's capture-mode setting.
+            var rowType = _db is null ? null : await _db.SquareCredentials.AsNoTracking().Where(c => c.Active)
+                .OrderByDescending(c => c.UpdatedOnUtc).Select(c => c.TransactionType).FirstOrDefaultAsync(ct);
+            if (!string.IsNullOrWhiteSpace(rowType))
+                mode = string.Equals(rowType, "AuthOnly", StringComparison.OrdinalIgnoreCase) ? CaptureMode.AuthorizeOnly : CaptureMode.AuthorizeAndCapture;
 
             // The card nonce/source id is tokenized on the storefront by the Square Web Payments SDK and sent
             // as the request's PaymentToken; CreatePayment charges it here. location_id is stamped when the
@@ -106,6 +124,17 @@ public class SquareGatewayAdapter : PaymentGatewayAdapterBase
             if (string.IsNullOrWhiteSpace(paymentId))
                 return PaymentResult.Failed("Square refund requires the original payment id.");
 
+            // Authorize only: a held (APPROVED) payment can't be refunded, only cancelled, which releases the funds.
+            if (payment.Status == PaymentStatus.Authorized)
+            {
+                using var cancel = await SendAsync(HttpMethod.Post, token, $"{baseUrl}/payments/{paymentId}/cancel", "{}", ct);
+                if (!cancel.Root.TryGetProperty("payment", out var cancelled))
+                    return PaymentResult.Failed($"Square void failed: {DescribeError(cancel)}");
+                return string.Equals(GetString(cancelled, "status"), "CANCELED", StringComparison.OrdinalIgnoreCase)
+                    ? new PaymentResult(true, PaymentStatus.Voided, TransactionId: paymentId, GatewayReference: paymentId)
+                    : PaymentResult.Failed($"Square void returned status '{GetString(cancelled, "status")}'.");
+            }
+
             var body = JsonSerializer.Serialize(new
             {
                 idempotency_key = Guid.NewGuid().ToString("N"),
@@ -149,7 +178,124 @@ public class SquareGatewayAdapter : PaymentGatewayAdapterBase
             token = raw; // Legacy: the value was the bare access token before the JSON envelope.
         }
 
-        return string.IsNullOrWhiteSpace(token) ? null : (baseUrl, token, locationId);
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+
+        // PHP parity "Refresh Token" / "Token Expires At": an OAuth access token is renewed before it lapses.
+        token = await RefreshIfDueAsync(baseUrl, token, ct) ?? token;
+        return (baseUrl, token, locationId);
+    }
+
+    /// <summary>
+    /// Renews the active row's OAuth access token when it expires within <see cref="RefreshWindow"/> and a refresh
+    /// token + Application ID + Secret are stored: Square's ObtainToken (grant_type = refresh_token). The new token,
+    /// expiry and (if Square rotated it) refresh token are saved on the row. A failed refresh keeps the current token
+    /// while it still works; once it has expired the error is surfaced so the admin can sign in to Square again.
+    /// Returns the token to use, or null to keep the one already resolved.
+    /// </summary>
+    private async Task<string?> RefreshIfDueAsync(string baseUrl, string currentToken, CancellationToken ct)
+    {
+        if (_db is null)
+            return null;
+        var row = await _db.SquareCredentials.Where(c => c.Active).OrderByDescending(c => c.UpdatedOnUtc).FirstOrDefaultAsync(ct);
+        var now = _clock?.UtcNow ?? DateTime.UtcNow;
+        if (row is null || row.AccessTokenExpiresAtUtc is not DateTime expires || expires - now > RefreshWindow
+            || string.IsNullOrWhiteSpace(row.RefreshToken) || string.IsNullOrWhiteSpace(row.ApplicationId)
+            || string.IsNullOrWhiteSpace(row.ApplicationSecret))
+            return null;
+
+        var oauthUrl = $"{SquareOAuthBase(baseUrl)}/oauth2/token";
+        var body = JsonSerializer.Serialize(new
+        {
+            client_id = row.ApplicationId,
+            client_secret = row.ApplicationSecret,
+            grant_type = "refresh_token",
+            refresh_token = row.RefreshToken,
+        });
+        using var resp = await SendAsync(HttpMethod.Post, string.Empty, oauthUrl, body, ct);
+        var newToken = GetString(resp.Root, "access_token");
+        if (string.IsNullOrWhiteSpace(newToken))
+        {
+            Logger.LogWarning("Square OAuth token refresh failed: HTTP {Status} {Error}", (int)resp.Status, DescribeError(resp));
+            if (expires <= now)
+                throw new InvalidOperationException("The Square access token has expired and could not be renewed. Reconnect Square or enter a new access token and refresh token.");
+            return null;
+        }
+
+        row.AccessToken = newToken;
+        if (DateTime.TryParse(GetString(resp.Root, "expires_at"), System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var newExpiry))
+            row.AccessTokenExpiresAtUtc = newExpiry;
+        if (GetString(resp.Root, "refresh_token") is { Length: > 0 } rotated)
+            row.RefreshToken = rotated;
+        await _db.SaveChangesAsync(ct);
+        Logger.LogInformation("Square OAuth access token renewed; it now expires {Expiry:u}.", row.AccessTokenExpiresAtUtc);
+        return newToken;
+    }
+
+    /// <summary>
+    /// PHP parity "View Locations": signs in with the given row's access token (renewing it first when it is the
+    /// active row and due) and lists the account's locations, so the admin can check the token and copy a Location ID.
+    /// </summary>
+    public async Task<GatewayTestResult> ListLocationsAsync(Guid credentialId, CancellationToken ct)
+    {
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var row = _db is null ? null : await _db.SquareCredentials.AsNoTracking().FirstOrDefaultAsync(c => c.Id == credentialId, ct);
+        if (row is null || string.IsNullOrWhiteSpace(row.AccessToken))
+            return new GatewayTestResult { Connected = false, Message = "This Square credential has no access token." };
+
+        var baseUrl = (row.BaseUrl ?? (row.IsProduction ? "https://connect.squareup.com/v2" : "https://connect.squareupsandbox.com/v2")).Trim().TrimEnd('/');
+        var token = row.AccessToken;
+        try
+        {
+            if (row.Active)
+                token = await RefreshIfDueAsync(baseUrl, token, ct) ?? token;
+
+            using var resp = await SendAsync(HttpMethod.Get, token, $"{baseUrl}/locations", null, ct);
+            var result = new GatewayTestResult
+            {
+                Environment = row.IsProduction ? "Production" : "Sandbox",
+                ElapsedMs = started.ElapsedMilliseconds,
+            };
+            if (!resp.Root.TryGetProperty("locations", out var list) || list.ValueKind != JsonValueKind.Array)
+            {
+                result.Connected = false;
+                result.Message = DescribeError(resp);
+                return result;
+            }
+
+            result.Connected = true;
+            result.Locations = list.EnumerateArray().Select(l =>
+            {
+                string? address = null;
+                if (l.TryGetProperty("address", out var a) && a.ValueKind == JsonValueKind.Object)
+                    address = string.Join(", ", new[] { GetString(a, "address_line_1"), GetString(a, "locality"),
+                        GetString(a, "administrative_district_level_1"), GetString(a, "postal_code") }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                return new GatewayLocation
+                {
+                    Id = GetString(l, "id") ?? string.Empty,
+                    Name = GetString(l, "name"),
+                    Status = GetString(l, "status"),
+                    Currency = GetString(l, "currency"),
+                    Address = string.IsNullOrWhiteSpace(address) ? null : address,
+                };
+            }).ToList();
+            result.Message = row.LocationId is { Length: > 0 } chosen && result.Locations.All(x => x.Id != chosen)
+                ? $"The saved Location ID '{chosen}' is not one of this account's locations."
+                : null;
+            return result;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+        {
+            return new GatewayTestResult { Connected = false, Message = ex.Message, ElapsedMs = started.ElapsedMilliseconds };
+        }
+    }
+
+    /// <summary>The OAuth host for a Payments base URL: <c>https://connect.squareup.com/v2</c> → <c>https://connect.squareup.com</c>.</summary>
+    public static string SquareOAuthBase(string baseUrl)
+    {
+        var trimmed = baseUrl.Trim().TrimEnd('/');
+        return trimmed.EndsWith("/v2", StringComparison.OrdinalIgnoreCase) ? trimmed[..^3] : trimmed;
     }
 
     private async Task<GatewayResponse> SendAsync(HttpMethod method, string accessToken, string url, string? json, CancellationToken ct)
@@ -158,7 +304,8 @@ public class SquareGatewayAdapter : PaymentGatewayAdapterBase
         using var request = new HttpRequestMessage(method, url);
         if (json is not null)
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        if (!string.IsNullOrEmpty(accessToken)) // ObtainToken (OAuth refresh) is called without one
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Headers.Add("Square-Version", SquareVersion);
 
         using var response = await client.SendAsync(request, ct);

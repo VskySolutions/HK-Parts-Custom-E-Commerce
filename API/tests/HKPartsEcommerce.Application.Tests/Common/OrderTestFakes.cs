@@ -60,13 +60,22 @@ internal sealed class FakePaymentRouter : IPaymentGatewayRouter
 internal sealed class FakeRefundSender : ISender
 {
     public int RefundCalls { get; private set; }
+    /// <summary>The amount the last refund asked for (null = the payment's whole remaining balance).</summary>
+    public decimal? LastAmount { get; private set; }
+    /// <summary>What a null-amount (full) refund reports as refunded.</summary>
+    public decimal FullRefundAmount { get; set; }
 
     public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
     {
-        if (request is RefundPaymentCommand)
+        if (request is RefundPaymentCommand refund)
         {
             RefundCalls++;
-            return Task.FromResult((TResponse)(object)new PaymentDto { Status = PaymentStatus.Refunded });
+            LastAmount = refund.Amount;
+            return Task.FromResult((TResponse)(object)new PaymentDto
+            {
+                Status = PaymentStatus.Refunded,
+                RefundedAmount = refund.Amount ?? FullRefundAmount,
+            });
         }
 
         throw new NotSupportedException($"Unexpected request {request.GetType().Name}");

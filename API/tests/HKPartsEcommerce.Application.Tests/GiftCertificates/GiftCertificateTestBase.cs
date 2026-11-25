@@ -230,6 +230,9 @@ public abstract class GiftCertificateTestBase : CatalogTestBase
         }
 
         public Task ReportTransactionAsync(Guid orderId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task VoidTransactionAsync(Guid orderId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ReturnTransactionAsync(TaxReturnRequest request, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class FakeRouting : IOrderRoutingEngine

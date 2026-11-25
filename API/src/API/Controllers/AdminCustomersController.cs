@@ -36,18 +36,48 @@ public class AdminCustomersController : ApiControllerBase
         => Ok(await Mediator.Send(command));
 
     /// <summary>
-    /// Guest customers: buyers who placed a storefront order without registering, one row per contact email,
-    /// most recent first. Search matches email, name, phone or order number.
+    /// Guest customers (guest checkout §4.2): one row per normalized guest email, newest first, 25 per page.
+    /// Search matches email, name, phone or order number; status = All / Active / Blocked; account = All / GuestOnly /
+    /// Registered (guests who later registered stay listed).
     /// </summary>
     [HttpGet("guests")]
     public async Task<ActionResult<PaginatedList<GuestCustomerDto>>> ListGuests(
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
-        => Ok(await Mediator.Send(new ListGuestCustomersQuery(page, pageSize, search)));
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 25, [FromQuery] string? search = null,
+        [FromQuery] GuestStatusFilter status = GuestStatusFilter.All, [FromQuery] GuestAccountFilter account = GuestAccountFilter.All)
+        => Ok(await Mediator.Send(new ListGuestCustomersQuery(page, pageSize, search, status, account)));
 
-    /// <summary>A guest customer's orders (by contact email), newest first.</summary>
-    [HttpGet("guests/orders")]
-    public async Task<ActionResult<List<GuestOrderDto>>> ListGuestOrders([FromQuery] string email)
-        => Ok(await Mediator.Send(new ListGuestCustomerOrdersQuery(email)));
+    /// <summary>A-17: the filtered guest list as a download: <c>format=csv</c> (default) or <c>format=xlsx</c> (Excel).</summary>
+    [HttpGet("guests/export")]
+    public async Task<IActionResult> ExportGuests(
+        [FromQuery] string? search = null, [FromQuery] GuestStatusFilter status = GuestStatusFilter.All,
+        [FromQuery] GuestAccountFilter account = GuestAccountFilter.All, [FromQuery] GuestExportFormat format = GuestExportFormat.Csv)
+    {
+        var bytes = await Mediator.Send(new ExportGuestCustomersQuery(search, status, account, format));
+        var name = $"guest-customers-{DateTime.UtcNow:yyyyMMdd}";
+        return format == GuestExportFormat.Xlsx
+            ? File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx")
+            : File(bytes, "text/csv", name + ".csv");
+    }
+
+    /// <summary>
+    /// N-05: anonymise a guest's personal data on request (non-firearm orders; firearm orders are kept as the law
+    /// requires). Returns how many orders were anonymised and how many firearm orders were kept.
+    /// </summary>
+    [HttpPost("guests/{guestId:guid}/anonymize")]
+    [RequirePermission(Permissions.UsersWrite)]
+    public async Task<ActionResult<AnonymizeGuestResult>> AnonymizeGuest(Guid guestId)
+        => Ok(await Mediator.Send(new AnonymizeGuestCommand(guestId)));
+
+    /// <summary>A-14 / A-15: a guest's orders by opaque guest id (never the email in the URL), newest first.</summary>
+    [HttpGet("guests/{guestId:guid}/orders")]
+    public async Task<ActionResult<List<GuestOrderDto>>> ListGuestOrders(Guid guestId)
+        => Ok(await Mediator.Send(new ListGuestCustomerOrdersQuery(guestId)));
+
+    /// <summary>A-18: move the guest's orders onto the account registered with the same email.</summary>
+    [HttpPost("guests/{guestId:guid}/link")]
+    [RequirePermission(Permissions.UsersWrite)]
+    public async Task<ActionResult<LinkGuestOrdersResult>> LinkGuestOrders(Guid guestId)
+        => Ok(await Mediator.Send(new LinkGuestOrdersCommand(guestId)));
 
     /// <summary>Admin creates a customer (identity + profile) and returns the new customer id. Email is marked verified or a verification email is sent, per the request.</summary>
     [HttpPost]

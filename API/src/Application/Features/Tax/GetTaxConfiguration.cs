@@ -27,6 +27,20 @@ public class GetTaxConfigurationQueryHandler : IRequestHandler<GetTaxConfigurati
             await _db.SaveChangesAsync(cancellationToken);
         }
 
-        return TaxConfigurationDto.From(config);
+        var dto = TaxConfigurationDto.From(config);
+        await AttachAvalaraStatusAsync(_db, dto, cancellationToken);
+        return dto;
+    }
+
+    /// <summary>Adds the read-only Avalara credential status shown on the Avalara tab.</summary>
+    public static async Task AttachAvalaraStatusAsync(IApplicationDbContext db, TaxConfigurationDto dto, CancellationToken ct)
+    {
+        var credential = await db.AvalaraCredentials.AsNoTracking()
+            .Where(c => c.Active && c.BaseUrl != null && c.AccountId != null && c.LicenseKey != null)
+            .OrderByDescending(c => c.UpdatedOnUtc)
+            .Select(c => new { c.CompanyCode })
+            .FirstOrDefaultAsync(ct);
+        dto.AvalaraConfigured = credential is not null;
+        dto.AvalaraCompanyCode = credential?.CompanyCode;
     }
 }

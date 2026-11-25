@@ -21,4 +21,17 @@ public interface ITaxCalculationService
     /// A no-op when the active provider does not perform reporting (e.g. flat-rate).
     /// </summary>
     Task ReportTransactionAsync(Guid orderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Voids the order's committed tax document (Avalara) when the order is cancelled. A no-op for every other
+    /// provider and for an order with nothing committed.
+    /// </summary>
+    Task VoidTransactionAsync(Guid orderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reports a refund of an order whose sale was committed to Avalara as a committed ReturnInvoice (PHP
+    /// applyCreditAvalara). A no-op when the order has no committed, unvoided document. Never throws: the money has
+    /// already moved, so a provider failure is logged and raised as an admin alert instead.
+    /// </summary>
+    Task ReturnTransactionAsync(TaxReturnRequest request, CancellationToken cancellationToken = default);
 }

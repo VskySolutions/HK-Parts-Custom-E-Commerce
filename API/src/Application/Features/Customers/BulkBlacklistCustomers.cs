@@ -127,7 +127,7 @@ public class BulkBlacklistCustomersCommandHandler : IRequestHandler<BulkBlacklis
 
             if (!byCustomer.TryGetValue(t.Id, out var entry))
             {
-                entry = new CustomerBlacklistEntry { CustomerId = t.Id };
+                entry = new CustomerBlacklistEntry { CustomerId = t.Id, Source = Checkout.BlacklistSources.Customer };
                 _db.CustomerBlacklistEntries.Add(entry);
             }
             entry.FirstName = Clean(t.FirstName);

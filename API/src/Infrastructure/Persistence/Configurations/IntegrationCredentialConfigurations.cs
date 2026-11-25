@@ -38,6 +38,12 @@ public sealed class StripeCredentialConfig : IntegrationCredentialConfig<StripeC
     {
         b.Property(x => x.PublishableKey).HasMaxLength(300);
         b.Property(x => x.ReturnUrl).HasMaxLength(500);
+        b.Property(x => x.TransactionType).HasMaxLength(20);
+        b.Property(x => x.AcceptedCardTypes).HasMaxLength(200);
+        b.Property(x => x.MinOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.MaxOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.AllowedCustomerGroupIds).HasMaxLength(2000);
+        b.Property(x => x.DefaultOrderStatus).HasMaxLength(20);
     }
 }
 
@@ -48,6 +54,13 @@ public sealed class PayPalCredentialConfig : IntegrationCredentialConfig<PayPalC
     {
         b.Property(x => x.ClientId).HasMaxLength(300);
         b.Property(x => x.ReturnUrl).HasMaxLength(500);
+        b.Property(x => x.ApiUsername).HasMaxLength(200);
+        b.Property(x => x.BrandName).HasMaxLength(127);
+        b.Property(x => x.MinOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.MaxOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.AllowedCustomerGroupIds).HasMaxLength(2000);
+        b.Property(x => x.DefaultOrderStatus).HasMaxLength(20);
+        b.Ignore(x => x.HasClassicCredentials);
     }
 }
 
@@ -65,6 +78,12 @@ public sealed class SquareCredentialConfig : IntegrationCredentialConfig<SquareC
     {
         b.Property(x => x.ApplicationId).HasMaxLength(200);
         b.Property(x => x.LocationId).HasMaxLength(100);
+        b.Property(x => x.TransactionType).HasMaxLength(20);
+        b.Property(x => x.DisplayName).HasMaxLength(100);
+        b.Property(x => x.MinOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.MaxOrderAmount).HasPrecision(18, 2);
+        b.Property(x => x.AllowedCustomerGroupIds).HasMaxLength(2000);
+        b.Property(x => x.DefaultOrderStatus).HasMaxLength(20);
     }
 }
 

@@ -17,6 +17,8 @@ public class CustomerBlacklistEntryDto
     public string? Email { get; set; }
     public string? Reason { get; set; }
     public string Status { get; set; } = string.Empty;
+    /// <summary>Guest checkout A-31: "Guest", "Customer" or "Manual"; null for entries made before sources were kept.</summary>
+    public string? Source { get; set; }
     public int HitCount { get; set; }
     public DateTime? LastHitUtc { get; set; }
     public DateTime CreatedOnUtc { get; set; }
@@ -30,6 +32,7 @@ public class CustomerBlacklistEntryDto
         Email = e.Email,
         Reason = e.Reason,
         Status = e.Status.ToString(),
+        Source = e.Source,
         HitCount = hitCount,
         LastHitUtc = lastHit,
         CreatedOnUtc = e.CreatedOnUtc,
@@ -165,7 +168,9 @@ public record SaveCustomerBlacklistEntryCommand(
     string? LastName,
     string? Email,
     string? Reason,
-    CustomerBlacklistStatus Status = CustomerBlacklistStatus.Blocked) : IRequest<CustomerBlacklistEntryDto>;
+    CustomerBlacklistStatus Status = CustomerBlacklistStatus.Blocked,
+    /// <summary>Guest checkout A-31: the screen the block came from ("Guest", "Customer"); new entries default to "Manual".</summary>
+    string? Source = null) : IRequest<CustomerBlacklistEntryDto>;
 
 public class SaveCustomerBlacklistEntryCommandValidator : AbstractValidator<SaveCustomerBlacklistEntryCommand>
 {
@@ -202,7 +207,7 @@ public class SaveCustomerBlacklistEntryCommandHandler : IRequestHandler<SaveCust
         }
         else
         {
-            entry = new CustomerBlacklistEntry();
+            entry = new CustomerBlacklistEntry { Source = BlacklistSources.Normalize(r.Source) };
             _db.CustomerBlacklistEntries.Add(entry);
         }
 
@@ -289,4 +294,17 @@ public class ListCustomerBlacklistHitsQueryHandler : IRequestHandler<ListCustome
         return new PaginatedList<CustomerBlacklistHitDto>(
             page.Items.Select(CustomerBlacklistHitDto.From).ToList(), page.TotalCount, page.PageNumber, page.PageSize);
     }
+}
+
+/// <summary>Where a blacklist entry was created (guest checkout A-31).</summary>
+public static class BlacklistSources
+{
+    public const string Guest = "Guest";
+    public const string Customer = "Customer";
+    public const string Manual = "Manual";
+
+    public static string Normalize(string? source) =>
+        string.Equals(source, Guest, StringComparison.OrdinalIgnoreCase) ? Guest
+        : string.Equals(source, Customer, StringComparison.OrdinalIgnoreCase) ? Customer
+        : Manual;
 }

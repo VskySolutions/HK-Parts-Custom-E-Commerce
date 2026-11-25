@@ -13,6 +13,9 @@ public class CustomerGroupDto
     public decimal? DiscountPercent { get; set; }
     public bool IsActive { get; set; }
     public int DisplayOrder { get; set; }
+
+    /// <summary>PHP group tax_method: overrides the store's tax method (None = tax exempt). Null = store default.</summary>
+    public TaxProviderType? TaxMethod { get; set; }
     public List<CustomerGroupPriceDto> GroupPrices { get; set; } = new();
 
     public static CustomerGroupDto From(CustomerGroup g) => new()
@@ -24,6 +27,7 @@ public class CustomerGroupDto
         DiscountPercent = g.DiscountPercent,
         IsActive = g.IsActive,
         DisplayOrder = g.DisplayOrder,
+        TaxMethod = g.TaxMethod,
         GroupPrices = g.GroupPrices.Select(CustomerGroupPriceDto.From).ToList(),
     };
 }

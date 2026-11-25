@@ -11,4 +11,10 @@ public interface IStorefrontUrlBuilder
 
     /// <summary>Admin/staff-facing password-reset link, targeting the admin SPA's <c>/auth/reset-password</c> route.</summary>
     string AdminPasswordResetUrl(string token);
+
+    /// <summary>Guest checkout U-61: the read-only order page opened by a signed guest order token.</summary>
+    string GuestOrderUrl(string token);
+
+    /// <summary>Guest checkout U-60: the order lookup form (order number + email or ZIP).</summary>
+    string GuestOrderLookupUrl();
 }

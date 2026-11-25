@@ -28,6 +28,7 @@ public class CustomerBlacklistEntryConfiguration : IEntityTypeConfiguration<Cust
         b.Property(x => x.Email).HasMaxLength(256);
         b.Property(x => x.Reason).HasMaxLength(1000);
         b.Property(x => x.Status).HasConversion<int>();
+        b.Property(x => x.Source).HasMaxLength(20);
         b.HasIndex(x => x.Email);
         b.HasIndex(x => new { x.LastName, x.FirstName });
         // Customers are soft-deleted, never removed: lookup FK, no cascade.

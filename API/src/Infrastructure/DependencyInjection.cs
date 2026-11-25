@@ -133,6 +133,10 @@ public static class DependencyInjection
         services.AddScoped<IEmailTemplateSender, EmailTemplateSender>();
         // Marketing unsubscribe tokens (WO-87): DataProtection-backed, time-safe, no new secret needed.
         services.AddSingleton<IUnsubscribeTokenService, UnsubscribeTokenService>();
+        // Guest order links (guest checkout U-61): DataProtection-backed, time-limited.
+        services.AddSingleton<IGuestOrderTokenService, Storefront.GuestOrderTokenService>();
+        // Guest checkout U-11: MX check of the guest email domain (no package: a raw DNS query + address fallback).
+        services.AddSingleton<IEmailDomainChecker, Storefront.EmailDomainChecker>();
 
         // Settings (WO-3): cached, audited platform settings.
         services.AddMemoryCache();
@@ -211,13 +215,20 @@ public static class DependencyInjection
         // Tax: calculation service + provider clients with flat-rate fallback (WO-35/36).
         services.AddScoped<ITaxProviderClient, TaxJarClient>();
         services.AddScoped<ITaxProviderClient, StripeTaxClient>();
+        // PHP parity: Avalara tax (estimate / commit / void / test connection) + its request log.
+        services.AddScoped<HKPartsEcommerce.Infrastructure.Tax.TaxLogWriter>();
+        services.AddScoped<AvalaraTaxClient>();
+        services.AddScoped<ITaxProviderClient>(sp => sp.GetRequiredService<AvalaraTaxClient>());
+        services.AddScoped<IAvalaraTaxConnection>(sp => sp.GetRequiredService<AvalaraTaxClient>());
         services.AddScoped<ITaxCalculationService, TaxCalculationService>();
         services.AddScoped<INexusTracker, HKPartsEcommerce.Infrastructure.Tax.NexusTracker>();
         // Payments: gateway router + adapters + expired-auth scanner (WO-32/33/34).
         services.AddScoped<IPaymentGatewayAdapter, StripeGatewayAdapter>();
         services.AddScoped<IPaymentGatewayAdapter, PaypalGatewayAdapter>();
         services.AddScoped<IPaymentGatewayAdapter, RazorpayGatewayAdapter>();
-        services.AddScoped<IPaymentGatewayAdapter, SquareGatewayAdapter>();
+        services.AddScoped<SquareGatewayAdapter>();
+        services.AddScoped<IPaymentGatewayAdapter>(sp => sp.GetRequiredService<SquareGatewayAdapter>());
+        services.AddScoped<ISquareClient>(sp => sp.GetRequiredService<SquareGatewayAdapter>());
         services.AddScoped<AuthorizeNetGatewayAdapter>();
         services.AddScoped<IPaymentGatewayAdapter>(sp => sp.GetRequiredService<AuthorizeNetGatewayAdapter>());
         services.AddScoped<IAuthorizeNetClient>(sp => sp.GetRequiredService<AuthorizeNetGatewayAdapter>());

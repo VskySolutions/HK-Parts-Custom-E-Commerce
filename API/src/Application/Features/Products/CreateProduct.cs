@@ -57,7 +57,9 @@ public record CreateProductCommand(
     string? PackageType = null,
     string? FreightClass = null,
     bool IsHazardous = false,
-    bool IsReturnable = true) : IRequest<ProductDto>;
+    bool IsReturnable = true,
+    /// <summary>Guest checkout A-02: buying this product needs an account.</summary>
+    bool AccountRequired = false) : IRequest<ProductDto>;
 
 public class CreateProductCommandValidator : AbstractValidator<CreateProductCommand>
 {
@@ -126,6 +128,7 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
             IsPublished = request.IsPublished,
             ReviewsEnabled = request.ReviewsEnabled,
             IsInquiryOnly = request.IsInquiryOnly,
+            AccountRequired = request.AccountRequired,
             InquiryButtonLabel = request.InquiryButtonLabel,
             DisplayOrder = request.DisplayOrder,
             IsFeatured = request.IsFeatured,

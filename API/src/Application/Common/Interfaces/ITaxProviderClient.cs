@@ -26,4 +26,22 @@ public interface ITaxProviderClient
     /// real call; other providers are a no-op.
     /// </summary>
     Task ReportTransactionAsync(Guid orderId, CancellationToken ct);
+
+    /// <summary>
+    /// Voids the order's committed tax document when the order is cancelled (PHP Avalara voidTax). Only Avalara
+    /// commits documents; every other provider is a no-op.
+    /// </summary>
+    Task VoidTransactionAsync(Guid orderId, CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>
+    /// Records a refund against the order's committed document (Avalara ReturnInvoice). Only Avalara commits
+    /// documents; every other provider is a no-op. Throws on failure.
+    /// </summary>
+    Task ReturnTransactionAsync(TaxReturnRequest request, CancellationToken ct) => Task.CompletedTask;
+}
+
+/// <summary>Avalara's Test Connection (PHP Avalara Settings page, pingTest): checks the active credential authenticates.</summary>
+public interface IAvalaraTaxConnection
+{
+    Task<TaxConnectionTestResult> TestConnectionAsync(CancellationToken ct);
 }

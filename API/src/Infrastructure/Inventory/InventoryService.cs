@@ -75,7 +75,23 @@ public class InventoryService : IInventoryService
             return;
 
         foreach (var line in order.Lines)
-            await DecrementStockAsync(line.ProductId, line.ProductVariantId, storeId, line.Quantity, ct);
+        {
+            if (await DecrementStockAsync(line.ProductId, line.ProductVariantId, storeId, line.Quantity, ct))
+                continue;
+
+            // PHP parity: an order may be placed on the product's TOTAL stock over all stores (or with "Use inventory"
+            // off), so the assigned store can be short. Its count goes below zero instead of the sale going
+            // unrecorded: the total across stores stays right, as the old site's single stock number did.
+            var level = await FindLevelAsync(line.ProductId, line.ProductVariantId, storeId, ct);
+            if (level is null)
+            {
+                level = new InventoryLevel { ProductId = line.ProductId, ProductVariantId = line.ProductVariantId, StoreId = storeId };
+                _db.InventoryLevels.Add(level);
+            }
+            level.StockQuantity -= line.Quantity;
+            await _db.SaveChangesAsync(ct);
+            await CheckLowStockAsync(level, ct);
+        }
     }
 
     public async Task RestoreForOrderAsync(Order order, IReadOnlyCollection<Guid>? orderLineItemIds = null, CancellationToken ct = default)

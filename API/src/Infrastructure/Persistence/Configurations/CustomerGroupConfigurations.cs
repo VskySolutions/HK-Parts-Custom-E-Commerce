@@ -13,6 +13,7 @@ public class CustomerGroupConfiguration : IEntityTypeConfiguration<CustomerGroup
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         b.Property(x => x.Description).HasMaxLength(512);
         b.Property(x => x.DiscountPercent).HasPrecision(5, 2);
+        b.Property(x => x.TaxMethod).HasConversion<int?>();
         b.HasQueryFilter(x => !x.Deleted);
     }
 }

@@ -53,12 +53,14 @@ public class GetCustomerGroupQueryHandler : IRequestHandler<GetCustomerGroupQuer
 /// <summary>Creates a customer group with a pricing rule (AC-CUS-003.1).</summary>
 public record CreateCustomerGroupCommand(
     string Name, string? Description, CustomerGroupPricingRuleType PricingRuleType,
-    decimal? DiscountPercent = null, bool IsActive = true, int DisplayOrder = 0) : IRequest<CustomerGroupDto>;
+    decimal? DiscountPercent = null, bool IsActive = true, int DisplayOrder = 0,
+    TaxProviderType? TaxMethod = null) : IRequest<CustomerGroupDto>;
 
 public class CreateCustomerGroupCommandValidator : AbstractValidator<CreateCustomerGroupCommand>
 {
     public CreateCustomerGroupCommandValidator()
     {
+        RuleFor(x => x.TaxMethod).IsInEnum().When(x => x.TaxMethod.HasValue);
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Description).MaximumLength(512);
         RuleFor(x => x.DiscountPercent).NotNull().InclusiveBetween(0, 100)
@@ -81,6 +83,7 @@ public class CreateCustomerGroupCommandHandler : IRequestHandler<CreateCustomerG
             DiscountPercent = request.PricingRuleType == CustomerGroupPricingRuleType.PercentageDiscount ? request.DiscountPercent : null,
             IsActive = request.IsActive,
             DisplayOrder = request.DisplayOrder,
+            TaxMethod = request.TaxMethod,
         };
         _db.CustomerGroups.Add(group);
         await _db.SaveChangesAsync(cancellationToken);
@@ -91,12 +94,14 @@ public class CreateCustomerGroupCommandHandler : IRequestHandler<CreateCustomerG
 /// <summary>Updates a customer group.</summary>
 public record UpdateCustomerGroupCommand(
     Guid Id, string Name, string? Description, CustomerGroupPricingRuleType PricingRuleType,
-    decimal? DiscountPercent, bool IsActive, int DisplayOrder) : IRequest<CustomerGroupDto>;
+    decimal? DiscountPercent, bool IsActive, int DisplayOrder,
+    TaxProviderType? TaxMethod = null) : IRequest<CustomerGroupDto>;
 
 public class UpdateCustomerGroupCommandValidator : AbstractValidator<UpdateCustomerGroupCommand>
 {
     public UpdateCustomerGroupCommandValidator()
     {
+        RuleFor(x => x.TaxMethod).IsInEnum().When(x => x.TaxMethod.HasValue);
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Description).MaximumLength(512);
         RuleFor(x => x.DiscountPercent).NotNull().InclusiveBetween(0, 100)
@@ -120,6 +125,7 @@ public class UpdateCustomerGroupCommandHandler : IRequestHandler<UpdateCustomerG
         group.DiscountPercent = request.PricingRuleType == CustomerGroupPricingRuleType.PercentageDiscount ? request.DiscountPercent : null;
         group.IsActive = request.IsActive;
         group.DisplayOrder = request.DisplayOrder;
+        group.TaxMethod = request.TaxMethod;
         await _db.SaveChangesAsync(cancellationToken);
         return CustomerGroupDto.From(group);
     }

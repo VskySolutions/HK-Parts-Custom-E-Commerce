@@ -159,6 +159,8 @@ const columns = [
   { name: 'name', label: 'Name', field: (r) => nameOf(r), align: 'left' },
   { name: 'email', label: 'Email', field: 'email', align: 'left' },
   { name: 'reason', label: 'Reason', field: 'reason', align: 'left' },
+  // Guest checkout A-31: which screen the block came from.
+  { name: 'source', label: 'Source', field: (r) => r.source || '—', align: 'left' },
   { name: 'status', label: 'Status', field: 'status', align: 'center' }
 ]
 const historyColumns = [

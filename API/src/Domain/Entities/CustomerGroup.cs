@@ -24,6 +24,12 @@ public class CustomerGroup : AuditableEntity, ISoftDeletable
     public decimal? DiscountPercent { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// PHP parity (customer group tax_method): overrides the store's tax method for this group's members;
+    /// <see cref="TaxProviderType.None"/> makes the group tax exempt. Null = use the store default.
+    /// </summary>
+    public TaxProviderType? TaxMethod { get; set; }
     public int DisplayOrder { get; set; }
 
     public bool Deleted { get; set; }

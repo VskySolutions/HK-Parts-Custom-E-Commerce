@@ -153,6 +153,8 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<CustomerBlacklistEntry> CustomerBlacklistEntries => Set<CustomerBlacklistEntry>();
     public DbSet<CustomerBlacklistHit> CustomerBlacklistHits => Set<CustomerBlacklistHit>();
     public DbSet<CustomerBlacklistEvent> CustomerBlacklistEvents => Set<CustomerBlacklistEvent>();
+    public DbSet<Guest> Guests => Set<Guest>();
+    public DbSet<GuestOrderAccessLog> GuestOrderAccessLogs => Set<GuestOrderAccessLog>();
     public DbSet<StoreManagerAssignment> StoreManagerAssignments => Set<StoreManagerAssignment>();
     public DbSet<Shipment> Shipments => Set<Shipment>();
     public DbSet<ShipmentLineItem> ShipmentLineItems => Set<ShipmentLineItem>();
@@ -180,6 +182,9 @@ public class AppDbContext : DbContext, IApplicationDbContext
     public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<TaxProviderConfiguration> TaxProviderConfigurations => Set<TaxProviderConfiguration>();
+    public DbSet<TaxStateRate> TaxStateRates => Set<TaxStateRate>();
+    public DbSet<TaxZipRate> TaxZipRates => Set<TaxZipRate>();
+    public DbSet<TaxLog> TaxLogs => Set<TaxLog>();
     public DbSet<StateNexusAccumulator> StateNexusAccumulators => Set<StateNexusAccumulator>();
     public DbSet<OrderStatusHistory> OrderStatusHistory => Set<OrderStatusHistory>();
 

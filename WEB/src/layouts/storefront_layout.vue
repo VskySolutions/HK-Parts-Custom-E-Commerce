@@ -314,7 +314,8 @@
             <router-link class="sf-footer__link" :to="{ name: 'shop-account-profile' }">My Account</router-link>
             <!-- <router-link class="sf-footer__link" :to="{ name: 'shop-wishlist' }">Wishlist</router-link> -->
             <router-link class="sf-footer__link" :to="{ name: 'shop-cart' }">Cart</router-link>
-            <router-link class="sf-footer__link" :to="{ name: 'shop-account-orders' }">Track Order</router-link>
+            <!-- Guest checkout U-60: guests track an order by number + email; signed-in buyers see their order history. -->
+            <router-link class="sf-footer__link" :to="customerAuth.isAuthenticated ? { name: 'shop-account-orders' } : { name: 'shop-order-lookup' }">Track Order</router-link>
             <router-link class="sf-footer__link" :to="{ name: 'shop-compare' }">Compare</router-link>
           </div>
 

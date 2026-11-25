@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
@@ -20,15 +21,41 @@ namespace HKPartsEcommerce.Infrastructure.Payments.Adapters;
 /// </summary>
 public class PaypalGatewayAdapter : PaymentGatewayAdapterBase
 {
+    private readonly IApplicationDbContext? _db;
 
-    public PaypalGatewayAdapter(ICredentialVault vault, IHttpClientFactory httpClientFactory, ILogger<PaypalGatewayAdapter> logger)
-        : base(vault, httpClientFactory, logger) { }
+    public PaypalGatewayAdapter(ICredentialVault vault, IHttpClientFactory httpClientFactory, ILogger<PaypalGatewayAdapter> logger,
+        IApplicationDbContext? db = null)
+        : base(vault, httpClientFactory, logger)
+        => _db = db;
 
     public override PaymentMethodType Method => PaymentMethodType.PayPal;
+
+    /// <summary>The active PayPal row, read for the PHP-parity settings (store name, classic API credentials).</summary>
+    private async Task<PayPalCredential?> ActiveRowAsync(CancellationToken ct) =>
+        _db is null
+            ? null
+            : await _db.PayPalCredentials.AsNoTracking().Where(c => c.Active).OrderByDescending(c => c.UpdatedOnUtc).FirstOrDefaultAsync(ct);
+
+    /// <summary>PHP parity: the classic "PayPal Express" API when the row has no REST Client ID / Secret but has the classic set.</summary>
+    private async Task<PaypalClassicExpress?> ClassicAsync(CancellationToken ct)
+    {
+        var row = await ActiveRowAsync(ct);
+        return row is not null && row.HasClassicCredentials && (string.IsNullOrWhiteSpace(row.ClientId) || string.IsNullOrWhiteSpace(row.SecretKey))
+            ? new PaypalClassicExpress(CreateClient(), row)
+            : null;
+    }
 
     public override Task<PaymentResult> AuthorizeAsync(PaymentRequest req, CaptureMode mode, CancellationToken ct)
         => GuardAsync("authorize", async () =>
         {
+            if (string.IsNullOrWhiteSpace(req.PaymentToken) && await ClassicAsync(ct) is { } classic)
+            {
+                var row = (await ActiveRowAsync(ct))!;
+                if (string.IsNullOrWhiteSpace(row.ReturnUrl) || !Uri.TryCreate(row.ReturnUrl.Trim(), UriKind.Absolute, out _))
+                    return PaymentResult.Failed("PayPal return URL is not configured — set it on the PayPal integration.");
+                return await classic.SetExpressCheckoutAsync(req, mode == CaptureMode.AuthorizeOnly, row.ReturnUrl.Trim(), ct);
+            }
+
             var ctx = await AuthenticateAsync(ct);
             if (ctx is null)
                 return PaymentResult.Failed("PayPal credentials are not configured (format 'clientId:secret').");
@@ -62,7 +89,7 @@ public class PaypalGatewayAdapter : PaymentGatewayAdapterBase
                 return PaymentResult.Failed($"PayPal return URL must be an absolute http(s) URL — got '{returnUrl}'.");
 
             var intent = mode == CaptureMode.AuthorizeOnly ? "AUTHORIZE" : "CAPTURE";
-            var body = BuildCreateOrderJson(intent, req, returnUrl.Trim());
+            var body = BuildCreateOrderJson(intent, req, returnUrl.Trim(), (await ActiveRowAsync(ct))?.BrandName);
             using var doc = await PostJsonAsync(token, $"{baseUrl}/v2/checkout/orders", body, ct);
             var root = doc.RootElement;
 
@@ -81,6 +108,8 @@ public class PaypalGatewayAdapter : PaymentGatewayAdapterBase
     public override Task<PaymentResult> CaptureAsync(PaymentRecord payment, decimal amount, CancellationToken ct)
         => GuardAsync("capture", async () =>
         {
+            if (PaypalClassicExpress.IsClassic(payment))
+                return await ((await ClassicAsync(ct)) ?? throw new InvalidOperationException("PayPal classic API credentials are not configured.")).CaptureAsync(payment, amount, ct);
             var ctx = await AuthenticateAsync(ct);
             if (ctx is null)
                 return PaymentResult.Failed("PayPal credentials are not configured.");
@@ -102,6 +131,8 @@ public class PaypalGatewayAdapter : PaymentGatewayAdapterBase
     public override Task<PaymentResult> RefundAsync(PaymentRecord payment, decimal amount, CancellationToken ct)
         => GuardAsync("refund", async () =>
         {
+            if (PaypalClassicExpress.IsClassic(payment))
+                return await ((await ClassicAsync(ct)) ?? throw new InvalidOperationException("PayPal classic API credentials are not configured.")).RefundAsync(payment, amount, ct);
             var ctx = await AuthenticateAsync(ct);
             if (ctx is null)
                 return PaymentResult.Failed("PayPal credentials are not configured.");
@@ -132,6 +163,8 @@ public class PaypalGatewayAdapter : PaymentGatewayAdapterBase
     public override Task<PaymentResult> VerifyRedirectAsync(PaymentRecord payment, CancellationToken ct)
         => GuardAsync("verify", async () =>
         {
+            if (PaypalClassicExpress.IsClassic(payment))
+                return await ((await ClassicAsync(ct)) ?? throw new InvalidOperationException("PayPal classic API credentials are not configured.")).CompleteAsync(payment, ct);
             var ctx = await AuthenticateAsync(ct);
             if (ctx is null)
                 return PaymentResult.Failed("PayPal credentials are not configured.", PaymentStatus.Pending);
@@ -161,7 +194,7 @@ public class PaypalGatewayAdapter : PaymentGatewayAdapterBase
                 : PaymentResult.Failed($"PayPal capture returned status '{capStatus}'.", PaymentStatus.Pending);
         });
 
-    private static string BuildCreateOrderJson(string intent, PaymentRequest req, string returnUrl)
+    private static string BuildCreateOrderJson(string intent, PaymentRequest req, string returnUrl, string? brandName = null)
     {
         // Buyer returns to {returnUrl}?order={orderId} on approval, or …&cancelled=1 on cancel — the same
         // storefront checkout return-handling as Stripe, so our order id round-trips for confirmation.
@@ -176,7 +209,10 @@ public class PaypalGatewayAdapter : PaymentGatewayAdapterBase
             {
                 new { amount = new { currency_code = req.CurrencyCode, value = req.Amount.ToString("0.00", CultureInfo.InvariantCulture) } },
             },
-            ["application_context"] = new { return_url = returnTo, cancel_url = cancelTo },
+            // "Store Name Shown in PayPal" (PHP parity): the business name on PayPal's page.
+            ["application_context"] = string.IsNullOrWhiteSpace(brandName)
+                ? new Dictionary<string, object?> { ["return_url"] = returnTo, ["cancel_url"] = cancelTo }
+                : new Dictionary<string, object?> { ["return_url"] = returnTo, ["cancel_url"] = cancelTo, ["brand_name"] = brandName.Trim() },
         };
         return JsonSerializer.Serialize(order);
     }
