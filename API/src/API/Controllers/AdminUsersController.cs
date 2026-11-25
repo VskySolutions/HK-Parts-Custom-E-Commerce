@@ -15,8 +15,8 @@ public class AdminUsersController : ApiControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedList<AdminUserDto>>> List(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
-        [FromQuery] bool? isActive = null, [FromQuery] bool? emailVerified = null)
-        => Ok(await Mediator.Send(new ListUsersQuery(page, pageSize, search, isActive, emailVerified)));
+        [FromQuery] bool? isActive = null, [FromQuery] bool? emailVerified = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListUsersQuery(page, pageSize, search, isActive, emailVerified, sortBy, sortDescending)));
 
     /// <summary>Get a single user by id, including profile and role assignments.</summary>
     [HttpGet("{id:guid}")]

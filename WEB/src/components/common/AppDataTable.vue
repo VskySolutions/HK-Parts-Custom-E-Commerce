@@ -302,16 +302,37 @@ function sortIcon (col) {
 }
 
 // ---- Server-side request passthrough --------------------------------------
+// function onRequest (reqProps) {
+//   if (reqProps && reqProps.pagination) {
+//     emit('update:pagination', reqProps.pagination)
+//     if (reqProps.pagination.rowsPerPage) {
+//       prefs.pageSize.value = reqProps.pagination.rowsPerPage
+//     }
+//     // Remember the active sort so it's available to endpoints that support it.
+//     if (reqProps.pagination.sortBy !== undefined) prefs.sortBy.value = reqProps.pagination.sortBy
+//     if (reqProps.pagination.descending !== undefined) prefs.descending.value = reqProps.pagination.descending
+//   }
+//   emit('request', reqProps)
+// }
+
 function onRequest (reqProps) {
-  if (reqProps && reqProps.pagination) {
-    emit('update:pagination', reqProps.pagination)
-    if (reqProps.pagination.rowsPerPage) {
-      prefs.pageSize.value = reqProps.pagination.rowsPerPage
+  if (reqProps?.pagination) {
+    const nextPagination = reqProps.pagination
+
+    emit('update:pagination', nextPagination)
+
+    // Save page size, including 0 (All).
+    prefs.pageSize.value = nextPagination.rowsPerPage
+
+    if (nextPagination.sortBy !== undefined) {
+      prefs.sortBy.value = nextPagination.sortBy
     }
-    // Remember the active sort so it's available to endpoints that support it.
-    if (reqProps.pagination.sortBy !== undefined) prefs.sortBy.value = reqProps.pagination.sortBy
-    if (reqProps.pagination.descending !== undefined) prefs.descending.value = reqProps.pagination.descending
+
+    if (nextPagination.descending !== undefined) {
+      prefs.descending.value = nextPagination.descending
+    }
   }
+
   emit('request', reqProps)
 }
 </script>

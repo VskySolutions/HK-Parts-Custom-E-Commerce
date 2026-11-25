@@ -1,7 +1,9 @@
-using Microsoft.AspNetCore.Mvc;
 using HKPartsEcommerce.API.Authorization;
 using HKPartsEcommerce.Application.Common.Authorization;
+using HKPartsEcommerce.Application.Common.Models;
+using HKPartsEcommerce.Application.Features.ProductCustomFields;
 using HKPartsEcommerce.Application.Features.Roles;
+using Microsoft.AspNetCore.Mvc;
 
 namespace HKPartsEcommerce.API.Controllers;
 
@@ -11,8 +13,8 @@ namespace HKPartsEcommerce.API.Controllers;
 public class AdminRolesController : ApiControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<RoleDto>>> List()
-        => Ok(await Mediator.Send(new ListRolesQuery()));
+    public async Task<ActionResult<PaginatedList<RoleDto>>> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+       => Ok(await Mediator.Send(new ListRolesQuery(page, pageSize, search, sortBy, sortDescending)));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<RoleDto>> Get(Guid id)
