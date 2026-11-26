@@ -1,8 +1,9 @@
-using MediatR;
-using Microsoft.EntityFrameworkCore;
+using HKPartsEcommerce.Application.Common.Extensions;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace HKPartsEcommerce.Application.Features.Logging;
 
@@ -20,10 +21,19 @@ public record ListApplicationLogsQuery(
     DateTime? DateTo = null,
     string? Level = null,
     string? CorrelationId = null,
-    string? Search = null) : IRequest<PaginatedList<ApplicationLogDto>>;
+    string? Search = null, 
+    string? SortBy = null, 
+    bool SortDescending = false) : IRequest<PaginatedList<ApplicationLogDto>>;
 
 public class ListApplicationLogsQueryHandler : IRequestHandler<ListApplicationLogsQuery, PaginatedList<ApplicationLogDto>>
 {
+
+    private static readonly IReadOnlyDictionary<string, string> SortMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["timeStamp"] = "TimeStamp",
+        ["level"] = "Level"
+    };
+
     private readonly IApplicationDbContext _db;
 
     public ListApplicationLogsQueryHandler(IApplicationDbContext db) => _db = db;
@@ -61,7 +71,9 @@ public class ListApplicationLogsQueryHandler : IRequestHandler<ListApplicationLo
             query = query.Where(l => l.Message != null && l.Message.Contains(term));
         }
 
-        var ordered = query.OrderByDescending(l => l.TimeStamp);
+        //var ordered = query.OrderByDescending(l => l.TimeStamp);
+        var ordered = query.ApplySort(request.SortBy, request.SortDescending, SortMap,
+            defaultSort: q => q.OrderByDescending(l => l.TimeStamp));
 
         var page = await PaginatedList<ApplicationLog>.CreateAsync(ordered, request.Page, request.PageSize, cancellationToken);
         var items = page.Items.Select(ApplicationLogDto.From).ToList();

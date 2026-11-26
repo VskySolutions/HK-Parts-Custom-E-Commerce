@@ -36,10 +36,11 @@
       :rows="rows"
       :columns="columns"
       :loading="loading"
-      :pagination="tablePagination"
+      :pagination="pagination"
       no-data-label="No templates match your filters."
       show-actions
       @row-click="onRowClick"
+      @request="onRequest"
       @refresh="reload"
     >
       <template #body-cell-name="cell">
@@ -138,14 +139,12 @@ const statusOptions = [
   { label: 'Disabled', value: false }
 ]
 
-// Stable descriptor -> client-side pagination (no rowsNumber = client mode).
-const tablePagination = { sortBy: 'name', rowsPerPage: 25 }
-
 const rows = ref([])
 const loading = ref(false)
 const category = ref(null)
 const enabled = ref(null)
 const search = ref('')
+const pagination = ref({ page: 1, rowsPerPage: 10, rowsNumber: 0, sortBy: 'name', descending: false })
 const filtersOpen = ref(false)
 
 const activeFilterCount = computed(() => (category.value !== null ? 1 : 0) + (enabled.value !== null ? 1 : 0))
@@ -156,25 +155,62 @@ function clearFilters () {
   reload()
 }
 
-async function load () {
+// async function load () {
+//   loading.value = true
+//   try {
+//     const result = await emailTemplatesApi.list({
+//       category: category.value ?? undefined,
+//       enabled: enabled.value ?? undefined,
+//       search: search.value || undefined
+//     })
+//     rows.value = Array.isArray(result) ? result : result?.items || []
+//   } catch (err) {
+//     rows.value = []
+//     notify.error(getApiErrorMessage(err))
+//   } finally {
+//     loading.value = false
+//   }
+// }
+
+// function reload () {
+//   load()
+// }
+
+async function fetch (props) {
+  const p = props?.pagination || pagination.value
+
   loading.value = true
+
   try {
     const result = await emailTemplatesApi.list({
       category: category.value ?? undefined,
       enabled: enabled.value ?? undefined,
-      search: search.value || undefined
+      page: p.page,
+      pageSize: p.rowsPerPage,
+      search: search.value || undefined,
+      sortBy: p.sortBy || undefined,
+      sortDescending: !!p.descending
     })
-    rows.value = Array.isArray(result) ? result : result?.items || []
+
+    const items = Array.isArray(result) ? result : result?.items || []
+    const total = Array.isArray(result) ? result.length : result?.totalCount ?? items.length
+    rows.value = items
+    pagination.value = { ...p, rowsNumber: total }
   } catch (err) {
     rows.value = []
+    pagination.value = { ...p,rowsNumber: 0}
     notify.error(getApiErrorMessage(err))
   } finally {
     loading.value = false
   }
 }
 
+function onRequest (props) {
+  fetch(props)
+}
+
 function reload () {
-  load()
+  fetch({ pagination: { ...pagination.value, page: 1} })
 }
 
 function openEditor (row) {
@@ -185,5 +221,5 @@ function onRowClick (evt, row) {
   openEditor(row)
 }
 
-onMounted(load)
+onMounted(() => fetch())
 </script>

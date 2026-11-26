@@ -214,9 +214,9 @@ const pagination = ref({ page: 1, rowsPerPage: 20, rowsNumber: 0 })
 // Column definitions match the custom body slot's q-td `key`s. Server list has no sort, so no sortable.
 const columns = [
   { name: 'expand', label: '', field: 'id', align: 'center' },
-  { name: 'name', label: 'Product', field: 'name', align: 'left' },
-  { name: 'sku', label: 'SKU', field: 'sku', align: 'left' },
-  { name: 'type', label: 'Type', field: 'productType', align: 'left' },
+  { name: 'name', label: 'Product', field: 'name', align: 'left', sortable: true },
+  { name: 'sku', label: 'SKU', field: 'sku', align: 'left', sortable: true },
+  { name: 'type', label: 'Type', field: 'productType', align: 'left', sortable: true },
   { name: 'qty', label: 'Stock qty', field: 'id', align: 'right' },
   { name: 'threshold', label: 'Low-stock alert', field: 'id', align: 'right' },
   { name: 'reserved', label: 'Reserved', field: 'id', align: 'right' }
@@ -400,7 +400,9 @@ async function fetchProducts (reqProps) {
       page: p.page,
       pageSize: p.rowsPerPage,
       search: search.value || undefined,
-      type: typeFilter.value || undefined
+      type: typeFilter.value || undefined,
+      sortBy: p.sortBy || undefined,
+      sortDescending: !!p.descending
     })
     const items = Array.isArray(result) ? result : result?.items || []
     const total = Array.isArray(result) ? result.length : result?.totalCount ?? items.length

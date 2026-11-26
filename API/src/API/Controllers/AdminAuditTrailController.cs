@@ -28,6 +28,8 @@ public class AdminAuditTrailController : ApiControllerBase
         [FromQuery] Guid? userId = null,
         [FromQuery] string? action = null,
         [FromQuery] string? entityType = null,
-        [FromQuery] string? search = null)
-        => Ok(await Mediator.Send(new ListAuditTrailQuery(page, pageSize, dateFrom, dateTo, userId, action, entityType, search)));
+        [FromQuery] string? search = null, 
+        [FromQuery] string? sortBy = null, 
+        [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListAuditTrailQuery(page, pageSize, dateFrom, dateTo, userId, action, entityType, search, sortBy, sortDescending)));
 }

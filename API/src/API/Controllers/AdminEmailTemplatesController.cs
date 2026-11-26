@@ -1,9 +1,10 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using HKPartsEcommerce.Application.Common.Authorization;
 using HKPartsEcommerce.API.Authorization;
+using HKPartsEcommerce.Application.Common.Authorization;
+using HKPartsEcommerce.Application.Common.Models;
 using HKPartsEcommerce.Application.Features.EmailTemplates;
 using HKPartsEcommerce.Domain.Enums;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace HKPartsEcommerce.API.Controllers;
 
@@ -14,9 +15,9 @@ public class AdminEmailTemplatesController : ApiControllerBase
 {
     /// <summary>List templates, optionally filtered by category, enabled state, and a name/key search term.</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<EmailTemplateSummaryDto>>> List(
-        [FromQuery] NotificationCategory? category, [FromQuery] bool? enabled, [FromQuery] string? search)
-        => Ok(await Mediator.Send(new ListEmailTemplatesQuery(category, enabled, search)));
+    public async Task<ActionResult<PaginatedList<EmailTemplateSummaryDto>>> List(
+        [FromQuery] NotificationCategory? category, [FromQuery] bool? enabled, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListEmailTemplatesQuery(category, enabled, page, pageSize, search, sortBy, sortDescending)));
 
     /// <summary>Get a single template by key.</summary>
     [HttpGet("{key}")]

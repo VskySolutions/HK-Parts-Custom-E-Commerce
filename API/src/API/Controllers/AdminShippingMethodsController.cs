@@ -16,8 +16,8 @@ public class AdminShippingMethodsController : ApiControllerBase
     [HttpGet]
     public async Task<ActionResult<PaginatedList<ShippingMethodDto>>> List(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
-        [FromQuery] ShippingMethodType? methodType = null, [FromQuery] bool? isEnabled = null)
-        => Ok(await Mediator.Send(new ListShippingMethodsQuery(page, pageSize, search, methodType, isEnabled)));
+        [FromQuery] ShippingMethodType? methodType = null, [FromQuery] bool? isEnabled = null, [FromQuery] string? sortBy = null, [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListShippingMethodsQuery(page, pageSize, search, methodType, isEnabled, sortBy, sortDescending)));
 
     /// <summary>Get a single shipping method by id.</summary>
     [HttpGet("{id:guid}")]

@@ -1,7 +1,8 @@
-using MediatR;
-using Microsoft.EntityFrameworkCore;
+using HKPartsEcommerce.Application.Common.Extensions;
 using HKPartsEcommerce.Application.Common.Interfaces;
 using HKPartsEcommerce.Application.Common.Models;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace HKPartsEcommerce.Application.Features.AuditTrail;
 
@@ -20,10 +21,21 @@ public record ListAuditTrailQuery(
     Guid? UserId = null,
     string? Action = null,
     string? EntityType = null,
-    string? Search = null) : IRequest<PaginatedList<AuditTrailDto>>;
+    string? Search = null, 
+    string? SortBy = null, 
+    bool SortDescending = false) : IRequest<PaginatedList<AuditTrailDto>>;
 
 public class ListAuditTrailQueryHandler : IRequestHandler<ListAuditTrailQuery, PaginatedList<AuditTrailDto>>
 {
+
+    private static readonly IReadOnlyDictionary<string, string> SortMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["actorName"] = "ActorName",
+        ["entityType"] = "EntityType",
+        ["action"] = "Action",
+        ["timestampUtc"] = "TimestampUtc",
+    };
+
     private readonly IApplicationDbContext _db;
 
     public ListAuditTrailQueryHandler(IApplicationDbContext db) => _db = db;
@@ -64,9 +76,12 @@ public class ListAuditTrailQueryHandler : IRequestHandler<ListAuditTrailQuery, P
 
         // Newest first. An Id tiebreaker gives a total order so OFFSET/FETCH paging stays stable across the
         // many rows a single admin transaction writes with an identical TimestampUtc.
-        var ordered = query
-            .OrderByDescending(a => a.TimestampUtc)
-            .ThenBy(a => a.Id);
+        //var ordered = query
+        //    .OrderByDescending(a => a.TimestampUtc)
+        //    .ThenBy(a => a.Id);
+
+        var ordered = query.ApplySort(request.SortBy, request.SortDescending, SortMap,
+            defaultSort: q => q.OrderByDescending(a => a.TimestampUtc).ThenBy(a => a.Id));
 
         var page = await PaginatedList<Domain.Entities.AuditTrail>.CreateAsync(ordered, request.Page, request.PageSize, cancellationToken);
         var items = page.Items.Select(AuditTrailDto.From).ToList();

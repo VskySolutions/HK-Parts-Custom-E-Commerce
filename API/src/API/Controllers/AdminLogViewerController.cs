@@ -26,6 +26,8 @@ public class AdminLogViewerController : ApiControllerBase
         [FromQuery] DateTime? dateTo = null,
         [FromQuery] string? level = null,
         [FromQuery] string? correlationId = null,
-        [FromQuery] string? search = null)
-        => Ok(await Mediator.Send(new ListApplicationLogsQuery(page, pageSize, dateFrom, dateTo, level, correlationId, search)));
+        [FromQuery] string? search = null, 
+        [FromQuery] string? sortBy = null, 
+        [FromQuery] bool sortDescending = false)
+        => Ok(await Mediator.Send(new ListApplicationLogsQuery(page, pageSize, dateFrom, dateTo, level, correlationId, search, sortBy, sortDescending)));
 }

@@ -292,6 +292,7 @@ async function fetch (props) {
     pagination.value = { ...p, rowsNumber: r?.totalCount ?? rows.value.length }
   } catch (e) {
     rows.value = []
+    pagination.value = { ...p, rowsNumber: 0 }
     notify.error(getApiErrorMessage(e))
   } finally {
     loading.value = false
